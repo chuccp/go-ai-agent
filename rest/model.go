@@ -70,8 +70,9 @@ func (r *ModelRest) createModel(req *web.Request) (any, error) {
 		IsDefault:   isDefault,
 		IsBase:      isBase,
 		Description: j.GetString("description"),
-		InputTypes:  j.GetString("input_types"),
-		OutputTypes: j.GetString("output_types"),
+		InputTypes:         j.GetString("input_types"),
+		OutputTypes:        j.GetString("output_types"),
+		SupportsMultimodal: jsonBool(j, "supports_multimodal"),
 	}
 	if m.Category == "" {
 		m.Category = aiTypes.CategoryLLM
@@ -137,6 +138,9 @@ func (r *ModelRest) updateModel(req *web.Request) (any, error) {
 	}
 	if v := j.GetString("output_types"); v != "" {
 		m.OutputTypes = v
+	}
+	if _, ok := (*j)["supports_multimodal"]; ok {
+		m.SupportsMultimodal = jsonBool(j, "supports_multimodal")
 	}
 	if isDefault := jsonBool(j, "is_default"); isDefault {
 		r.aiModel.ClearDefaultByCategory(m.Category)

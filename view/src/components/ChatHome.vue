@@ -22,6 +22,7 @@
         :is-streaming="isStreaming"
         :thinking="thinking"
         @send="sendMessage"
+        @upload="onFilesSelected"
         @model-change="onModelChange"
       />
     </div>
@@ -37,7 +38,8 @@ import ChatPanel from './ChatPanel.vue'
 import FlowProgress from './FlowProgress.vue'
 
 interface Session { id: number; title: string; created_at: string; updated_at: string }
-interface Message { role: string; content: string; flowId?: number }
+interface Message { role: string; content: string; flowId?: number; attachments?: Attachment[] }
+interface Attachment { id: string; name: string; type: string; size: number; path: string }
 
 const sessions = ref<Session[]>([])
 const messages = ref<Message[]>([])
@@ -51,6 +53,7 @@ const flowEvents = ref<FlowEvent[]>([])
 const currentExecutionId = ref<number | null>(null)
 const ws = ref<WebSocket | null>(null)
 const flowStore = useFlowStore()
+const pendingAttachments = ref<Attachment[]>([])
 const API_BASE = ''
 
 const selectedFlowName = computed(() => {
@@ -121,15 +124,21 @@ function connectWebSocket() {
 
 // Send
 async function sendMessage(content: string) {
-  if (isStreaming.value || !content.trim()) return
+  if (isStreaming.value) return
+  if (!content.trim() && pendingAttachments.value.length === 0) return
   if (!activeSessionId.value) {
     try {
-      const r = await fetch(`${API_BASE}/api/sessions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: content.substring(0, 30) }) })
+      const title = content.trim() ? content.substring(0, 30) : 'New Chat'
+      const r = await fetch(`${API_BASE}/api/sessions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title }) })
       const d = await r.json(); const s = d.data as Session; activeSessionId.value = s.id; sessions.value.unshift(s)
     } catch { return }
   }
+
+  const atts = [...pendingAttachments.value]
+  pendingAttachments.value = []
+
   const wsMsgs = [...messages.value.map(m => ({ role: m.role, content: m.content })), { role: 'user', content }]
-  messages.value.push({ role: 'user', content })
+  messages.value.push({ role: 'user', content, attachments: atts })
 
   if (selectedFlowId.value) {
     if (isFlowRunning.value && currentExecutionId.value) {
@@ -139,18 +148,34 @@ async function sendMessage(content: string) {
       isStreaming.value = true; isFlowRunning.value = true; flowEvents.value = []; flowStore.clearFlowEvents()
       const er = await fetch(`${API_BASE}/api/flows/${selectedFlowId.value}/execute`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id: activeSessionId.value }) })
       const ed = await er.json(); currentExecutionId.value = ed.data?.execution_id
-      ws.value!.send(JSON.stringify({ type: 'flow_start', session_id: activeSessionId.value, model: selectedModelId.value, messages: wsMsgs, stream: true, options: { flow_id: selectedFlowId.value, execution_id: currentExecutionId.value } }))
+      ws.value!.send(JSON.stringify({ type: 'flow_start', session_id: activeSessionId.value, model: selectedModelId.value, messages: wsMsgs, stream: true, options: { flow_id: selectedFlowId.value, execution_id: currentExecutionId.value }, attachments: atts }))
     }
   } else {
     isStreaming.value = true
     thinking.value = '正在处理用户请求...'
-    ws.value!.send(JSON.stringify({ type: 'agent', session_id: activeSessionId.value, model: selectedModelId.value, messages: wsMsgs, stream: true }))
+    const msgType = atts.length > 0 ? 'chat' : 'agent'
+    ws.value!.send(JSON.stringify({ type: msgType, session_id: activeSessionId.value, model: selectedModelId.value, messages: wsMsgs, stream: true, attachments: atts }))
   }
 }
 
 function stopFlow() {
   if (ws.value && currentExecutionId.value) ws.value.send(JSON.stringify({ type: 'flow_stop', session_id: activeSessionId.value, options: { execution_id: currentExecutionId.value } }))
   isFlowRunning.value = false; isStreaming.value = false; currentExecutionId.value = null; messages.value.push({ role: 'tool', content: '⏹ 流程已停止' })
+}
+
+// File upload handling
+async function onFilesSelected(files: File[]) {
+  for (const file of files) {
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const r = await fetch(`${API_BASE}/api/upload`, { method: 'POST', body: formData })
+      const d = await r.json()
+      if (d.data) {
+        pendingAttachments.value.push(d.data as Attachment)
+      }
+    } catch (e) { console.error('upload failed', e) }
+  }
 }
 
 // Flow events

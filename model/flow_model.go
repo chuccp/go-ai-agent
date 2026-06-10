@@ -4,260 +4,250 @@ import (
 	"github.com/chuccp/go-ai-agent/entity"
 	"github.com/chuccp/go-web-frame/core"
 	"github.com/chuccp/go-web-frame/db"
+	fwModel "github.com/chuccp/go-web-frame/model"
 )
 
 // ==================== FlowModel ====================
 
 type FlowModel struct {
 	core.IModel
-	db *db.DB
+	*fwModel.EntryModel[*entity.FlowDefinition, uint]
 }
 
 func (m *FlowModel) Init(d *db.DB, ctx *core.Context) error {
-	m.db = d
-	return m.db.Table((&entity.FlowDefinition{}).TableName()).AutoMigrate(&entity.FlowDefinition{})
-}
-
-func (m *FlowModel) t() *db.Table {
-	return m.db.Table((&entity.FlowDefinition{}).TableName())
+	tableName := (&entity.FlowDefinition{}).TableName()
+	m.EntryModel = fwModel.NewEntryModel[*entity.FlowDefinition, uint](d, tableName)
+	return m.CreateTable()
 }
 
 func (m *FlowModel) Create(flow *entity.FlowDefinition) error {
-	return m.t().Create(flow)
+	return m.EntryModel.Save(flow)
 }
 
 func (m *FlowModel) FindById(id uint) (*entity.FlowDefinition, error) {
-	var flow entity.FlowDefinition
-	err := m.t().First(&flow, id)
-	if err != nil {
-		return nil, err
-	}
-	return &flow, nil
+	return m.FindByPK(id)
 }
 
 func (m *FlowModel) List() ([]*entity.FlowDefinition, error) {
-	var flows []*entity.FlowDefinition
-	err := m.t().Order("updated_at desc").Find(&flows)
-	return flows, err
+	return m.EntryModel.Query().
+		Order("updated_at desc").
+		All()
 }
 
 func (m *FlowModel) ListByCategory(category string) ([]*entity.FlowDefinition, error) {
-	var flows []*entity.FlowDefinition
-	err := m.t().Where("category = ?", category).Order("updated_at desc").Find(&flows)
-	return flows, err
+	return m.EntryModel.Query().
+		Where("category = ?", category).
+		Order("updated_at desc").
+		All()
 }
 
 func (m *FlowModel) Update(flow *entity.FlowDefinition) error {
-	return m.t().Save(flow)
+	return m.EntryModel.Save(flow)
 }
 
 func (m *FlowModel) Delete(id uint) error {
-	return m.t().Delete(&entity.FlowDefinition{}, id)
+	return m.EntryModel.DeleteByPK(id)
 }
 
 func (m *FlowModel) IsExist() (bool, error) {
-	return false, nil
+	return m.EntryModel.IsExist()
 }
 
 func (m *FlowModel) CreateTable() error {
-	return m.db.Table((&entity.FlowDefinition{}).TableName()).AutoMigrate(&entity.FlowDefinition{})
+	return m.EntryModel.CreateTable()
 }
 
 func (m *FlowModel) DeleteTable() error {
-	return m.db.Migrator().DropTable(&entity.FlowDefinition{})
+	return m.EntryModel.DeleteTable()
 }
 
 func (m *FlowModel) GetTableName() string {
-	return (&entity.FlowDefinition{}).TableName()
+	return m.EntryModel.GetTableName()
 }
 
 func (m *FlowModel) ReNew(d *db.DB, c *core.Context) core.IModel {
-	return &FlowModel{db: d}
+	tableName := (&entity.FlowDefinition{}).TableName()
+	return &FlowModel{
+		EntryModel: fwModel.NewEntryModel[*entity.FlowDefinition, uint](d, tableName),
+	}
 }
 
 // ==================== FlowNodeModel ====================
 
 type FlowNodeModel struct {
 	core.IModel
-	db *db.DB
+	*fwModel.EntryModel[*entity.FlowNode, uint]
 }
 
 func (m *FlowNodeModel) Init(d *db.DB, ctx *core.Context) error {
-	m.db = d
-	return m.db.Table((&entity.FlowNode{}).TableName()).AutoMigrate(&entity.FlowNode{})
-}
-
-func (m *FlowNodeModel) t() *db.Table {
-	return m.db.Table((&entity.FlowNode{}).TableName())
-}
-
-func (m *FlowNodeModel) CreateBatch(nodes []*entity.FlowNode) error {
-	for _, n := range nodes {
-		if err := m.t().Create(n); err != nil {
-			return err
-		}
-	}
-	return nil
+	tableName := (&entity.FlowNode{}).TableName()
+	m.EntryModel = fwModel.NewEntryModel[*entity.FlowNode, uint](d, tableName)
+	return m.CreateTable()
 }
 
 func (m *FlowNodeModel) Create(node *entity.FlowNode) error {
-	return m.t().Create(node)
+	return m.EntryModel.Save(node)
+}
+
+func (m *FlowNodeModel) CreateBatch(nodes []*entity.FlowNode) error {
+	return m.EntryModel.Saves(nodes)
 }
 
 func (m *FlowNodeModel) FindByFlowId(flowId uint) ([]*entity.FlowNode, error) {
-	var nodes []*entity.FlowNode
-	err := m.t().Where("flow_id = ?", flowId).Order("id asc").Find(&nodes)
-	return nodes, err
+	return m.EntryModel.Query().
+		Where("flow_id = ?", flowId).
+		Order("id asc").
+		All()
 }
 
 func (m *FlowNodeModel) DeleteByFlowId(flowId uint) error {
-	return m.t().Where("flow_id = ?", flowId).Delete(&entity.FlowNode{})
+	return m.EntryModel.Delete().
+		Where("flow_id = ?", flowId).
+		Delete()
 }
 
 func (m *FlowNodeModel) Update(node *entity.FlowNode) error {
-	return m.t().Save(node)
+	return m.EntryModel.Save(node)
 }
 
 func (m *FlowNodeModel) IsExist() (bool, error) {
-	return false, nil
+	return m.EntryModel.IsExist()
 }
 
 func (m *FlowNodeModel) CreateTable() error {
-	return m.db.Table((&entity.FlowNode{}).TableName()).AutoMigrate(&entity.FlowNode{})
+	return m.EntryModel.CreateTable()
 }
 
 func (m *FlowNodeModel) DeleteTable() error {
-	return m.db.Migrator().DropTable(&entity.FlowNode{})
+	return m.EntryModel.DeleteTable()
 }
 
 func (m *FlowNodeModel) GetTableName() string {
-	return (&entity.FlowNode{}).TableName()
+	return m.EntryModel.GetTableName()
 }
 
 func (m *FlowNodeModel) ReNew(d *db.DB, c *core.Context) core.IModel {
-	return &FlowNodeModel{db: d}
+	tableName := (&entity.FlowNode{}).TableName()
+	return &FlowNodeModel{
+		EntryModel: fwModel.NewEntryModel[*entity.FlowNode, uint](d, tableName),
+	}
 }
 
 // ==================== FlowEdgeModel ====================
 
 type FlowEdgeModel struct {
 	core.IModel
-	db *db.DB
+	*fwModel.EntryModel[*entity.FlowEdge, uint]
 }
 
 func (m *FlowEdgeModel) Init(d *db.DB, ctx *core.Context) error {
-	m.db = d
-	return m.db.Table((&entity.FlowEdge{}).TableName()).AutoMigrate(&entity.FlowEdge{})
-}
-
-func (m *FlowEdgeModel) t() *db.Table {
-	return m.db.Table((&entity.FlowEdge{}).TableName())
-}
-
-func (m *FlowEdgeModel) CreateBatch(edges []*entity.FlowEdge) error {
-	for _, e := range edges {
-		if err := m.t().Create(e); err != nil {
-			return err
-		}
-	}
-	return nil
+	tableName := (&entity.FlowEdge{}).TableName()
+	m.EntryModel = fwModel.NewEntryModel[*entity.FlowEdge, uint](d, tableName)
+	return m.CreateTable()
 }
 
 func (m *FlowEdgeModel) Create(edge *entity.FlowEdge) error {
-	return m.t().Create(edge)
+	return m.EntryModel.Save(edge)
+}
+
+func (m *FlowEdgeModel) CreateBatch(edges []*entity.FlowEdge) error {
+	return m.EntryModel.Saves(edges)
 }
 
 func (m *FlowEdgeModel) FindByFlowId(flowId uint) ([]*entity.FlowEdge, error) {
-	var edges []*entity.FlowEdge
-	err := m.t().Where("flow_id = ?", flowId).Order("id asc").Find(&edges)
-	return edges, err
+	return m.EntryModel.Query().
+		Where("flow_id = ?", flowId).
+		Order("id asc").
+		All()
 }
 
 func (m *FlowEdgeModel) DeleteByFlowId(flowId uint) error {
-	return m.t().Where("flow_id = ?", flowId).Delete(&entity.FlowEdge{})
+	return m.EntryModel.Delete().
+		Where("flow_id = ?", flowId).
+		Delete()
 }
 
 func (m *FlowEdgeModel) IsExist() (bool, error) {
-	return false, nil
+	return m.EntryModel.IsExist()
 }
 
 func (m *FlowEdgeModel) CreateTable() error {
-	return m.db.Table((&entity.FlowEdge{}).TableName()).AutoMigrate(&entity.FlowEdge{})
+	return m.EntryModel.CreateTable()
 }
 
 func (m *FlowEdgeModel) DeleteTable() error {
-	return m.db.Migrator().DropTable(&entity.FlowEdge{})
+	return m.EntryModel.DeleteTable()
 }
 
 func (m *FlowEdgeModel) GetTableName() string {
-	return (&entity.FlowEdge{}).TableName()
+	return m.EntryModel.GetTableName()
 }
 
 func (m *FlowEdgeModel) ReNew(d *db.DB, c *core.Context) core.IModel {
-	return &FlowEdgeModel{db: d}
+	tableName := (&entity.FlowEdge{}).TableName()
+	return &FlowEdgeModel{
+		EntryModel: fwModel.NewEntryModel[*entity.FlowEdge, uint](d, tableName),
+	}
 }
 
 // ==================== FlowExecutionModel ====================
 
 type FlowExecutionModel struct {
 	core.IModel
-	db *db.DB
+	*fwModel.EntryModel[*entity.FlowExecution, uint]
 }
 
 func (m *FlowExecutionModel) Init(d *db.DB, ctx *core.Context) error {
-	m.db = d
-	return m.db.Table((&entity.FlowExecution{}).TableName()).AutoMigrate(&entity.FlowExecution{})
-}
-
-func (m *FlowExecutionModel) t() *db.Table {
-	return m.db.Table((&entity.FlowExecution{}).TableName())
+	tableName := (&entity.FlowExecution{}).TableName()
+	m.EntryModel = fwModel.NewEntryModel[*entity.FlowExecution, uint](d, tableName)
+	return m.CreateTable()
 }
 
 func (m *FlowExecutionModel) Create(exec *entity.FlowExecution) error {
-	return m.t().Create(exec)
+	return m.EntryModel.Save(exec)
 }
 
 func (m *FlowExecutionModel) FindById(id uint) (*entity.FlowExecution, error) {
-	var exec entity.FlowExecution
-	err := m.t().First(&exec, id)
-	if err != nil {
-		return nil, err
-	}
-	return &exec, nil
+	return m.FindByPK(id)
 }
 
 func (m *FlowExecutionModel) FindBySessionId(sessionId uint) ([]*entity.FlowExecution, error) {
-	var execs []*entity.FlowExecution
-	err := m.t().Where("session_id = ?", sessionId).Order("created_at desc").Find(&execs)
-	return execs, err
+	return m.EntryModel.Query().
+		Where("session_id = ?", sessionId).
+		Order("created_at desc").
+		All()
 }
 
 func (m *FlowExecutionModel) FindByFlowId(flowId uint) ([]*entity.FlowExecution, error) {
-	var execs []*entity.FlowExecution
-	err := m.t().Where("flow_id = ?", flowId).Order("created_at desc").Find(&execs)
-	return execs, err
+	return m.EntryModel.Query().
+		Where("flow_id = ?", flowId).
+		Order("created_at desc").
+		All()
 }
 
 func (m *FlowExecutionModel) Update(exec *entity.FlowExecution) error {
-	return m.t().Save(exec)
+	return m.EntryModel.Save(exec)
 }
 
 func (m *FlowExecutionModel) IsExist() (bool, error) {
-	return false, nil
+	return m.EntryModel.IsExist()
 }
 
 func (m *FlowExecutionModel) CreateTable() error {
-	return m.db.Table((&entity.FlowExecution{}).TableName()).AutoMigrate(&entity.FlowExecution{})
+	return m.EntryModel.CreateTable()
 }
 
 func (m *FlowExecutionModel) DeleteTable() error {
-	return m.db.Migrator().DropTable(&entity.FlowExecution{})
+	return m.EntryModel.DeleteTable()
 }
 
 func (m *FlowExecutionModel) GetTableName() string {
-	return (&entity.FlowExecution{}).TableName()
+	return m.EntryModel.GetTableName()
 }
 
 func (m *FlowExecutionModel) ReNew(d *db.DB, c *core.Context) core.IModel {
-	return &FlowExecutionModel{db: d}
+	tableName := (&entity.FlowExecution{}).TableName()
+	return &FlowExecutionModel{
+		EntryModel: fwModel.NewEntryModel[*entity.FlowExecution, uint](d, tableName),
+	}
 }

@@ -129,13 +129,22 @@ func (r *ChatRunner) Run() error {
 	}
 }
 
+type Attachment struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Type string `json:"type"` // "image/png", "application/pdf", ...
+	Size int64  `json:"size"`
+	Path string `json:"path"` // 服务端文件路径
+}
+
 type WSRequest struct {
-	Type      string             `json:"type"`
-	SessionID uint               `json:"session_id,omitempty"`
-	Model     string             `json:"model,omitempty"`
-	Messages  []common.ChatMessage `json:"messages,omitempty"`
-	Stream    bool               `json:"stream"`
-	Options   map[string]any     `json:"options,omitempty"`
+	Type        string             `json:"type"`
+	SessionID   uint               `json:"session_id,omitempty"`
+	Model       string             `json:"model,omitempty"`
+	Messages    []common.ChatMessage `json:"messages,omitempty"`
+	Stream      bool               `json:"stream"`
+	Options     map[string]any     `json:"options,omitempty"`
+	Attachments []Attachment       `json:"attachments,omitempty"`
 }
 
 type WSResponse struct {

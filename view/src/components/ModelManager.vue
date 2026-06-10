@@ -124,6 +124,11 @@
 
               <label>基础模型</label>
               <label class="checkbox"><input type="checkbox" v-model="form.is_base" /> 标记为基础模型（全局唯一）</label>
+
+              <template v-if="form.category === 'llm'">
+                <label>多模态</label>
+                <label class="checkbox"><input type="checkbox" v-model="form.supports_multimodal" /> 支持多模态（图片输入）</label>
+              </template>
             </div>
             <div class="dialog-footer">
               <button v-if="!editingId" class="cancel-btn" @click="formStep = 'category'">← 上一步</button>
@@ -153,6 +158,7 @@ const showKey = ref(false)
 const form = ref({
   name: '', provider: 'openai', model: '', category: 'llm',
   api_key: '', base_url: '', description: '', is_default: false, is_base: false,
+  supports_multimodal: false,
 })
 
 const availableProviders = computed(() => PROVIDERS_BY_API[apiType.value] || [])
@@ -214,6 +220,7 @@ async function openEditor(m?: AIModel) {
       name: m.name, provider: m.provider, model: m.model, category: m.category,
       api_key: m.api_key || '', base_url: m.base_url || '', description: m.description || '',
       is_default: m.is_default, is_base: m.is_base,
+      supports_multimodal: m.supports_multimodal || false,
     }
     // Try to infer API type from provider
     for (const [k, providers] of Object.entries(PROVIDERS_BY_API)) {
@@ -229,6 +236,7 @@ async function openEditor(m?: AIModel) {
     form.value = {
       name: '', provider: 'openai', model: '', category: filterCategory.value,
       api_key: '', base_url: '', description: '', is_default: false, is_base: false,
+      supports_multimodal: false,
     }
   }
   showEditor.value = true

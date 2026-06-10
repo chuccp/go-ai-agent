@@ -96,16 +96,18 @@ func (r *ChatRunner) modelCreate(params map[string]any) (string, error) {
 
 	inputTypes, _ := params["input_types"].(string)
 	outputTypes, _ := params["output_types"].(string)
+	supportsMultimodal, _ := params["supports_multimodal"].(bool)
 
 	m := &entity.AIModel{
-		Name:        name,
-		Provider:    provider,
-		Model:       model,
-		Category:    category,
-		APIKey:      apiKey,
-		BaseURL:     baseURL,
-		InputTypes:  inputTypes,
-		OutputTypes: outputTypes,
+		Name:               name,
+		Provider:           provider,
+		Model:              model,
+		Category:           category,
+		APIKey:             apiKey,
+		BaseURL:            baseURL,
+		InputTypes:         inputTypes,
+		OutputTypes:        outputTypes,
+		SupportsMultimodal: supportsMultimodal,
 	}
 
 	aiModel := r.aiModel()
@@ -168,6 +170,10 @@ func (r *ChatRunner) modelUpdate(params map[string]any) (string, error) {
 	}
 	if v, ok := params["category"].(string); ok && v != "" {
 		m.Category = v
+		changed = true
+	}
+	if v, ok := params["supports_multimodal"].(bool); ok {
+		m.SupportsMultimodal = v
 		changed = true
 	}
 	if !changed {

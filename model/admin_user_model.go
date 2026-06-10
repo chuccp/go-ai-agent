@@ -4,63 +4,56 @@ import (
 	"github.com/chuccp/go-ai-agent/entity"
 	"github.com/chuccp/go-web-frame/core"
 	"github.com/chuccp/go-web-frame/db"
+	fwModel "github.com/chuccp/go-web-frame/model"
 )
 
 type AdminUserModel struct {
 	core.IModel
-	db *db.DB
+	*fwModel.EntryModel[*entity.AdminUser, uint]
 }
 
 func (m *AdminUserModel) Init(d *db.DB, ctx *core.Context) error {
-	m.db = d
+	tableName := (&entity.AdminUser{}).TableName()
+	m.EntryModel = fwModel.NewEntryModel[*entity.AdminUser, uint](d, tableName)
 	return m.CreateTable()
 }
 
-func (m *AdminUserModel) t() *db.Table {
-	return m.db.Table((&entity.AdminUser{}).TableName())
-}
-
-// Create inserts a new admin user record.
 func (m *AdminUserModel) Create(user *entity.AdminUser) error {
-	return m.t().Create(user)
+	return m.EntryModel.Save(user)
 }
 
-// FindByUsername looks up an admin user by username.
 func (m *AdminUserModel) FindByUsername(username string) (*entity.AdminUser, error) {
-	var user entity.AdminUser
-	err := m.t().Where("username = ?", username).First(&user)
-	if err != nil {
-		return nil, err
-	}
-	return &user, nil
+	return m.EntryModel.FindOne("username = ?", username)
 }
 
-// HasAdminUser checks if any admin user exists in the database.
 func (m *AdminUserModel) HasAdminUser() (bool, error) {
-	var count int64
-	err := m.t().Where("is_admin = ?", true).Count(&count)
+	count, err := m.EntryModel.Query().Where("is_admin = ?", true).Count()
 	return count > 0, err
 }
 
-// UpdatePassword updates the password hash for an admin user.
 func (m *AdminUserModel) UpdatePassword(id uint, passwordHash string) error {
-	return m.t().Where("id = ?", id).UpdateColumn("password_hash", passwordHash)
+	return m.EntryModel.UpdateColumn(id, "password_hash", passwordHash)
 }
 
-func (m *AdminUserModel) IsExist() (bool, error) { return false, nil }
+func (m *AdminUserModel) IsExist() (bool, error) {
+	return m.EntryModel.IsExist()
+}
 
 func (m *AdminUserModel) CreateTable() error {
-	return m.db.Table((&entity.AdminUser{}).TableName()).AutoMigrate(&entity.AdminUser{})
+	return m.EntryModel.CreateTable()
 }
 
 func (m *AdminUserModel) DeleteTable() error {
-	return m.db.Migrator().DropTable(&entity.AdminUser{})
+	return m.EntryModel.DeleteTable()
 }
 
 func (m *AdminUserModel) GetTableName() string {
-	return (&entity.AdminUser{}).TableName()
+	return m.EntryModel.GetTableName()
 }
 
 func (m *AdminUserModel) ReNew(d *db.DB, c *core.Context) core.IModel {
-	return &AdminUserModel{db: d}
+	tableName := (&entity.AdminUser{}).TableName()
+	return &AdminUserModel{
+		EntryModel: fwModel.NewEntryModel[*entity.AdminUser, uint](d, tableName),
+	}
 }

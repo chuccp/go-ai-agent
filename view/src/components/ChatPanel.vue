@@ -16,35 +16,51 @@
         <div class="welcome-title">开始新的对话</div>
         <div class="welcome-sub">选择模型后发送消息，AI 将在这里回复</div>
       </div>
-      <ChatInput :disabled="isStreaming" :center-mode="true" @send="$emit('send', $event)" />
+      <ChatInput :disabled="isStreaming" :center-mode="true" :accept-files="acceptFiles" @send="$emit('send', $event)" @upload="(files: File[]) => $emit('upload', files)" />
     </div>
     <template v-else>
       <MessageList :messages="messages" :is-streaming="isStreaming" :thinking="thinking" />
-      <ChatInput :disabled="isStreaming" :center-mode="false" @send="$emit('send', $event)" />
+      <ChatInput :disabled="isStreaming" :center-mode="false" :accept-files="acceptFiles" @send="$emit('send', $event)" @upload="(files: File[]) => $emit('upload', files)" />
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import MessageList from './MessageList.vue'
 import ChatInput from './ChatInput.vue'
 
 interface Message { role: string; content: string }
 interface DBModel {
   id: string; name: string; provider: string; model: string
-  category: string; is_default: boolean
+  category: string; is_default: boolean; supports_multimodal?: boolean
 }
 
 defineProps<{ messages: Message[]; isStreaming: boolean; thinking: string }>()
 const emit = defineEmits<{
   send: [content: string]
+  upload: [files: File[]]
   'model-change': [model: string]
 }>()
 
 const API_BASE = ''
 const dbModels = ref<DBModel[]>([])
 const selectedModelId = ref('')
+const hasOCRModel = ref(false)
+
+// Accept files based on current model capabilities
+const acceptFiles = computed(() => {
+  const model = dbModels.value.find(m => m.id === selectedModelId.value)
+  const multimodal = model?.supports_multimodal || false
+  const files: string[] = []
+
+  if (multimodal) files.push('image/*')
+  if (hasOCRModel.value) files.push('image/*')
+  files.push('.txt,.md,.csv')
+  files.push('.pdf,.docx,.doc')
+
+  return files.join(',')
+})
 
 async function loadModels() {
   try {
@@ -60,7 +76,18 @@ async function loadModels() {
       selectedModelId.value = models[0].id
       emit('model-change', models[0].id)
     }
+    // Check OCR model availability
+    checkOCR()
   } catch { /* ignore */ }
+}
+
+async function checkOCR() {
+  try {
+    const res = await fetch(`${API_BASE}/api/models?category=ocr`)
+    const data = await res.json()
+    const ocrModels = data.data?.models || []
+    hasOCRModel.value = ocrModels.length > 0
+  } catch { hasOCRModel.value = false }
 }
 
 function onModelSelect(e: Event) {

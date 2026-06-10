@@ -41,8 +41,14 @@ type geminiContent struct {
 	Parts []geminiPart `json:"parts"`
 }
 
+type geminiInlineData struct {
+	MimeType string `json:"mimeType"`
+	Data     string `json:"data"`
+}
+
 type geminiPart struct {
 	Text         string               `json:"text,omitempty"`
+	InlineData   *geminiInlineData    `json:"inlineData,omitempty"`
 	FunctionCall *geminiFunctionCall  `json:"functionCall,omitempty"`
 	FunctionResp *geminiFunctionResp  `json:"functionResponse,omitempty"`
 }
@@ -189,7 +195,10 @@ func (c *GeminiChat) ChatWithHistory(history []common.ChatMessage, text string, 
 }
 
 func (c *GeminiChat) ChatWithHistoryWithContext(ctx context.Context, history []common.ChatMessage, text string, opts *common.LLMOptions) (string, error) {
-	msgs := append(history, common.ChatMessage{Role: "user", Content: text})
+	msgs := history
+	if text != "" {
+		msgs = append(msgs, common.ChatMessage{Role: "user", Content: text})
+	}
 	req := c.buildRequest(msgs, opts)
 	resp, err := c.doRequest(ctx, req, false)
 	if err != nil {
@@ -203,7 +212,10 @@ func (c *GeminiChat) ChatStream(text string, handler *common.StreamHandler, opts
 }
 
 func (c *GeminiChat) ChatStreamWithContext(ctx context.Context, history []common.ChatMessage, text string, handler *common.StreamHandler, opts *common.LLMOptions) error {
-	msgs := append(history, common.ChatMessage{Role: "user", Content: text})
+	msgs := history
+	if text != "" {
+		msgs = append(msgs, common.ChatMessage{Role: "user", Content: text})
+	}
 	req := c.buildRequest(msgs, opts)
 
 	url := fmt.Sprintf("/v1beta/models/%s:streamGenerateContent?alt=sse&key=%s", c.model, c.apiKey)
@@ -335,7 +347,7 @@ func (c *GeminiChat) buildRequest(messages []common.ChatMessage, opts *common.LL
 	for _, m := range messages {
 		if m.Role == "system" {
 			req.SystemInstruction = &geminiSystemInst{
-				Parts: []geminiPart{{Text: m.Content}},
+				Parts: buildGeminiParts(m.Content, m.ContentParts),
 			}
 			continue
 		}
@@ -345,11 +357,45 @@ func (c *GeminiChat) buildRequest(messages []common.ChatMessage, opts *common.LL
 		}
 		req.Contents = append(req.Contents, geminiContent{
 			Role:  role,
-			Parts: []geminiPart{{Text: m.Content}},
+			Parts: buildGeminiParts(m.Content, m.ContentParts),
 		})
 	}
 
 	return req
+}
+
+func buildGeminiParts(textContent string, contentParts []common.ContentPart) []geminiPart {
+	if len(contentParts) == 0 {
+		return []geminiPart{{Text: textContent}}
+	}
+	var parts []geminiPart
+	if textContent != "" {
+		parts = append(parts, geminiPart{Text: textContent})
+	}
+	for _, p := range contentParts {
+		switch p.Type {
+		case "text":
+			parts = append(parts, geminiPart{Text: p.Text})
+		case "image":
+			mediaType, data := parseGeminiDataURL(p.ImageURL)
+			parts = append(parts, geminiPart{
+				InlineData: &geminiInlineData{MimeType: mediaType, Data: data},
+			})
+		}
+	}
+	return parts
+}
+
+func parseGeminiDataURL(url string) (mediaType string, data string) {
+	if !strings.HasPrefix(url, "data:") {
+		return "image/png", url
+	}
+	rest := strings.TrimPrefix(url, "data:")
+	idx := strings.Index(rest, ";base64,")
+	if idx < 0 {
+		return "image/png", rest
+	}
+	return rest[:idx], rest[idx+len(";base64,"):]
 }
 
 func (c *GeminiChat) doRequest(ctx context.Context, req geminiRequest, stream bool) (*geminiResponse, error) {

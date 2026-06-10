@@ -3,6 +3,7 @@ package common
 
 import (
 	"context"
+	"strings"
 
 	"github.com/chuccp/go-ai-agent/ai/types"
 	"github.com/chuccp/go-web-frame/config"
@@ -53,10 +54,37 @@ type ChatService interface {
 
 // ---- Shared types ----
 
+// ContentPart 多模态消息的单个部分
+type ContentPart struct {
+	Type     string `json:"type"`                // "text" | "image"
+	Text     string `json:"text,omitempty"`
+	ImageURL string `json:"image_url,omitempty"` // 图片 URL 或 base64 data URL
+}
+
 // ChatMessage 聊天消息
 type ChatMessage struct {
-	Role    string
-	Content string
+	Role         string        `json:"role"`
+	Content      string        `json:"content"`
+	ContentParts []ContentPart `json:"content_parts,omitempty"` // 多模态内容；非空时 provider 使用此字段
+}
+
+// HasContentParts 判断消息是否包含多模态内容
+func (m *ChatMessage) HasContentParts() bool {
+	return len(m.ContentParts) > 0
+}
+
+// GetText 获取消息的纯文本内容（用于存储/显示）
+func (m *ChatMessage) GetText() string {
+	if m.Content == "" && m.HasContentParts() {
+		var texts []string
+		for _, p := range m.ContentParts {
+			if p.Type == "text" && p.Text != "" {
+				texts = append(texts, p.Text)
+			}
+		}
+		return strings.Join(texts, "\n")
+	}
+	return m.Content
 }
 
 // ToolCall 工具调用

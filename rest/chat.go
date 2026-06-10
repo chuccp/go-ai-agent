@@ -1,7 +1,13 @@
 package rest
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
 
 	aiTypes "github.com/chuccp/go-ai-agent/ai/types"
 	"github.com/chuccp/go-ai-agent/config"
@@ -47,6 +53,15 @@ func (c *ChatRest) Init(context *core.Context) error {
 	c.context.Get("/api/models", c.listModels)
 	c.chatRunner.SetFlowRunner(c.flowRunner)
 	c.context.WebSocket("/ws/chat", c.chatRunner.HandleWebSocket)
+
+	// File upload
+	c.context.Post("/api/upload", c.uploadFile)
+
+	// Ensure upload directory exists
+	uploadDir := "./data/uploads"
+	if err := os.MkdirAll(uploadDir, 0755); err != nil {
+		log.Warn("Failed to create upload directory")
+	}
 
 	log.Info("WebSocket 路由已注册: /ws/chat")
 	return nil
@@ -110,15 +125,99 @@ func (c *ChatRest) listModels(request *web.Request) (any, error) {
 	models := make([]map[string]any, 0, len(dbModels))
 	for _, m := range dbModels {
 		models = append(models, map[string]any{
-			"id":        fmt.Sprintf("%d.%s", m.Id, m.Model),
-			"name":      m.Name,
-			"provider":  m.Provider,
-			"model":     m.Model,
-			"category":  m.Category,
-			"is_default": m.IsDefault,
+			"id":                  fmt.Sprintf("%d.%s", m.Id, m.Model),
+			"name":                m.Name,
+			"provider":            m.Provider,
+			"model":               m.Model,
+			"category":            m.Category,
+			"is_default":          m.IsDefault,
+			"supports_multimodal": m.SupportsMultimodal,
 		})
 	}
 	return web.Data(map[string]interface{}{
 		"models": models,
 	}), nil
+}
+
+// uploadFile handles file uploads for chat attachments.
+func (c *ChatRest) uploadFile(req *web.Request) (any, error) {
+	form, err := req.MultipartForm()
+	if err != nil {
+		return nil, fmt.Errorf("解析上传表单失败: %w", err)
+	}
+
+	files := form.File["file"]
+	if len(files) == 0 {
+		return nil, fmt.Errorf("未找到上传文件（字段名: file）")
+	}
+
+	header := files[0]
+	file, err := header.Open()
+	if err != nil {
+		return nil, fmt.Errorf("打开上传文件失败: %w", err)
+	}
+	defer func() { _ = file.Close() }()
+
+	// Generate unique filename
+	id := make([]byte, 8)
+	if _, err := rand.Read(id); err != nil {
+		return nil, fmt.Errorf("生成随机文件名失败: %w", err)
+	}
+	ext := filepath.Ext(header.Filename)
+	safeName := hex.EncodeToString(id) + "_" + strings.ReplaceAll(header.Filename, " ", "_")
+	uploadDir := "./data/uploads"
+	savePath := filepath.Join(uploadDir, safeName)
+
+	dst, err := os.Create(savePath)
+	if err != nil {
+		return nil, fmt.Errorf("创建文件失败: %w", err)
+	}
+	defer func() { _ = dst.Close() }()
+
+	if _, err := io.Copy(dst, file); err != nil {
+		return nil, fmt.Errorf("保存文件失败: %w", err)
+	}
+
+	// Detect MIME type from extension if not provided
+	mimeType := header.Header.Get("Content-Type")
+	if mimeType == "" {
+		mimeType = detectMimeType(ext)
+	}
+
+	return web.Data(map[string]any{
+		"id":   id,
+		"name": header.Filename,
+		"type": mimeType,
+		"size": header.Size,
+		"path": safeName,
+	}), nil
+}
+
+func detectMimeType(ext string) string {
+	switch strings.ToLower(ext) {
+	case ".png":
+		return "image/png"
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".gif":
+		return "image/gif"
+	case ".webp":
+		return "image/webp"
+	case ".pdf":
+		return "application/pdf"
+	case ".docx":
+		return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+	case ".xlsx":
+		return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+	case ".xls":
+		return "application/vnd.ms-excel"
+	case ".doc":
+		return "application/msword"
+	case ".txt", ".md":
+		return "text/plain"
+	case ".csv":
+		return "text/csv"
+	default:
+		return "application/octet-stream"
+	}
 }

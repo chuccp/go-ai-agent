@@ -51,9 +51,18 @@ type streamOptions struct {
 	IncludeUsage bool `json:"include_usage"`
 }
 
+type contentPartParam struct {
+	Type     string `json:"type"`
+	Text     string `json:"text,omitempty"`
+	ImageURL *struct {
+		URL    string `json:"url"`
+		Detail string `json:"detail,omitempty"`
+	} `json:"image_url,omitempty"`
+}
+
 type messageParam struct {
 	Role    string `json:"role"`
-	Content string `json:"content"`
+	Content any    `json:"content"` // string | []contentPartParam
 }
 
 type chatResponse struct {
@@ -354,10 +363,35 @@ func getResponseContent(resp *chatResponse) string {
 func buildMessages(history []common.ChatMessage, text string) []messageParam {
 	msgs := make([]messageParam, 0, len(history)+1)
 	for _, m := range history {
-		msgs = append(msgs, messageParam{Role: m.Role, Content: m.Content})
+		msgs = append(msgs, messageParam{Role: m.Role, Content: buildOpenAIContent(m.Content, m.ContentParts)})
 	}
 	if text != "" {
 		msgs = append(msgs, messageParam{Role: "user", Content: text})
 	}
 	return msgs
+}
+
+func buildOpenAIContent(textContent string, parts []common.ContentPart) any {
+	if len(parts) == 0 {
+		return textContent
+	}
+	var result []contentPartParam
+	if textContent != "" {
+		result = append(result, contentPartParam{Type: "text", Text: textContent})
+	}
+	for _, p := range parts {
+		switch p.Type {
+		case "text":
+			result = append(result, contentPartParam{Type: "text", Text: p.Text})
+		case "image":
+			result = append(result, contentPartParam{
+				Type: "image_url",
+				ImageURL: &struct {
+					URL    string `json:"url"`
+					Detail string `json:"detail,omitempty"`
+				}{URL: p.ImageURL, Detail: "auto"},
+			})
+		}
+	}
+	return result
 }

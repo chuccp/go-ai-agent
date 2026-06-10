@@ -17,6 +17,13 @@
           :class="['bubble', msg.role]"
           v-html="renderContent(msg.content)"
         ></div>
+        <!-- Attachments in user messages -->
+        <div v-if="msg.role === 'user' && msg.attachments?.length" class="attachments">
+          <div v-for="(att, i) in msg.attachments" :key="i" class="att-item">
+            <span class="att-icon">{{ fileIcon(att.type) }}</span>
+            <span class="att-name">{{ att.name }}</span>
+          </div>
+        </div>
         <router-link
           v-if="msg.flowId"
           :to="'/designer/' + msg.flowId"
@@ -45,10 +52,15 @@
 import { ref, watch, computed } from 'vue'
 import { marked } from 'marked'
 
+interface Attachment {
+  id?: string; name: string; type: string; size?: number; path?: string
+}
+
 interface Message {
   role: string
   content: string
   flowId?: number
+  attachments?: Attachment[]
 }
 
 const props = defineProps<{
@@ -77,6 +89,14 @@ watch(
 )
 
 marked.setOptions({ breaks: true, gfm: true })
+
+function fileIcon(mime: string): string {
+  if (mime.startsWith('image/')) return '🖼'
+  if (mime.startsWith('text/')) return '📄'
+  if (mime.includes('pdf')) return '📕'
+  if (mime.includes('doc')) return '📝'
+  return '📎'
+}
 
 function renderContent(text: string): string {
   if (!text) return ''
@@ -219,6 +239,29 @@ function renderContent(text: string): string {
   font-weight: 600;
   color: #475569;
 }
+
+/* Attachment items in user messages */
+.attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+.msg-content.user .attachments {
+  justify-content: flex-end;
+}
+.att-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: rgba(99,102,241,0.08);
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 12px;
+  color: #6366f1;
+}
+.att-icon { font-size: 13px; }
+.att-name { max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Tool messages — subtle, no icon prefix */
 .tool-msg {

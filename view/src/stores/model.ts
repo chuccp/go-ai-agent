@@ -13,6 +13,7 @@ export interface AIModel {
   base_url: string
   is_default: boolean
   is_base: boolean
+  supports_multimodal: boolean
   description: string
   created_at: string
   updated_at: string

@@ -49,13 +49,20 @@ type anthropicMsg struct {
 	Content any    `json:"content"`
 }
 
+type anthropicImageSource struct {
+	Type      string `json:"type"`       // "base64"
+	MediaType string `json:"media_type"` // "image/png"
+	Data      string `json:"data"`       // raw base64
+}
+
 type anthropicContent struct {
-	Type      string `json:"type"`
-	Text      string `json:"text,omitempty"`
-	ID        string `json:"id,omitempty"`
-	Name      string `json:"name,omitempty"`
-	Input     any    `json:"input,omitempty"`
-	ToolUseID string `json:"tool_use_id,omitempty"`
+	Type      string                `json:"type"`
+	Text      string                `json:"text,omitempty"`
+	Source    *anthropicImageSource `json:"source,omitempty"`
+	ID        string                `json:"id,omitempty"`
+	Name      string                `json:"name,omitempty"`
+	Input     any                   `json:"input,omitempty"`
+	ToolUseID string                `json:"tool_use_id,omitempty"`
 }
 
 type anthropicResponse struct {
@@ -191,7 +198,10 @@ func (c *ChatService) ChatWithHistory(history []common.ChatMessage, text string,
 }
 
 func (c *ChatService) ChatWithHistoryWithContext(ctx context.Context, history []common.ChatMessage, text string, opts *common.LLMOptions) (string, error) {
-	msgs := append(history, common.ChatMessage{Role: "user", Content: text})
+	msgs := history
+	if text != "" {
+		msgs = append(msgs, common.ChatMessage{Role: "user", Content: text})
+	}
 	req := c.buildRequest(msgs, opts, false)
 	resp, err := c.doRequest(ctx, req)
 	if err != nil {
@@ -205,7 +215,10 @@ func (c *ChatService) ChatStream(text string, handler *common.StreamHandler, opt
 }
 
 func (c *ChatService) ChatStreamWithContext(ctx context.Context, history []common.ChatMessage, text string, handler *common.StreamHandler, opts *common.LLMOptions) error {
-	msgs := append(history, common.ChatMessage{Role: "user", Content: text})
+	msgs := history
+	if text != "" {
+		msgs = append(msgs, common.ChatMessage{Role: "user", Content: text})
+	}
 	req := c.buildRequest(msgs, opts, true)
 
 	r, err := c.restyClient.R().
@@ -303,10 +316,56 @@ func (c *ChatService) buildRequest(messages []common.ChatMessage, opts *common.L
 			req.System = m.Content
 			continue
 		}
-		msgs = append(msgs, anthropicMsg{Role: m.Role, Content: m.Content})
+		var content any = m.Content
+		if m.HasContentParts() {
+			content = buildAnthropicContent(m.ContentParts, m.Content)
+		}
+		msgs = append(msgs, anthropicMsg{Role: m.Role, Content: content})
 	}
 	req.Messages = msgs
 	return req
+}
+
+func buildAnthropicContent(parts []common.ContentPart, textContent string) []anthropicContent {
+	var result []anthropicContent
+	if textContent != "" {
+		result = append(result, anthropicContent{Type: "text", Text: textContent})
+	}
+	for _, p := range parts {
+		switch p.Type {
+		case "text":
+			result = append(result, anthropicContent{Type: "text", Text: p.Text})
+		case "image":
+			mediaType, data := parseDataURL(p.ImageURL)
+			if mediaType == "" {
+				mediaType = "image/png"
+			}
+			result = append(result, anthropicContent{
+				Type: "image",
+				Source: &anthropicImageSource{
+					Type:      "base64",
+					MediaType: mediaType,
+					Data:      data,
+				},
+			})
+		}
+	}
+	return result
+}
+
+func parseDataURL(url string) (mediaType string, data string) {
+	if !strings.HasPrefix(url, "data:") {
+		return "", url
+	}
+	// data:image/png;base64,<data>
+	rest := strings.TrimPrefix(url, "data:")
+	idx := strings.Index(rest, ";base64,")
+	if idx < 0 {
+		return "", rest
+	}
+	mediaType = rest[:idx]
+	data = rest[idx+len(";base64,"):]
+	return
 }
 
 func (c *ChatService) doRequest(ctx context.Context, req anthropicRequest) (*anthropicResponse, error) {

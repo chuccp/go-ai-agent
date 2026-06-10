@@ -127,6 +127,10 @@ For creating a model, you need: name (display name), provider (e.g. openai, deep
 					"type":        "string",
 					"description": "支持的输出类型，逗号分隔（text,image,audio,video）",
 				},
+				"supports_multimodal": map[string]any{
+					"type":        "boolean",
+					"description": "是否支持多模态（图片输入），仅 LLM 模型有效",
+				},
 				"confirm_key": map[string]any{
 					"type":        "string",
 					"description": "确认码（内部使用，不要展示给用户）。create/update/delete 首次调用返回此码，用户确认后用 action=confirm 提交",
