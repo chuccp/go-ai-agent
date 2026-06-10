@@ -10,7 +10,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/chuccp/go-ai-agent/chat/common"
+	"github.com/chuccp/go-ai-agent/ai/chat/common"
 	"github.com/chuccp/go-ai-agent/agent/tool"
 	"github.com/chuccp/go-web-frame/config"
 	"github.com/chuccp/go-web-frame/log"

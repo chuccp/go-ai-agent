@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/bytedance/sonic"
 	"github.com/chuccp/go-ai-agent/entity"
 )
 
@@ -98,8 +99,9 @@ func (r *ChatRunner) flowGet(args map[string]any) (string, error) {
 	sb.WriteString(fmt.Sprintf("流程 [ID:%d] %s\n描述: %s\n分类: %s\n\n节点 (%d):\n",
 		f.Id, f.Name, f.Description, f.Category, len(nodes)))
 	for _, n := range nodes {
-		sb.WriteString(fmt.Sprintf("  - [ID:%d] %s (type=%s, pos=%.0f,%.0f)\n",
-			n.Id, n.Label, n.Type, n.PositionX, n.PositionY))
+		extra := nodeConfigSummary(n)
+		sb.WriteString(fmt.Sprintf("  - [ID:%d] %s (type=%s)%s\n",
+			n.Id, n.Label, n.Type, extra))
 	}
 	sb.WriteString(fmt.Sprintf("\n连线 (%d):\n", len(edges)))
 	for _, e := range edges {
@@ -233,4 +235,35 @@ func getUintArg(args map[string]any, key string) (uint, error) {
 	default:
 		return 0, fmt.Errorf("参数 %s 类型错误", key)
 	}
+}
+
+func nodeConfigSummary(n *entity.FlowNode) string {
+	if n.Config == "" {
+		return ""
+	}
+	var cfg map[string]any
+	if err := sonic.Unmarshal([]byte(n.Config), &cfg); err != nil {
+		return ""
+	}
+	parts := make([]string, 0, 2)
+	if model, ok := cfg["model"].(string); ok && model != "" {
+		parts = append(parts, "模型:"+model)
+	}
+	if prompt, ok := cfg["prompt"].(string); ok && prompt != "" {
+		p := prompt
+		if len(p) > 40 {
+			p = p[:40] + "..."
+		}
+		parts = append(parts, "提示词:"+p)
+	}
+	if confirm, ok := cfg["confirm_only"].(bool); ok && confirm {
+		parts = append(parts, "确认模式")
+	}
+	if itemsKey, ok := cfg["items_key"].(string); ok && itemsKey != "" {
+		parts = append(parts, "迭代:"+itemsKey)
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return " (" + strings.Join(parts, ", ") + ")"
 }

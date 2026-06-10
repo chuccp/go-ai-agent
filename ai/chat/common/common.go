@@ -4,6 +4,7 @@ package common
 import (
 	"context"
 
+	"github.com/chuccp/go-ai-agent/ai/types"
 	"github.com/chuccp/go-web-frame/config"
 	"github.com/spf13/cast"
 )
@@ -23,11 +24,8 @@ const (
 
 // ---- Provider Info ----
 
-// ProviderInfo holds a provider's default model and base URL.
-type ProviderInfo struct {
-	Model   string `json:"model"`
-	BaseURL string `json:"baseUrl"`
-}
+// ProviderInfo is a type alias for the canonical definition in ai/types.
+type ProviderInfo = types.ProviderInfo
 
 // ---- Provider & Service interfaces ----
 

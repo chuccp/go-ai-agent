@@ -3,6 +3,7 @@ package rest
 import (
 	"fmt"
 
+	aiTypes "github.com/chuccp/go-ai-agent/ai/types"
 	"github.com/chuccp/go-ai-agent/config"
 	"github.com/chuccp/go-ai-agent/entity"
 	"github.com/chuccp/go-ai-agent/model"
@@ -98,7 +99,7 @@ func (c *ChatRest) getSessionMessages(request *web.Request) (any, error) {
 func (c *ChatRest) listModels(request *web.Request) (any, error) {
 	category := request.Query("category")
 	if category == "" {
-		category = "llm"
+		category = aiTypes.CategoryLLM
 	}
 
 	dbModels, err := c.aiModelModel.ListByCategory(category)

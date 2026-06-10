@@ -14,6 +14,8 @@ type AIModel struct {
 	IsDefault   bool      `gorm:"default:false" json:"is_default"`     // 是否为该分类的默认模型
 	IsBase      bool      `gorm:"default:false" json:"is_base"`       // 是否为基础模型（首次初始化时配置）
 	Description string    `gorm:"size:512" json:"description"`         // 描述
+	InputTypes  string    `gorm:"size:256" json:"input_types,omitempty"`  // 支持的输入类型: text,image,audio (逗号分隔)
+	OutputTypes string    `gorm:"size:256" json:"output_types,omitempty"` // 支持的输出类型: text,image,audio (逗号分隔)
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }

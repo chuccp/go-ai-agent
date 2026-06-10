@@ -65,6 +65,8 @@ Available node types and their config fields:
 
 When you finally call create: nodes must include at least a start node (index 0) and an end node (last index), connected by an edge. Use source_index/target_index (0-based array indices) to wire edges.
 
+When listing or describing flows, ALWAYS include the model used by each LLM/for_each/iterator node. Use action="get" to retrieve full node details including model config, then present them to the user.
+
 When updating: describe the planned changes to the user and confirm before calling update. You can change name/description/category, or replace nodes+edges.`,
 		InputSchema: map[string]any{
 			"type": "object",

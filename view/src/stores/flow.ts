@@ -38,7 +38,16 @@ export const useFlowStore = defineStore('flow', () => {
         body: JSON.stringify(payload),
       })
       const data = await res.json()
-      return data.data
+      const saved = data.data
+      if (saved) {
+        if (flowId) {
+          const idx = flows.value.findIndex(f => f.id === flowId)
+          if (idx !== -1) flows.value[idx] = saved
+        } else {
+          flows.value.push(saved)
+        }
+      }
+      return saved
     } catch (e) { console.error('saveFlow failed', e); return null }
   }
 

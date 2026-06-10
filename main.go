@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/chuccp/go-ai-agent/chat"
+	"github.com/chuccp/go-ai-agent/ai/chat"
 	"github.com/chuccp/go-ai-agent/model"
 	"github.com/chuccp/go-ai-agent/rest"
 	"github.com/chuccp/go-ai-agent/runner"

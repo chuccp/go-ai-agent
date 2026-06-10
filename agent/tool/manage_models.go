@@ -75,8 +75,8 @@ func (t *ManageModels) Definition() Definition {
 		Description: `Manage AI model configurations through conversation. Use this to list, get, create, update, or delete AI models.
 
 IMPORTANT — Confirmation required for modify operations (create / update / delete):
-1. When you call create/update/delete, the tool returns a confirmation prompt with a HIDDEN confirm_key. DO NOT show the confirm_key to the user. Just ask them to confirm in plain language, e.g. "确认删除模型 #3？回复确认或取消。"
-2. Wait for the user to reply. If they say "确认" / "yes" / "ok" / "好" / "可以", call action="confirm" with the confirm_key (NOT the original create/update/delete action).
+1. When you call create/update/delete, the tool returns a confirmation prompt with a HIDDEN confirm_key. DO NOT display the raw tool response or the confirm_key to the user. DO NOT show [tool_call ...] or any technical details. Simply tell the user in plain language: "涉及敏感操作，需要再次确认。" followed by a brief description of what will be done, and ask "确认执行？" or "确认删除？".
+2. Wait for the user to reply. If they say "确认" / "yes" / "ok" / "好" / "可以" / "执行", call action="confirm" with the confirm_key (NOT the original create/update/delete action).
 3. If the user says "取消" / "no" / "不" / "算了", call action="cancel" with the confirm_key to discard the pending operation.
 4. list and get execute immediately without confirmation.
 
@@ -119,6 +119,14 @@ For creating a model, you need: name (display name), provider (e.g. openai, deep
 					"type":        "string",
 					"description": "模型分类（llm/image/voice/video），默认 llm",
 				},
+				"input_types": map[string]any{
+					"type":        "string",
+					"description": "支持的输入类型，逗号分隔（text,image,audio,video）",
+				},
+				"output_types": map[string]any{
+					"type":        "string",
+					"description": "支持的输出类型，逗号分隔（text,image,audio,video）",
+				},
 				"confirm_key": map[string]any{
 					"type":        "string",
 					"description": "确认码（内部使用，不要展示给用户）。create/update/delete 首次调用返回此码，用户确认后用 action=confirm 提交",
@@ -158,7 +166,7 @@ func (t *ManageModels) Execute(call Call) (string, error) {
 		}
 		key := storePendingOp(action, params)
 		desc := describePendingOp(action, params)
-		return fmt.Sprintf("[confirm_key:%s]\n%s\n\n回复\"确认\"执行，回复\"取消\"放弃。", key, desc), nil
+		return fmt.Sprintf("[confirm_key:%s]\n涉及敏感操作，需要再次确认。\n\n%s\n\n请回复\"确认\"执行，或\"取消\"放弃。", key, desc), nil
 
 	case "confirm":
 		confirmKey, _ := params["confirm_key"].(string)
@@ -187,15 +195,15 @@ func describePendingOp(action string, params map[string]any) string {
 	id, _ := params["id"].(float64)
 	name, _ := params["name"].(string)
 	provider, _ := params["provider"].(string)
-	model, _ := params["model"].(string)
+	modelName, _ := params["model"].(string)
 
 	switch action {
 	case "delete":
-		return fmt.Sprintf("⚠️ 确认删除模型 #%d？", uint(id))
+		return fmt.Sprintf("删除模型 #%d", uint(id))
 	case "create":
-		return fmt.Sprintf("⚠️ 确认创建模型？\n名称: %s\n提供商: %s\n模型: %s", name, provider, model)
+		return fmt.Sprintf("创建模型「%s」(%s.%s)", name, provider, modelName)
 	case "update":
-		return fmt.Sprintf("⚠️ 确认更新模型 #%d？", uint(id))
+		return fmt.Sprintf("更新模型 #%d", uint(id))
 	}
-	return fmt.Sprintf("⚠️ 确认执行 %s 操作？", action)
+	return fmt.Sprintf("执行 %s 操作", action)
 }

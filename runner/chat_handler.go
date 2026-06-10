@@ -8,7 +8,7 @@ import (
 
 	"github.com/bytedance/sonic"
 	"github.com/chuccp/go-ai-agent/agent"
-	"github.com/chuccp/go-ai-agent/chat/common"
+	"github.com/chuccp/go-ai-agent/ai/chat/common"
 	"github.com/chuccp/go-ai-agent/entity"
 	"github.com/chuccp/go-web-frame/log"
 	"github.com/gorilla/websocket"

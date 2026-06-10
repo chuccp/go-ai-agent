@@ -3,7 +3,8 @@ package rest
 import (
 	"errors"
 
-	"github.com/chuccp/go-ai-agent/chat"
+	"github.com/chuccp/go-ai-agent/ai/chat"
+	aiTypes "github.com/chuccp/go-ai-agent/ai/types"
 	appconfig "github.com/chuccp/go-ai-agent/config"
 	"github.com/chuccp/go-ai-agent/entity"
 	"github.com/chuccp/go-ai-agent/model"
@@ -305,7 +306,7 @@ func (s *SetupRest) putModelInit(req *web.Request) (any, error) {
 		return nil, errors.New("提供商和模型标识不能为空")
 	}
 	if category == "" {
-		category = "llm"
+		category = aiTypes.CategoryLLM
 	}
 	if name == "" {
 		name = provider + " " + modelName

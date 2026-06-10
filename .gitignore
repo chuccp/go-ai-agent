@@ -32,3 +32,6 @@ go.work.sum
 # .vscode/
 /view/node_modules
 /.idea
+*.yml
+/data
+go-ai-agent

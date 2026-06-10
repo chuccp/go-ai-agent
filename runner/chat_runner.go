@@ -7,8 +7,9 @@ import (
 
 	"github.com/bytedance/sonic"
 	"github.com/chuccp/go-ai-agent/agent/tool"
-	"github.com/chuccp/go-ai-agent/chat"
-	"github.com/chuccp/go-ai-agent/chat/common"
+	"github.com/chuccp/go-ai-agent/ai/chat"
+	"github.com/chuccp/go-ai-agent/ai/chat/common"
+	aiTypes "github.com/chuccp/go-ai-agent/ai/types"
 	"github.com/chuccp/go-ai-agent/model"
 	"github.com/chuccp/go-web-frame/core"
 	"github.com/chuccp/go-web-frame/log"
@@ -86,7 +87,7 @@ func (r *ChatRunner) loadProvidersFromDB() {
 		}
 	}
 	// Resolve default model path for fallback when client sends no model
-	if def, err := aiModel.FindDefault("llm"); err == nil && def != nil {
+	if def, err := aiModel.FindDefault(aiTypes.CategoryLLM); err == nil && def != nil {
 		path := strconv.FormatUint(uint64(def.Id), 10) + ".default"
 		r.defaultModelPath = path
 		r.chatService.SetDefaultPath(path)

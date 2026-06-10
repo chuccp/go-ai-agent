@@ -1,5 +1,5 @@
 <template>
-  <div class="chat-panel">
+  <div :class="['chat-panel', { 'is-empty': messages.length === 0 }]">
     <div class="top-bar">
       <div class="model-picker">
         <span class="model-label">模型</span>
@@ -10,8 +10,18 @@
         </select>
       </div>
     </div>
-    <MessageList :messages="messages" :is-streaming="isStreaming" />
-    <ChatInput :disabled="isStreaming" @send="$emit('send', $event)" />
+    <div v-if="messages.length === 0" class="center-area">
+      <div class="welcome">
+        <div class="welcome-logo">✨</div>
+        <div class="welcome-title">开始新的对话</div>
+        <div class="welcome-sub">选择模型后发送消息，AI 将在这里回复</div>
+      </div>
+      <ChatInput :disabled="isStreaming" :center-mode="true" @send="$emit('send', $event)" />
+    </div>
+    <template v-else>
+      <MessageList :messages="messages" :is-streaming="isStreaming" :thinking="thinking" />
+      <ChatInput :disabled="isStreaming" :center-mode="false" @send="$emit('send', $event)" />
+    </template>
   </div>
 </template>
 
@@ -26,7 +36,7 @@ interface DBModel {
   category: string; is_default: boolean
 }
 
-defineProps<{ messages: Message[]; isStreaming: boolean }>()
+defineProps<{ messages: Message[]; isStreaming: boolean; thinking: string }>()
 const emit = defineEmits<{
   send: [content: string]
   'model-change': [model: string]
@@ -72,6 +82,10 @@ onMounted(loadModels)
   min-height: 0;
   overflow: hidden;
 }
+.chat-panel.is-empty {
+  justify-content: center;
+}
+
 .top-bar {
   display: flex;
   align-items: center;
@@ -80,6 +94,14 @@ onMounted(loadModels)
   background: #fff;
   flex-shrink: 0;
 }
+.is-empty .top-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  border-bottom: none;
+}
+
 .model-picker {
   display: flex;
   align-items: center;
@@ -104,4 +126,20 @@ onMounted(loadModels)
 .model-picker select:focus {
   border-color: #6366f1;
 }
+
+/* Center area for empty state */
+.center-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 20px;
+  gap: 24px;
+}
+.welcome {
+  text-align: center;
+  color: #64748b;
+}
+.welcome-logo { font-size: 40px; margin-bottom: 12px; }
+.welcome-title { font-size: 22px; font-weight: 600; }
+.welcome-sub { font-size: 14px; color: #94a3b8; margin-top: 6px; }
 </style>

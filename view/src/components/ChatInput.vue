@@ -1,5 +1,5 @@
 <template>
-  <div class="chat-input">
+  <div :class="['chat-input', { 'center-mode': centerMode }]">
     <div :class="['input-wrap', { disabled }]">
       <textarea
         ref="inputRef"
@@ -19,14 +19,14 @@
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
       </button>
     </div>
-    <div class="input-hint" v-if="!disabled">Enter 发送 · Shift+Enter 换行</div>
+    <div class="input-hint" v-if="!disabled && !centerMode">Enter 发送 · Shift+Enter 换行</div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, nextTick } from 'vue'
 
-defineProps<{ disabled: boolean }>()
+defineProps<{ disabled: boolean; centerMode: boolean }>()
 const emit = defineEmits<{ send: [content: string] }>()
 
 const text = ref('')
@@ -61,21 +61,29 @@ function autoResize() {
   background: #fff;
   border-top: 1px solid #e2e8f0;
 }
+.chat-input.center-mode {
+  border-top: none;
+  padding: 0;
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+}
+
 .input-wrap {
   display: flex;
   align-items: flex-end;
   gap: 8px;
-  background: #f1f5f9;
+  background: #f8fafc;
   border: 1px solid #e2e8f0;
-  border-radius: 16px;
-  padding: 4px 4px 4px 16px;
+  border-radius: 20px;
+  padding: 6px 6px 6px 18px;
   transition: border-color 0.2s, box-shadow 0.2s;
   max-width: 820px;
   margin: 0 auto;
 }
 .input-wrap:focus-within {
   border-color: #6366f1;
-  box-shadow: 0 0 0 3px rgba(99,102,241,0.1);
+  box-shadow: 0 0 0 3px rgba(99,102,241,0.08);
   background: #fff;
 }
 .input-wrap.disabled {
@@ -85,12 +93,12 @@ textarea {
   flex: 1;
   border: none;
   background: transparent;
-  font-size: 14px;
+  font-size: 15px;
   font-family: inherit;
   line-height: 1.5;
   resize: none;
   outline: none;
-  padding: 8px 0;
+  padding: 9px 0;
   color: #1e293b;
   max-height: 160px;
   min-height: 24px;
@@ -98,9 +106,9 @@ textarea {
 textarea::placeholder { color: #94a3b8; }
 textarea:disabled { cursor: not-allowed; }
 .send-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 12px;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
   border: none;
   background: #6366f1;
   color: #fff;
@@ -109,9 +117,9 @@ textarea:disabled { cursor: not-allowed; }
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  transition: background 0.15s;
+  transition: background 0.15s, transform 0.15s;
 }
-.send-btn:hover:not(:disabled) { background: #4f46e5; }
+.send-btn:hover:not(:disabled) { background: #4f46e5; transform: scale(1.05); }
 .send-btn:disabled {
   background: #cbd5e1;
   cursor: not-allowed;

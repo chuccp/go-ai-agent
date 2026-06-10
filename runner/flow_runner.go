@@ -7,8 +7,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/chuccp/go-ai-agent/chat"
-	"github.com/chuccp/go-ai-agent/chat/common"
+	"github.com/chuccp/go-ai-agent/ai/chat"
+	"github.com/chuccp/go-ai-agent/ai/chat/common"
 	"github.com/chuccp/go-ai-agent/flow/cache"
 	"github.com/chuccp/go-ai-agent/flow/engine"
 	"github.com/chuccp/go-ai-agent/entity"

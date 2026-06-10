@@ -20,6 +20,7 @@
       <ChatPanel
         :messages="messages"
         :is-streaming="isStreaming"
+        :thinking="thinking"
         @send="sendMessage"
         @model-change="onModelChange"
       />
@@ -42,6 +43,7 @@ const sessions = ref<Session[]>([])
 const messages = ref<Message[]>([])
 const activeSessionId = ref<number | null>(null)
 const isStreaming = ref(false)
+const thinking = ref('')
 const isFlowRunning = ref(false)
 const selectedModelId = ref('')
 const selectedFlowId = ref<number | null>(null)
@@ -92,23 +94,27 @@ function connectWebSocket() {
     if (data.type === 'pong') return
     if (data.type === 'session_created') { activeSessionId.value = data.session_id; fetchSessions(); return }
     if (data.type === 'chunk') {
-      if (data.done) { isStreaming.value = false; isFlowRunning.value = false }
-      else if (data.content && !data.reasoning) {
+      if (data.done) { isStreaming.value = false; isFlowRunning.value = false; thinking.value = '' }
+      else if (data.reasoning && data.content) {
+        thinking.value = '💭 ' + data.content
+      } else if (data.content && !data.reasoning) {
+        thinking.value = ''
         const last = messages.value[messages.value.length - 1]
         if (last && last.role === 'assistant') last.content += data.content
         else messages.value.push({ role: 'assistant', content: data.content })
       }
       return
     }
-    if (data.type === 'tool_call') { messages.value.push({ role: 'tool', content: '🔧 ' + data.message }); return }
+    if (data.type === 'tool_call') { thinking.value = '🔧 ' + (data.message || '处理中...'); return }
     if (data.type === 'tool_result') {
+      thinking.value = ''
       let flowId: number | undefined
       const m = data.message || ''
       const fm = m.match(/ID:\s*(\d+)/)
       if (fm && (m.includes('流程创建成功') || m.includes('流程更新成功'))) { flowId = parseInt(fm[1]); flowStore.fetchFlows() }
-      messages.value.push({ role: 'tool', content: '📋 ' + m, flowId }); return
+      messages.value.push({ role: 'tool', content: m, flowId }); return
     }
-    if (data.type === 'error') { isStreaming.value = false; isFlowRunning.value = false; messages.value.push({ role: 'tool', content: '❌ ' + data.message }) }
+    if (data.type === 'error') { isStreaming.value = false; isFlowRunning.value = false; thinking.value = ''; messages.value.push({ role: 'tool', content: '❌ ' + data.message }) }
   }
   ws.value.onclose = () => setTimeout(connectWebSocket, 2000)
 }
@@ -137,6 +143,7 @@ async function sendMessage(content: string) {
     }
   } else {
     isStreaming.value = true
+    thinking.value = '正在处理用户请求...'
     ws.value!.send(JSON.stringify({ type: 'agent', session_id: activeSessionId.value, model: selectedModelId.value, messages: wsMsgs, stream: true }))
   }
 }

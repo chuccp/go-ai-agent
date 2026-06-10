@@ -1,7 +1,8 @@
 package rest
 
 import (
-	"github.com/chuccp/go-ai-agent/chat"
+	"github.com/chuccp/go-ai-agent/ai/chat"
+	aiTypes "github.com/chuccp/go-ai-agent/ai/types"
 	"github.com/chuccp/go-ai-agent/entity"
 	"github.com/chuccp/go-ai-agent/model"
 	"github.com/chuccp/go-web-frame/core"
@@ -69,9 +70,11 @@ func (r *ModelRest) createModel(req *web.Request) (any, error) {
 		IsDefault:   isDefault,
 		IsBase:      isBase,
 		Description: j.GetString("description"),
+		InputTypes:  j.GetString("input_types"),
+		OutputTypes: j.GetString("output_types"),
 	}
 	if m.Category == "" {
-		m.Category = "llm"
+		m.Category = aiTypes.CategoryLLM
 	}
 	if m.IsDefault {
 		r.aiModel.ClearDefaultByCategory(m.Category)
@@ -128,6 +131,12 @@ func (r *ModelRest) updateModel(req *web.Request) (any, error) {
 	}
 	if v := j.GetString("description"); v != "" {
 		m.Description = v
+	}
+	if v := j.GetString("input_types"); v != "" {
+		m.InputTypes = v
+	}
+	if v := j.GetString("output_types"); v != "" {
+		m.OutputTypes = v
 	}
 	if isDefault := jsonBool(j, "is_default"); isDefault {
 		r.aiModel.ClearDefaultByCategory(m.Category)

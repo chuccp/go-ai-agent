@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/chuccp/go-ai-agent/chat"
+	"github.com/chuccp/go-ai-agent/ai/chat"
+	aiTypes "github.com/chuccp/go-ai-agent/ai/types"
 	"github.com/chuccp/go-ai-agent/entity"
 	"github.com/chuccp/go-ai-agent/model"
 	"github.com/chuccp/go-web-frame/core"
@@ -43,9 +44,15 @@ func (r *ChatRunner) modelList() (string, error) {
 	}
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf("共 %d 个模型:\n\n", len(list)))
+	b.WriteString("| ID | 名称 | 提供商 | 模型 | 分类 | 默认 |\n")
+	b.WriteString("|----|------|--------|------|------|------|\n")
 	for _, m := range list {
-		b.WriteString(formatModelRow(m))
-		b.WriteString("\n")
+		def := ""
+		if m.IsDefault {
+			def = "✅"
+		}
+		b.WriteString(fmt.Sprintf("| %d | %s | %s | %s | %s | %s |\n",
+			m.Id, m.Name, m.Provider, m.Model, m.Category, def))
 	}
 	return b.String(), nil
 }
@@ -81,19 +88,24 @@ func (r *ChatRunner) modelCreate(params map[string]any) (string, error) {
 		return "", fmt.Errorf("api_key 不能为空")
 	}
 	if category == "" {
-		category = "llm"
+		category = aiTypes.CategoryLLM
 	}
 	if name == "" {
 		name = provider + " " + model
 	}
 
+	inputTypes, _ := params["input_types"].(string)
+	outputTypes, _ := params["output_types"].(string)
+
 	m := &entity.AIModel{
-		Name:     name,
-		Provider: provider,
-		Model:    model,
-		Category: category,
-		APIKey:   apiKey,
-		BaseURL:  baseURL,
+		Name:        name,
+		Provider:    provider,
+		Model:       model,
+		Category:    category,
+		APIKey:      apiKey,
+		BaseURL:     baseURL,
+		InputTypes:  inputTypes,
+		OutputTypes: outputTypes,
 	}
 
 	aiModel := r.aiModel()
@@ -215,14 +227,6 @@ func getParamUint(params map[string]any, key string) (uint, bool) {
 		return uint(n), true
 	}
 	return 0, false
-}
-
-func formatModelRow(m *entity.AIModel) string {
-	def := ""
-	if m.IsDefault {
-		def = " [默认]"
-	}
-	return fmt.Sprintf("#%d %s — %s.%s (%s)%s", m.Id, m.Name, m.Provider, m.Model, m.Category, def)
 }
 
 func formatModelDetail(m *entity.AIModel) string {

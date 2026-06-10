@@ -1,24 +1,17 @@
 <template>
   <div class="message-list" ref="listRef">
-    <div v-if="messages.length === 0" class="empty-state">
-      <div class="empty-icon">💬</div>
-      <div class="empty-title">开始新的对话</div>
-      <div class="empty-sub">选择模型后发送消息，AI 将在这里回复</div>
-    </div>
-
     <div
       v-for="(msg, index) in messages"
       :key="index"
       :class="['msg-row', msg.role]"
     >
       <!-- Avatar -->
-      <div :class="['avatar', msg.role]">
-        {{ avatarText(msg.role) }}
-      </div>
+      <div v-if="msg.role === 'user'" class="avatar user">You</div>
+      <div v-else-if="msg.role === 'assistant'" class="avatar assistant">AI</div>
 
       <!-- Content -->
-      <div class="bubble-wrap">
-        <div v-if="msg.role === 'tool'" class="tool-label">{{ msg.content }}</div>
+      <div :class="['msg-content', msg.role]">
+        <div v-if="msg.role === 'tool'" class="tool-msg">{{ msg.content }}</div>
         <div
           v-else
           :class="['bubble', msg.role]"
@@ -32,8 +25,14 @@
       </div>
     </div>
 
+    <!-- Thinking indicator -->
+    <div v-if="thinking" class="msg-row assistant">
+      <div class="avatar assistant">AI</div>
+      <div class="thinking-label">{{ thinking }}</div>
+    </div>
+
     <!-- Streaming cursor -->
-    <div v-if="isStreaming && lastMsgIsAssistant" class="msg-row assistant">
+    <div v-if="isStreaming && lastMsgIsAssistant && !thinking" class="msg-row assistant">
       <div class="avatar assistant">AI</div>
       <div class="streaming-cursor">
         <span class="dot"></span><span class="dot"></span><span class="dot"></span>
@@ -55,6 +54,7 @@ interface Message {
 const props = defineProps<{
   messages: Message[]
   isStreaming: boolean
+  thinking: string
 }>()
 
 const listRef = ref<HTMLElement | null>(null)
@@ -65,7 +65,7 @@ const lastMsgIsAssistant = computed(() => {
 })
 
 watch(
-  () => [props.messages, props.messages.length],
+  () => [props.messages, props.messages.length, props.thinking],
   () => {
     requestAnimationFrame(() => {
       if (listRef.value) {
@@ -75,12 +75,6 @@ watch(
   },
   { deep: true }
 )
-
-function avatarText(role: string): string {
-  if (role === 'user') return 'You'
-  if (role === 'assistant') return 'AI'
-  return 'Sys'
-}
 
 marked.setOptions({ breaks: true, gfm: true })
 
@@ -108,24 +102,11 @@ function renderContent(text: string): string {
   scroll-behavior: smooth;
 }
 
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  color: #94a3b8;
-  gap: 8px;
-}
-.empty-icon { font-size: 48px; margin-bottom: 8px; }
-.empty-title { font-size: 18px; font-weight: 600; color: #64748b; }
-.empty-sub { font-size: 13px; }
-
 /* Message row */
 .msg-row {
   display: flex;
-  gap: 10px;
-  margin-bottom: 24px;
+  gap: 12px;
+  margin-bottom: 20px;
   max-width: 820px;
   margin-left: auto;
   margin-right: auto;
@@ -136,52 +117,54 @@ function renderContent(text: string): string {
 
 /* Avatar */
 .avatar {
-  width: 34px;
-  height: 34px;
-  border-radius: 8px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   flex-shrink: 0;
   color: #fff;
+  margin-top: 2px;
 }
 .avatar.user { background: #6366f1; }
 .avatar.assistant { background: #10b981; }
-.avatar.tool { background: #f59e0b; }
 
-/* Bubble */
-.bubble-wrap {
+/* Message content wrapper */
+.msg-content {
   flex: 1;
   min-width: 0;
 }
-.msg-row.user .bubble-wrap {
-  text-align: right;
+.msg-content.user {
+  display: flex;
+  justify-content: flex-end;
 }
+
+/* Bubble */
 .bubble {
-  display: inline-block;
-  max-width: 100%;
-  padding: 12px 16px;
-  border-radius: 16px;
   font-size: 14px;
-  line-height: 1.65;
+  line-height: 1.7;
   word-break: break-word;
-  text-align: left;
 }
 .bubble.user {
+  display: inline-block;
+  max-width: 100%;
+  padding: 10px 16px;
+  border-radius: 18px;
   background: #eef2ff;
   color: #1e293b;
   border-bottom-right-radius: 4px;
 }
 .bubble.assistant {
-  background: #f8fafc;
+  /* Gemini-style: no box, just clean text */
   color: #1e293b;
-  border: 1px solid #e2e8f0;
-  border-bottom-left-radius: 4px;
+  padding: 0;
 }
+
 .bubble.user :deep(p) { margin: 0; }
-.bubble.assistant :deep(p) { margin: 0 0 8px 0; }
+.bubble.assistant :deep(p) { margin: 0 0 10px 0; }
 .bubble.assistant :deep(p:last-child) { margin-bottom: 0; }
 
 /* Code blocks in markdown */
@@ -189,9 +172,9 @@ function renderContent(text: string): string {
   background: #1e293b;
   color: #e2e8f0;
   padding: 14px 16px;
-  border-radius: 8px;
+  border-radius: 10px;
   overflow-x: auto;
-  margin: 8px 0;
+  margin: 10px 0;
   font-size: 13px;
   line-height: 1.5;
 }
@@ -200,7 +183,7 @@ function renderContent(text: string): string {
   font-size: 13px;
 }
 .bubble.assistant :deep(p code) {
-  background: #e2e8f0;
+  background: #f1f5f9;
   color: #1e293b;
   padding: 2px 6px;
   border-radius: 4px;
@@ -208,25 +191,50 @@ function renderContent(text: string): string {
 }
 .bubble.assistant :deep(ul), .bubble.assistant :deep(ol) {
   padding-left: 20px;
-  margin: 4px 0;
+  margin: 6px 0;
+}
+.bubble.assistant :deep(li) {
+  margin-bottom: 4px;
 }
 .bubble.assistant :deep(blockquote) {
   border-left: 3px solid #6366f1;
   padding-left: 12px;
   color: #64748b;
-  margin: 8px 0;
+  margin: 10px 0;
+}
+.bubble.assistant :deep(table) {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 10px 0;
+  font-size: 13px;
+}
+.bubble.assistant :deep(th),
+.bubble.assistant :deep(td) {
+  border: 1px solid #e2e8f0;
+  padding: 8px 12px;
+  text-align: left;
+}
+.bubble.assistant :deep(th) {
+  background: #f8fafc;
+  font-weight: 600;
+  color: #475569;
 }
 
-/* Tool messages */
-.tool-label {
-  display: inline-block;
-  padding: 8px 12px;
+/* Tool messages — subtle, no icon prefix */
+.tool-msg {
   font-size: 12px;
-  color: #64748b;
-  background: #f1f5f9;
-  border-radius: 8px;
-  border: 1px dashed #cbd5e1;
+  color: #94a3b8;
+  padding: 4px 0;
   line-height: 1.5;
+}
+
+/* Thinking indicator */
+.thinking-label {
+  font-size: 13px;
+  color: #94a3b8;
+  padding: 6px 0;
+  font-style: italic;
+  animation: fadeInUp 0.2s ease;
 }
 
 /* Flow link */
@@ -245,13 +253,13 @@ function renderContent(text: string): string {
   display: flex;
   gap: 4px;
   align-items: center;
-  padding: 12px 16px;
+  padding: 4px 0;
 }
 .streaming-cursor .dot {
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  background: #94a3b8;
+  background: #cbd5e1;
   animation: bounce 1.4s infinite both;
 }
 .streaming-cursor .dot:nth-child(2) { animation-delay: 0.2s; }
@@ -260,5 +268,10 @@ function renderContent(text: string): string {
 @keyframes bounce {
   0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
   40% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 </style>
