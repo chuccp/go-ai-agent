@@ -109,7 +109,7 @@ func (c *ChatRest) listModels(request *web.Request) (any, error) {
 	models := make([]map[string]any, 0, len(dbModels))
 	for _, m := range dbModels {
 		models = append(models, map[string]any{
-			"id":        fmt.Sprintf("%s.%s", m.Provider, m.Model),
+			"id":        fmt.Sprintf("%d.%s", m.Id, m.Model),
 			"name":      m.Name,
 			"provider":  m.Provider,
 			"model":     m.Model,

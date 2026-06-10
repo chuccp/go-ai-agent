@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"strconv"
 	"sync"
 	"time"
 
@@ -17,16 +18,18 @@ import (
 
 type ChatRunner struct {
 	core.IRunner
-	ctx          *core.Context
-	chatService  *chat.UnifiedChatService
-	sessionModel *model.ChatSessionModel
-	messageModel *model.ChatMessageModel
-	flowModel    *model.FlowModel
-	nodeModel    *model.FlowNodeModel
-	edgeModel    *model.FlowEdgeModel
-	flowRunner   *FlowRunner
-	activeConns  map[*websocket.Conn]bool
-	mu           sync.Mutex
+	ctx              *core.Context
+	chatService      *chat.UnifiedChatService
+	sessionModel     *model.ChatSessionModel
+	messageModel     *model.ChatMessageModel
+	flowModel        *model.FlowModel
+	nodeModel        *model.FlowNodeModel
+	edgeModel        *model.FlowEdgeModel
+	flowRunner       *FlowRunner
+	activeConns      map[*websocket.Conn]bool
+	defaultModelPath string
+	providersLoaded  bool
+	mu               sync.Mutex
 }
 
 func NewChatRunner() *ChatRunner {
@@ -43,20 +46,53 @@ func (r *ChatRunner) Init(ctx *core.Context) error {
 	r.edgeModel = core.GetModel[*model.FlowEdgeModel](ctx)
 
 	tool.SetFlowHandler(r.handleFlowAction)
+	tool.SetModelHandler(r.handleModelAction)
 
-	// Load AI model configs from DB and configure chat providers
-	aiModel := core.GetModel[*model.AIModelModel](ctx)
-	if aiModel != nil {
-		models, err := aiModel.List()
-		if err == nil {
-			for _, m := range models {
-				r.chatService.ConfigureProvider(m.Provider, m.APIKey, m.Model, m.BaseURL)
-			}
-		}
+	// If system is already initialized, load providers from DB immediately.
+	// Otherwise defer until after setup completes (checked in Run() tick).
+	if ctx.GetConfig().GetBoolOrDefault("system.init", false) {
+		r.loadProvidersFromDB()
 	}
 
 	log.Info("WebSocket 聊天服务已初始化")
 	return nil
+}
+
+func (r *ChatRunner) loadProvidersFromDB() {
+	aiModel := core.GetModel[*model.AIModelModel](r.ctx)
+	if aiModel == nil {
+		return
+	}
+	models, err := aiModel.List()
+	if err != nil {
+		log.Warn("failed to list AI models from DB", zap.Error(err))
+		return
+	}
+	for _, m := range models {
+		provider, err := chat.NewProvider(m.Provider)
+		if err != nil {
+			log.Warn("unknown provider type, skipping",
+				zap.String("provider", m.Provider),
+				zap.Uint("id", m.Id),
+				zap.Error(err))
+			continue
+		}
+		r.chatService.RegisterProvider(m.Id, provider)
+		if err := r.chatService.ConfigureProvider(m.Id, m.Provider, m.APIKey, m.Model, m.BaseURL); err != nil {
+			log.Warn("provider configure failed",
+				zap.Uint("id", m.Id),
+				zap.String("provider", m.Provider),
+				zap.Error(err))
+		}
+	}
+	// Resolve default model path for fallback when client sends no model
+	if def, err := aiModel.FindDefault("llm"); err == nil && def != nil {
+		path := strconv.FormatUint(uint64(def.Id), 10) + ".default"
+		r.defaultModelPath = path
+		r.chatService.SetDefaultPath(path)
+	}
+	r.providersLoaded = true
+	log.Info("providers loaded from DB", zap.Int("count", len(models)))
 }
 
 func (r *ChatRunner) SetFlowRunner(fr *FlowRunner) {
@@ -82,6 +118,10 @@ func (r *ChatRunner) Run() error {
 			r.closeAll()
 			return nil
 		case <-ticker.C:
+			// Lazy-load providers after setup completes (system.init flips to true)
+			if !r.providersLoaded && r.ctx.GetConfig().GetBoolOrDefault("system.init", false) {
+				r.loadProvidersFromDB()
+			}
 			r.sendPing()
 		}
 	}

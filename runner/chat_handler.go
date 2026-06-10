@@ -25,14 +25,12 @@ type chatPrep struct {
 	opts        *common.LLMOptions
 }
 
-func (r *ChatRunner) prepareChat(conn *websocket.Conn, req WSRequest, defaultModel, providerPrefix string) chatPrep {
+func (r *ChatRunner) prepareChat(conn *websocket.Conn, req WSRequest) chatPrep {
 	cp := chatPrep{}
 
 	cp.modelPath = req.Model
 	if cp.modelPath == "" {
-		cp.modelPath = defaultModel
-	} else if !strings.Contains(cp.modelPath, ".") {
-		cp.modelPath = providerPrefix + cp.modelPath
+		cp.modelPath = r.defaultModelPath
 	}
 
 	cp.history = req.Messages
@@ -78,7 +76,7 @@ func (r *ChatRunner) prepareChat(conn *websocket.Conn, req WSRequest, defaultMod
 // ==================== chat / agent 处理 ====================
 
 func (r *ChatRunner) handleChat(conn *websocket.Conn, req WSRequest) {
-	cp := r.prepareChat(conn, req, "volcengine.default", "volcengine.")
+	cp := r.prepareChat(conn, req)
 	if req.Stream {
 		r.handleStreamChat(conn, cp.modelPath, cp.history, cp.userMessage, cp.opts, cp.sessionID)
 	} else {
@@ -87,7 +85,7 @@ func (r *ChatRunner) handleChat(conn *websocket.Conn, req WSRequest) {
 }
 
 func (r *ChatRunner) handleAgent(conn *websocket.Conn, req WSRequest) {
-	cp := r.prepareChat(conn, req, "deepseek.default", "deepseek.")
+	cp := r.prepareChat(conn, req)
 
 	sender := &wsSender{conn: conn, runner: r}
 	chatID := fmt.Sprintf("%d", cp.sessionID)

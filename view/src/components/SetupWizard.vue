@@ -68,7 +68,10 @@
 
             <div class="form-row">
               <label class="form-label">密码</label>
-              <input v-model="dbForm.password" type="password" class="form-input" placeholder="密码" />
+              <div class="pwd-wrap">
+                <input v-model="dbForm.password" :type="showDbPassword ? 'text' : 'password'" class="form-input" placeholder="密码" />
+                <button type="button" class="pwd-toggle" @click="showDbPassword = !showDbPassword">{{ showDbPassword ? '🙈' : '👁' }}</button>
+              </div>
             </div>
 
             <div v-if="dbForm.type === 'mysql'" class="form-row">
@@ -118,12 +121,18 @@
 
             <div class="form-row">
               <label class="form-label">密码 <span class="required">*</span></label>
-              <input v-model="adminForm.password" type="password" class="form-input" placeholder="至少6位" />
+              <div class="pwd-wrap">
+                <input v-model="adminForm.password" :type="showAdminPassword ? 'text' : 'password'" class="form-input" placeholder="至少6位" />
+                <button type="button" class="pwd-toggle" @click="showAdminPassword = !showAdminPassword">{{ showAdminPassword ? '🙈' : '👁' }}</button>
+              </div>
             </div>
 
             <div class="form-row">
               <label class="form-label">确认密码 <span class="required">*</span></label>
-              <input v-model="adminForm.confirmPassword" type="password" class="form-input" placeholder="再次输入密码" />
+              <div class="pwd-wrap">
+                <input v-model="adminForm.confirmPassword" :type="showAdminConfirm ? 'text' : 'password'" class="form-input" placeholder="再次输入密码" />
+                <button type="button" class="pwd-toggle" @click="showAdminConfirm = !showAdminConfirm">{{ showAdminConfirm ? '🙈' : '👁' }}</button>
+              </div>
             </div>
           </div>
 
@@ -179,7 +188,10 @@
 
             <div class="form-row">
               <label class="form-label">API Key <span class="required">*</span></label>
-              <input v-model="modelForm.api_key" type="password" class="form-input" placeholder="sk-..." />
+              <div class="pwd-wrap">
+                <input v-model="modelForm.api_key" :type="showModelKey ? 'text' : 'password'" class="form-input" placeholder="sk-..." />
+                <button type="button" class="pwd-toggle" @click="showModelKey = !showModelKey">{{ showModelKey ? '🙈' : '👁' }}</button>
+              </div>
             </div>
 
             <div class="form-row">
@@ -219,6 +231,10 @@ const saving = ref(false)
 const testing = ref(false)
 const error = ref('')
 const adminExists = ref(false)
+const showDbPassword = ref(false)
+const showAdminPassword = ref(false)
+const showAdminConfirm = ref(false)
+const showModelKey = ref(false)
 
 const dbForm = reactive({
   type: 'sqlite',
@@ -706,6 +722,31 @@ async function onComplete() {
 
 .required {
   color: #ff4d4f;
+}
+
+/* ---- Password toggle ---- */
+.pwd-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.pwd-wrap input {
+  flex: 1;
+  padding-right: 36px;
+}
+
+.pwd-toggle {
+  position: absolute;
+  right: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 4px 8px;
+  line-height: 1;
 }
 
 /* ---- Step footer ---- */

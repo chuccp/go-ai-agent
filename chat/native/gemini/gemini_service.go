@@ -94,15 +94,18 @@ type geminiError struct {
 // ==================== GeminiProvider ====================
 
 type GeminiProvider struct {
-	config      GeminiConfig
-	mu          sync.RWMutex
-	initialized bool
-	restyClient *resty.Client
+	configPrefix string
+	config       GeminiConfig
+	mu           sync.RWMutex
+	initialized  bool
+	restyClient  *resty.Client
 }
 
 func NewGeminiService() *GeminiProvider { return &GeminiProvider{} }
 
 func (s *GeminiProvider) Name() string { return ServiceName }
+
+func (s *GeminiProvider) SetConfigPrefix(prefix string) { s.configPrefix = prefix }
 
 func (s *GeminiProvider) Init(ctx context.Context, cfg config.IConfig) error {
 	_ = ctx
@@ -111,8 +114,12 @@ func (s *GeminiProvider) Init(ctx context.Context, cfg config.IConfig) error {
 	if s.initialized {
 		return nil
 	}
+	key := s.configPrefix
+	if key == "" {
+		key = "chat.gemini"
+	}
 	var gc GeminiConfig
-	if err := cfg.UnmarshalKey("chat.gemini", &gc); err != nil {
+	if err := cfg.UnmarshalKey(key, &gc); err != nil {
 		return fmt.Errorf("load gemini config failed: %w", err)
 	}
 	if gc.APIKey == "" {

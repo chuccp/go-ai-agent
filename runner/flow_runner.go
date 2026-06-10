@@ -94,6 +94,9 @@ func (r *FlowRunner) registerFunctions() {
 	// llm 函数
 	r.functions.Register("llm", func(ctx *engine.ExecutionContext, name string, args map[string]any) (map[string]any, error) {
 		model, _ := args["model"].(string)
+		if model == "" {
+			model = r.chatService.GetDefaultPath()
+		}
 		prompt, _ := args["prompt"].(string)
 		system, _ := args["system"].(string)
 		maxTokens := 4096

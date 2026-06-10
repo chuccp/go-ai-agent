@@ -24,5 +24,5 @@ const (
 	KeyPrompt = "prompt"
 )
 
-// 默认模型
-const DefaultModel = "deepseek.default"
+// 默认模型 — empty means resolve from system default at runtime
+const DefaultModel = ""

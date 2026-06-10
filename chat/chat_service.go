@@ -3,6 +3,7 @@ package chat
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -19,66 +20,72 @@ import (
 
 // UnifiedChatService 统一聊天服务
 type UnifiedChatService struct {
-	mu        sync.RWMutex
-	providers map[string]common.ChatProvider
-	config    config.IConfig
+	mu               sync.RWMutex
+	providers        map[uint]common.ChatProvider
+	config           config.IConfig
+	defaultModelPath string
+}
+
+// SetDefaultPath sets the default model path for fallback resolution.
+func (s *UnifiedChatService) SetDefaultPath(path string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.defaultModelPath = path
+}
+
+// GetDefaultPath returns the default model path.
+func (s *UnifiedChatService) GetDefaultPath() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.defaultModelPath
 }
 
 func NewUnifiedChatService() *UnifiedChatService {
 	return &UnifiedChatService{
-		providers: make(map[string]common.ChatProvider),
+		providers: make(map[uint]common.ChatProvider),
 	}
-}
-
-func NewUnifiedChatServiceWithProviders(providers ...common.ChatProvider) *UnifiedChatService {
-	s := NewUnifiedChatService()
-	for _, p := range providers {
-		_ = s.RegisterProvider(p)
-	}
-	return s
 }
 
 // Init 实现 IService 接口
 func (s *UnifiedChatService) Init(ctx *core.Context) error {
-	cfg := ctx.GetConfig()
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.config = cfg
-
-	for name, provider := range s.providers {
-		if err := provider.Init(ctx, cfg); err != nil {
-			log.Warn("provider init deferred — kept for metadata", zap.String("provider", name), zap.Error(err))
-		}
-	}
+	s.config = ctx.GetConfig()
 	return nil
 }
 
-func (s *UnifiedChatService) RegisterProvider(provider common.ChatProvider) error {
+func (s *UnifiedChatService) RegisterProvider(id uint, provider common.ChatProvider) error {
+	configPrefix := "chat." + strconv.FormatUint(uint64(id), 10)
+	switch p := provider.(type) {
+	case *openai.Provider:
+		p.SetConfigPrefix(configPrefix)
+	case *claude.Provider:
+		p.SetConfigPrefix(configPrefix)
+	case *gemini.GeminiProvider:
+		p.SetConfigPrefix(configPrefix)
+	case *volcengine.VolcengineProvider:
+		p.SetConfigPrefix(configPrefix)
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
-	name := provider.Name()
-	if name == "" {
-		return fmt.Errorf("provider name cannot be empty")
-	}
-
-	if s.config != nil {
-		if err := provider.Init(context.Background(), s.config); err != nil {
-			return fmt.Errorf("init provider %s failed: %w", name, err)
-		}
-	}
-
-	s.providers[strings.ToLower(name)] = provider
+	s.providers[id] = provider
 	return nil
 }
 
-func (s *UnifiedChatService) GetProvider(name string) (common.ChatProvider, error) {
+func (s *UnifiedChatService) UnregisterProvider(id uint) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.providers, id)
+}
+
+func (s *UnifiedChatService) GetProvider(id uint) (common.ChatProvider, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	provider, ok := s.providers[strings.ToLower(name)]
+	provider, ok := s.providers[id]
 	if !ok {
-		return nil, fmt.Errorf("provider not found: %s", name)
+		return nil, fmt.Errorf("provider not found for id: %d", id)
 	}
 	return provider, nil
 }
@@ -86,18 +93,20 @@ func (s *UnifiedChatService) GetProvider(name string) (common.ChatProvider, erro
 func (s *UnifiedChatService) GetChatService(path string) (common.ChatService, error) {
 	parts := strings.SplitN(path, ".", 2)
 	if len(parts) != 2 {
-		return nil, fmt.Errorf("invalid path format, expected: provider.model")
+		return nil, fmt.Errorf("invalid path format, expected: id.model")
 	}
 
-	providerName := parts[0]
-	model := parts[1]
+	id, err := strconv.ParseUint(parts[0], 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid provider id in path: %s", parts[0])
+	}
 
-	provider, err := s.GetProvider(providerName)
+	provider, err := s.GetProvider(uint(id))
 	if err != nil {
 		return nil, err
 	}
 
-	return provider.GetChat(model)
+	return provider.GetChat(parts[1])
 }
 
 func (s *UnifiedChatService) Chat(path string, text string, options *common.LLMOptions) (string, error) {
@@ -156,65 +165,74 @@ func (s *UnifiedChatService) ChatWithTools(ctx context.Context, path string, his
 	return service.ChatWithTools(ctx, history, text, opts)
 }
 
-func (s *UnifiedChatService) ListProviders() []string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	providers := make([]string, 0, len(s.providers))
-	for name := range s.providers {
-		providers = append(providers, name)
-	}
-	return providers
-}
-
 func (s *UnifiedChatService) ListAllModels() []string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	models := make([]string, 0)
-	for name, provider := range s.providers {
+	for id, provider := range s.providers {
 		for _, model := range provider.GetModels() {
-			models = append(models, name+"."+model)
+			models = append(models, strconv.FormatUint(uint64(id), 10)+"."+model)
 		}
 	}
 	return models
 }
 
 // ConfigureProvider sets API credentials and re-initializes a provider from DB-stored config.
-func (s *UnifiedChatService) ConfigureProvider(name, apiKey, modelName, baseURL string) error {
+func (s *UnifiedChatService) ConfigureProvider(id uint, name, apiKey, modelName, baseURL string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	provider, ok := s.providers[strings.ToLower(name)]
+	provider, ok := s.providers[id]
 	if !ok {
-		return fmt.Errorf("provider not found: %s", name)
+		return fmt.Errorf("provider not found for id: %d", id)
 	}
 
 	if s.config == nil {
 		return fmt.Errorf("chat service not initialized")
 	}
 
-	s.config.Put("chat."+name+".apiKey", apiKey)
+	configKey := "chat." + strconv.FormatUint(uint64(id), 10)
+	s.config.Put(configKey+".apiKey", apiKey)
 	if modelName != "" {
-		s.config.Put("chat."+name+".model", modelName)
+		s.config.Put(configKey+".model", modelName)
 	}
 	if baseURL != "" {
-		s.config.Put("chat."+name+".baseUrl", baseURL)
+		s.config.Put(configKey+".baseUrl", baseURL)
 	}
 
 	if err := provider.Init(context.Background(), s.config); err != nil {
-		log.Warn("provider configure failed", zap.String("provider", name), zap.Error(err))
+		log.Warn("provider configure failed", zap.Uint("id", id), zap.Error(err))
 		return err
 	}
-	log.Info("provider configured from DB", zap.String("provider", name), zap.String("model", modelName))
+	log.Info("provider configured from DB", zap.Uint("id", id), zap.String("model", modelName))
 	return nil
 }
 
+// NewProvider creates a provider instance for the given vendor name.
+func NewProvider(name string) (common.ChatProvider, error) {
+	name = strings.ToLower(name)
+	if _, ok := openai.ProviderDefaults[name]; ok || name == "openai_compat" {
+		return openai.NewService(name), nil
+	}
+	if _, ok := claude.ProviderDefaults[name]; ok || name == "claude_compat" {
+		return claude.NewService(name), nil
+	}
+	if name == "gemini" {
+		return gemini.NewGeminiService(), nil
+	}
+	if name == "volcengine" {
+		return volcengine.NewVolcengineService(), nil
+	}
+	return nil, fmt.Errorf("unknown provider type: %s", name)
+}
+
 // GetAllProviderInfo returns the default model and base URL for every registered provider.
-func (s *UnifiedChatService) GetAllProviderInfo() map[string]common.ProviderInfo {
+func (s *UnifiedChatService) GetAllProviderInfo() map[uint]common.ProviderInfo {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	result := make(map[string]common.ProviderInfo, len(s.providers))
-	for name, p := range s.providers {
-		result[name] = p.GetProviderInfo()
+	result := make(map[uint]common.ProviderInfo, len(s.providers))
+	for id, p := range s.providers {
+		result[id] = p.GetProviderInfo()
 	}
 	return result
 }
@@ -244,27 +262,8 @@ func GetGroupedProviderInfo() map[string]map[string]common.ProviderInfo {
 	return result
 }
 
-// NewDefaultChatService creates a UnifiedChatService pre-registered with all built-in providers.
+// NewDefaultChatService creates a UnifiedChatService with no pre-registered providers.
+// Providers are registered at startup from DB records via ChatRunner.Init().
 func NewDefaultChatService() *UnifiedChatService {
-	providers := make([]common.ChatProvider, 0, 24)
-
-	// OpenAI Chat Completions protocol — names from ProviderDefaults
-	for name := range openai.ProviderDefaults {
-		providers = append(providers, openai.NewService(name))
-	}
-	providers = append(providers, openai.NewService("openai_compat"))
-
-	// Anthropic Messages protocol — names from ProviderDefaults
-	for name := range claude.ProviderDefaults {
-		providers = append(providers, claude.NewService(name))
-	}
-	providers = append(providers, claude.NewService("claude_compat"))
-
-	// Native protocols
-	providers = append(providers,
-		gemini.NewGeminiService(),
-		volcengine.NewVolcengineService(),
-	)
-
-	return NewUnifiedChatServiceWithProviders(providers...)
+	return NewUnifiedChatService()
 }

@@ -80,16 +80,19 @@ type anthropicDelta struct {
 // ==================== Provider ====================
 
 type Provider struct {
-	name        string
-	config      Config
-	mu          sync.RWMutex
-	initialized bool
-	restyClient *resty.Client
+	name         string
+	configPrefix string
+	config       Config
+	mu           sync.RWMutex
+	initialized  bool
+	restyClient  *resty.Client
 }
 
 func NewService(name string) *Provider { return &Provider{name: name} }
 
 func (s *Provider) Name() string { return s.name }
+
+func (s *Provider) SetConfigPrefix(prefix string) { s.configPrefix = prefix }
 
 func (s *Provider) Init(_ context.Context, cfg config.IConfig) error {
 	s.mu.Lock()
@@ -97,8 +100,12 @@ func (s *Provider) Init(_ context.Context, cfg config.IConfig) error {
 	if s.initialized {
 		return nil
 	}
+	key := s.configPrefix
+	if key == "" {
+		key = "chat." + s.name
+	}
 	var oc Config
-	if err := cfg.UnmarshalKey("chat."+s.name, &oc); err != nil {
+	if err := cfg.UnmarshalKey(key, &oc); err != nil {
 		return fmt.Errorf("load chat.%s config failed: %w", s.name, err)
 	}
 	if def, ok := ProviderDefaults[s.name]; ok {

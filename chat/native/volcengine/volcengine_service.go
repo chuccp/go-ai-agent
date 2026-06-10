@@ -148,10 +148,11 @@ type sseEvent struct {
 
 // VolcengineProvider 火山引擎聊天提供商
 type VolcengineProvider struct {
-	config      VolcengineConfig
-	mu          sync.RWMutex
-	initialized bool
-	restyClient *resty.Client
+	configPrefix string
+	config       VolcengineConfig
+	mu           sync.RWMutex
+	initialized  bool
+	restyClient  *resty.Client
 }
 
 func NewVolcengineService() *VolcengineProvider {
@@ -164,6 +165,8 @@ func (s *VolcengineProvider) Name() string {
 	return ServiceName
 }
 
+func (s *VolcengineProvider) SetConfigPrefix(prefix string) { s.configPrefix = prefix }
+
 func (s *VolcengineProvider) Init(ctx context.Context, cfg config.IConfig) error {
 	_ = ctx
 	s.mu.Lock()
@@ -173,8 +176,12 @@ func (s *VolcengineProvider) Init(ctx context.Context, cfg config.IConfig) error
 		return nil
 	}
 
+	key := s.configPrefix
+	if key == "" {
+		key = "chat.volcengine"
+	}
 	var vc VolcengineConfig
-	if err := cfg.UnmarshalKey("chat.volcengine", &vc); err != nil {
+	if err := cfg.UnmarshalKey(key, &vc); err != nil {
 		return fmt.Errorf("加载火山引擎配置失败: %w", err)
 	}
 
