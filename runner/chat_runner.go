@@ -103,8 +103,9 @@ func (r *ChatRunner) SetFlowRunner(fr *FlowRunner) {
 			r.mu.Lock()
 			defer r.mu.Unlock()
 			for conn := range r.activeConns {
-				conn.WriteMessage(websocket.TextMessage, data)
-				break
+				if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
+					log.Warn("flow event write failed", zap.Error(err))
+				}
 			}
 		})
 	}
