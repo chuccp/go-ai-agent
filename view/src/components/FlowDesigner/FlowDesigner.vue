@@ -61,6 +61,8 @@ import NodePanel from './NodePanel.vue'
 import Canvas from './Canvas.vue'
 import PropertyPanel from './PropertyPanel.vue'
 
+const API_BASE = ''
+
 const route = useRoute()
 const router = useRouter()
 const flowStore = useFlowStore()
@@ -87,12 +89,28 @@ onMounted(async () => {
     if (flow) {
       flowName.value = flow.name
       flowCategory.value = flow.category
-      nodes.value = flow.nodes || []
+      nodes.value = autoLayout(flow.nodes || [])
       edges.value = flow.edges || []
     }
+  } else {
+    flowStore.fetchFlows()
   }
   // new flow: keep empty defaults
 })
+
+function autoLayout(flowNodes: FlowNode[]): FlowNode[] {
+  if (flowNodes.length === 0) return flowNodes
+  const allAtOrigin = flowNodes.every(n => n.position_x === 0 && n.position_y === 0)
+  if (!allAtOrigin) return flowNodes
+  const SPACING_X = 220
+  const SPACING_Y = 140
+  const COLS = 3
+  return flowNodes.map((n, i) => ({
+    ...n,
+    position_x: (i % COLS) * SPACING_X + 50,
+    position_y: Math.floor(i / COLS) * SPACING_Y + 50,
+  }))
+}
 
 function updateNode(updated: FlowNode) {
   const idx = nodes.value.findIndex(n => n.id === updated.id)

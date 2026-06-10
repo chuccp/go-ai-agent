@@ -66,8 +66,8 @@
           class="flow-node"
           :class="[node.type, { selected: selectedNodeId === node.id }]"
           :style="{ left: node.position_x + 'px', top: node.position_y + 'px' }"
-          @mousedown.prevent="onNodeMouseDown($event, node)"
-          @click.stop="selectNode(node)"
+          @mousedown="onNodeMouseDown($event, node)"
+          @selectstart.prevent
         >
           <div class="node-header">
             <span class="node-icon">{{ getIcon(node.type) }}</span>
@@ -75,6 +75,7 @@
           </div>
           <div class="node-body">
             <span class="node-type-name">{{ getTypeLabel(node.type) }}</span>
+            <span v-if="getNodePreview(node)" class="node-preview">{{ getNodePreview(node) }}</span>
           </div>
           <!-- 连接点 -->
           <div class="handle input" @mousedown.stop="onHandleMouseDown($event, node, 'input')"></div>
@@ -142,6 +143,45 @@ const nodeNames: Record<string, string> = {
 function getIcon(t: NodeType) { return nodeStyles[t]?.icon || '●' }
 function getTypeLabel(t: NodeType) { return nodeNames[t] || t }
 
+function safeParseConfig(raw: any): Record<string, any> {
+  if (typeof raw !== 'string') return raw || {}
+  try { return JSON.parse(raw || '{}') } catch {}
+  const sanitized = raw.replace(/[\x00-\x1F\x7F]/g, c =>
+    ({ '\n': '\\n', '\r': '\\r', '\t': '\\t', '\b': '\\b', '\f': '\\f' } as Record<string, string>)[c] || '\\u' + ('000' + c.charCodeAt(0).toString(16)).slice(-4)
+  )
+  try { return JSON.parse(sanitized || '{}') } catch { return {} }
+}
+
+function getNodePreview(node: FlowNode): string {
+  const cfg = safeParseConfig(node.config)
+  switch (node.type) {
+    case 'llm': {
+      const m = cfg.model || ''
+      return m ? `模型: ${m}` : ''
+    }
+    case 'user_input': {
+      const p = cfg.prompt || ''
+      if (typeof p === 'string' && p.trim()) return p.length > 80 ? p.substring(0, 80) + '…' : p
+      return cfg.confirm_only ? '[确认模式]' : ''
+    }
+    case 'split':
+      return cfg.source_key ? `来源: ${cfg.source_key}` : (cfg.delimiter ? `分隔: "${cfg.delimiter}"` : '')
+    case 'for_each': {
+      const p = cfg.prompt || ''
+      if (typeof p === 'string' && p.trim()) return p.length > 80 ? p.substring(0, 80) + '…' : p
+      return cfg.items_key ? `遍历: ${cfg.items_key}` : ''
+    }
+    case 'script':
+      return cfg.script ? cfg.script.substring(0, 60) + (cfg.script.length > 60 ? '…' : '') : ''
+    case 'transform':
+      return cfg.expression ? cfg.expression.substring(0, 60) + (cfg.expression.length > 60 ? '…' : '') : ''
+    case 'condition':
+      return cfg.expression ? cfg.expression.substring(0, 60) + (cfg.expression.length > 60 ? '…' : '') : ''
+    default:
+      return ''
+  }
+}
+
 function getHandlePos(nodeId: number, handle: string): { x: number; y: number } {
   const node = props.nodes.find(n => n.id === nodeId)
   if (!node) return { x: 0, y: 0 }
@@ -183,17 +223,30 @@ const drawEnd = reactive({ x: 0, y: 0 })
 let drawSourceNodeId: number | null = null
 let drawSourceHandle = ''
 let draggingNode: FlowNode | null = null
+let dragStartPos = { x: 0, y: 0 }
 let dragOffset = { x: 0, y: 0 }
+let hasDragged = false
 
 function onNodeMouseDown(event: MouseEvent, node: FlowNode) {
-  draggingNode = node; dragOffset = { x: event.clientX - node.position_x * zoom.value, y: event.clientY - node.position_y * zoom.value }
+  draggingNode = node
+  hasDragged = false
+  dragStartPos = { x: event.clientX, y: event.clientY }
+  dragOffset = { x: event.clientX - node.position_x * zoom.value, y: event.clientY - node.position_y * zoom.value }
   const onMove = (e: MouseEvent) => {
     if (!draggingNode) return
+    const dx = Math.abs(e.clientX - dragStartPos.x)
+    const dy = Math.abs(e.clientY - dragStartPos.y)
+    if (!hasDragged && dx < 6 && dy < 6) return
+    hasDragged = true
     emit('update:nodes', props.nodes.map(n => n.id === draggingNode!.id
       ? { ...n, position_x: snap(Math.max(0, (e.clientX - dragOffset.x) / zoom.value)), position_y: snap(Math.max(0, (e.clientY - dragOffset.y) / zoom.value)) }
       : n))
   }
-  const onUp = () => { draggingNode = null; window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp) }
+  const onUp = () => {
+    if (!hasDragged) selectNode(node)
+    draggingNode = null; hasDragged = false
+    window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp)
+  }
   window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp)
 }
 
@@ -246,7 +299,9 @@ function onHandleMouseDown(event: MouseEvent, node: FlowNode, handle: string) {
 .edges-layer line { pointer-events: stroke; cursor: pointer; }
 
 /* ====== 节点样式 ====== */
-.flow-node { position: absolute; width: 170px; border-radius: 8px; cursor: move; z-index: 5; user-select: none; box-shadow: 0 1px 3px rgba(0,0,0,0.08); transition: box-shadow 0.15s; overflow: hidden; }
+.flow-node { position: absolute; width: 170px; border-radius: 8px; cursor: grab; z-index: 5; user-select: none; -webkit-user-select: none; box-shadow: 0 1px 3px rgba(0,0,0,0.08); transition: box-shadow 0.15s; overflow: hidden; }
+.flow-node * { user-select: none; -webkit-user-select: none; cursor: grab; }
+.flow-node:active { cursor: grabbing; }
 .flow-node:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
 .flow-node.selected { box-shadow: 0 0 0 2px #4a9eff, 0 4px 12px rgba(0,0,0,0.15); }
 
@@ -255,6 +310,7 @@ function onHandleMouseDown(event: MouseEvent, node: FlowNode, handle: string) {
 .node-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .node-body { padding: 4px 10px 6px; background: #fff; font-size: 10px; color: #999; }
 .node-type-name { text-transform: uppercase; letter-spacing: 0.5px; }
+.node-preview { display: block; margin-top: 2px; font-size: 11px; color: #555; line-height: 1.3; white-space: pre-line; overflow: hidden; max-height: 44px; }
 
 /* 各类型颜色 */
 .flow-node.start .node-header { background: #52c41a; }
@@ -268,7 +324,7 @@ function onHandleMouseDown(event: MouseEvent, node: FlowNode, handle: string) {
 .flow-node.script .node-header { background: #2f54eb; }
 
 /* 连接点 */
-.handle { position: absolute; width: 10px; height: 10px; background: #fff; border: 2px solid #999; border-radius: 50%; cursor: crosshair; z-index: 6; transition: all 0.15s; }
+.handle { position: absolute; width: 10px; height: 10px; background: #fff; border: 2px solid #999; border-radius: 50%; cursor: crosshair !important; z-index: 6; transition: all 0.15s; }
 .handle:hover { background: #4a9eff; border-color: #4a9eff; transform: scale(1.3); }
 .handle.input { left: -5px; top: 50%; transform: translateY(-50%); }
 .handle.input:hover { transform: translateY(-50%) scale(1.3); }

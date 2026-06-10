@@ -287,9 +287,19 @@ function parseOutputFormat(fmt: string): { output_format_type: string; output_fo
   }
 }
 
+function safeParseConfig(raw: any): Record<string, any> {
+  if (typeof raw !== 'string') return raw || {}
+  try { return JSON.parse(raw || '{}') } catch {}
+  // Config may contain raw control characters (e.g. newlines in prompt)
+  const sanitized = raw.replace(/[\x00-\x1F\x7F]/g, c =>
+    ({ '\n': '\\n', '\r': '\\r', '\t': '\\t', '\b': '\\b', '\f': '\\f' } as Record<string, string>)[c] || '\\u' + ('000' + c.charCodeAt(0).toString(16)).slice(-4)
+  )
+  try { return JSON.parse(sanitized || '{}') } catch { return {} }
+}
+
 watch(() => props.node, (n) => {
   if (!n) return
-  const cfg = typeof n.config === 'string' ? JSON.parse(n.config || '{}') : n.config
+  const cfg = safeParseConfig(n.config)
   if (n.type === 'llm') {
     const fmt = parseOutputFormat(cfg.output_format || '')
     llmConfig.value = { model: cfg.model || '', system: cfg.system || '', prompt: cfg.prompt || '', max_tokens: cfg.max_tokens || 4096, ...fmt }
