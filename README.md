@@ -25,6 +25,7 @@ The agent will **understand your intent → propose a node structure → confirm
 ## Features
 
 - **Chat-Created Workflows** — Build AI pipelines through natural language conversation with the `manage_flows` tool
+- **One-Click Share** — Export any flow as a portable JSON file, share with teammates, import with one click — build a shared library of battle-tested AI workflows
 - **Visual Flow Designer** — Dify-style drag-and-drop DAG editor with 14 node types, for manual editing when needed
 - **Desktop App** — Native macOS/Windows/Linux window via Wails v2, double-click to launch
 - **One-Step Setup** — Desktop mode auto-configures SQLite + admin account, only model API key needed
@@ -92,6 +93,42 @@ You: "Create a content review flow"
 │  Edit manually anytime in the   │
 │  drag-and-drop designer         │
 └─────────────────────────────────┘
+```
+
+## Flows vs Skills
+
+AI skills (single prompts or tool calls) are like individual moves — a flow is the entire playbook.
+
+| | Skill | Flow |
+|---|-------|------|
+| **Structure** | One shot — a prompt + a single action | Multi-step DAG — 14 node types in any combination |
+| **Branching** | None, linear only | Condition nodes, text split, parallel batch |
+| **Human-in-the-loop** | Cannot pause mid-way | `user_input` node pauses for review, approval, or additional input |
+| **State passing** | Stateless | `{{node_label.output}}` template syntax passes data between nodes |
+| **Observability** | Only final result visible | Every node's input, output, and status is traced and logged |
+| **Multi-model** | Single model | Different nodes can use different models (GPT for translation → Claude for polish → Gemini for review) |
+| **Concurrency** | None | `for_each` parallel processing, `iterator` sequential batching, `loop` with break conditions |
+
+**Concrete example** — *"Monitor news → summarize with DeepSeek → sentiment analysis → flag negative for human review → publish positive directly"*
+
+- **As a skill**: Write 5 separate prompts, run them manually, check each result yourself, route positive/negative by hand
+- **As a flow**: One pipeline runs end-to-end — condition node auto-splits, negative goes to human confirmation, positive goes straight to publish
+
+Flows orchestrate human judgment together with AI capabilities, instead of calling AI in isolation.
+
+## Share & Reuse
+
+Flows are stored as portable JSON — export any flow with one click, share the file, import with one click.
+
+- **Team library** — build a collection of proven, battle-tested workflows your whole team can reuse
+- **Community templates** — share flows publicly (GitHub, Discord, etc.) so anyone can import and run them
+- **No lock-in** — the JSON format is human-readable and tool-agnostic; flows outlive any single platform
+- **Instant onboarding** — new team members import shared flows and are productive immediately
+
+```
+Create → Export JSON → Share → Import → Run
+   │                                      │
+   └────────── Iterate & re-share ←───────┘
 ```
 
 ## Architecture
