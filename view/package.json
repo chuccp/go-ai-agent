@@ -6,7 +6,12 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "wails:dev": "cd .. && $HOME/go/bin/wails dev",
+    "wails:build": "cd .. && $HOME/go/bin/wails build",
+    "wails:build:mac": "cd .. && $HOME/go/bin/wails build -platform darwin/universal",
+    "wails:build:win": "cd .. && $HOME/go/bin/wails build -platform windows/amd64",
+    "wails:build:linux": "cd .. && $HOME/go/bin/wails build -platform linux/amd64"
   },
   "dependencies": {
     "@assistant-ui/react": "^0.14.16",

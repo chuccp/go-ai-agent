@@ -17,6 +17,9 @@ export default function SetupWizard() {
   const [adminExists, setAdminExists] = useState(false)
   const [apiType, setApiType] = useState('openai')
   const [providers, setProviders] = useState<any>({})
+  const [dbConfigured, setDbConfigured] = useState(false)
+  const [adminConfigured, setAdminConfigured] = useState(false)
+  const [isDesktop, setIsDesktop] = useState(false)
 
   // DB form
   const [dbType, setDbType] = useState('sqlite')
@@ -29,7 +32,16 @@ export default function SetupWizard() {
   const [modelForm, setModelForm] = useState({ provider: '', name: '', model_id: '', api_key: '', base_url: '', think_level: 'off', multimodal: false })
 
   useEffect(() => {
-    store.checkAdminExists().then(setAdminExists)
+    // Check setup status to determine which steps are already done
+    store.getSetupStatus().then((s: { db_configured: boolean; admin_configured: boolean; mode: string }) => {
+      setDbConfigured(s.db_configured)
+      setAdminConfigured(s.admin_configured)
+      setIsDesktop(s.mode === 'desktop')
+      if (s.admin_configured) setAdminExists(true)
+      // Skip to the right step
+      if (s.db_configured && s.admin_configured) setStep(2)
+      else if (s.db_configured) setStep(1)
+    })
     store.fetchProviderDefaults().then(setProviders)
   }, [])
 
@@ -191,6 +203,11 @@ export default function SetupWizard() {
         {step === 2 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div style={{ fontSize: 14, fontWeight: 600 }}>{t('setup.model.configBase')}</div>
+            {isDesktop && (
+              <div style={{ fontSize: 12, color: '#155aef', background: '#e8f0fe', padding: '8px 12px', borderRadius: 8 }}>
+                SQLite + {t('setup.admin.createAdmin')} {t('common.success')}
+              </div>
+            )}
             <div><label style={labelStyle}>{t('model.apiType')}</label>
               <select value={apiType} onChange={e => { setApiType(e.target.value); setModelForm(f => ({ ...f, provider: '' })) }} style={inputStyle}>
                 <option value="openai">{t('model.openaiCompat')}</option>
@@ -215,7 +232,7 @@ export default function SetupWizard() {
             </div>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
               <button onClick={() => { store.completeSetup().then(() => nav('/')) }} style={btnStyle()}>{t('setup.skip')}</button>
-              <button onClick={() => setStep(1)} style={btnStyle()}>{t('common.prev')}</button>
+              {!isDesktop && <button onClick={() => setStep(1)} style={btnStyle()}>{t('common.prev')}</button>}
               <button onClick={handleModelNext} disabled={saving} style={btnStyle(true)}>{saving ? t('setup.initializing') : t('setup.completeSetup')}</button>
             </div>
           </div>

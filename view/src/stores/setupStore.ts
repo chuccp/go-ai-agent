@@ -1,9 +1,33 @@
 import { create } from 'zustand'
 import { API_BASE } from '@/constants'
 
+interface SetupStatus {
+  initialized: boolean
+  db_configured: boolean
+  admin_configured: boolean
+  mode: string
+}
+
+async function fetchSetupStatus(): Promise<SetupStatus> {
+  try {
+    const res = await fetch(`${API_BASE}/api/setup/status`)
+    const data = await res.json()
+    const s = data.data || {}
+    return {
+      initialized: s.initialized ?? false,
+      db_configured: s.db_configured ?? false,
+      admin_configured: s.admin_configured ?? false,
+      mode: s.mode ?? 'web',
+    }
+  } catch {
+    return { initialized: false, db_configured: false, admin_configured: false, mode: 'web' }
+  }
+}
+
 interface SetupState {
   initialized: boolean | null
   checkSetup: () => Promise<boolean>
+  getSetupStatus: () => Promise<SetupStatus>
   testConnection: (data: any) => Promise<{ ok: boolean; msg: string }>
   initDatabase: (data: any) => Promise<{ ok: boolean; msg: string }>
   checkAdminExists: () => Promise<boolean>
@@ -16,14 +40,16 @@ interface SetupState {
 export const useSetupStore = create<SetupState>((set) => ({
   initialized: null,
 
-  async checkSetup() {
-    try {
-      const res = await fetch(`${API_BASE}/api/setup/status`)
-      const data = await res.json()
-      const init = data.data?.initialized ?? false
-      set({ initialized: init })
-      return init
-    } catch { set({ initialized: false }); return false }
+  getSetupStatus: async () => {
+    const s = await fetchSetupStatus()
+    set({ initialized: s.initialized })
+    return s
+  },
+
+  checkSetup: async () => {
+    const s = await fetchSetupStatus()
+    set({ initialized: s.initialized })
+    return s.initialized
   },
 
   async testConnection(data) {

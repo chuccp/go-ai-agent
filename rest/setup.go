@@ -47,6 +47,9 @@ func (s *SetupRest) Init(ctx *core.Context) error {
 	// Provider defaults for the setup wizard
 	ctx.Get("/api/setup/providers", s.getProviders)
 
+	// Setup status (per-step progress)
+	ctx.Get("/api/setup/status", s.getSetupStatus)
+
 	// Complete setup
 	ctx.Post("/api/setup/complete", s.completeSetup)
 
@@ -341,6 +344,36 @@ func (s *SetupRest) putModelInit(req *web.Request) (any, error) {
 
 func (s *SetupRest) getProviders(_ *web.Request) (any, error) {
 	return web.Data(chat.GetGroupedProviderInfo()), nil
+}
+
+// ---- Setup Status ----
+
+func (s *SetupRest) getSetupStatus(_ *web.Request) (any, error) {
+	cfg := s.context.GetConfig()
+
+	initialized := cfg.GetBoolOrDefault("system.init", false)
+	dbConfigured := cfg.HasKey("web.db") && cfg.GetString("web.db.type") != ""
+
+	adminConfigured := false
+	if dbConfigured {
+		adminModel := core.GetModel[*model.AdminUserModel](s.context)
+		if adminModel != nil {
+			hasAdmin, _ := adminModel.HasAdminUser()
+			adminConfigured = hasAdmin
+		}
+	}
+
+	mode := "web"
+	if cfg.GetBoolOrDefault("system.desktop", false) {
+		mode = "desktop"
+	}
+
+	return web.Data(map[string]interface{}{
+		"initialized":      initialized,
+		"db_configured":    dbConfigured,
+		"admin_configured": adminConfigured,
+		"mode":             mode,
+	}), nil
 }
 
 // ---- Complete Setup ----

@@ -1,6 +1,10 @@
 package main
 
 import (
+	"flag"
+	"net/http"
+	"time"
+
 	"github.com/chuccp/go-ai-agent/ai/chat"
 	"github.com/chuccp/go-ai-agent/model"
 	"github.com/chuccp/go-ai-agent/rest"
@@ -10,30 +14,41 @@ import (
 	"github.com/chuccp/go-web-frame/config"
 	"github.com/chuccp/go-web-frame/core"
 	"github.com/chuccp/go-web-frame/log"
+	"github.com/wailsapp/wails/v2"
+	"github.com/wailsapp/wails/v2/pkg/options"
+	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"go.uber.org/zap"
 )
 
 const configFilePath = "application.yml"
+
+var webMode bool
+
+func init() {
+	flag.BoolVar(&webMode, "web", false, "run in web server mode (no native window)")
+}
 
 func Create() *wf.WebFrame {
 	loadConfig, isFirstRun := loadOrCreateConfig()
 
 	builder := wf.NewBuilder(loadConfig)
 
-	builder.Service(
+	services := []core.IService{
 		&cache.Cache{},
 		chat.NewDefaultChatService(),
-	)
+	}
+
+	if !webMode {
+		services = append(services, &DesktopInitService{})
+	}
+
+	builder.Service(services...)
 
 	chatRunner := runner.NewChatRunner()
 	builder.Runner(chatRunner)
 
 	flowRun := runner.NewFlowRunner()
 
-	// Build REST handler list.
-	// During first-run, only Api, ChatRest (for /ws/chat), and SetupRest are registered.
-	// Model-dependent endpoints return errors instead of panicking thanks to nil guards.
-	// FlowRest and ModelRest are only registered when fully initialized.
 	rests := []core.IRest{
 		&rest.Api{},
 		rest.NewChatRest(chatRunner, flowRun),
@@ -65,40 +80,101 @@ func Create() *wf.WebFrame {
 	return builder.Build()
 }
 
-// loadOrCreateConfig loads application.yml if it exists, or creates an in-memory
-// default config for first-run setup. Returns the config and a boolean indicating
-// whether the system is in first-run mode (not initialized).
 func loadOrCreateConfig() (*config.Config, bool) {
-	// Try to load the existing config file
 	loadConfig, err := config.LoadConfig(configFilePath)
 	if err == nil {
-		// File exists — check if fully initialized
 		init := loadConfig.GetBoolOrDefault("system.init", false)
 		if init {
 			return loadConfig, false
 		}
-		// File exists but init is false — still in setup mode
 		log.Info("配置文件存在但系统未完成初始化，进入设置模式")
 		return loadConfig, true
 	}
 
-	// File doesn't exist — first run, create defaults
 	log.Info("未找到 application.yml，进入首次运行初始化模式")
 	cfg := config.NewConfig()
 	cfg.Put("system.apiPrefix", "/api")
 	cfg.Put("system.debug", true)
 	cfg.Put("system.init", false)
+
+	// Desktop mode (default): pre-configure SQLite for auto-initialization
+	if !webMode {
+		cfg.Put("web.db.type", "sqlite")
+		cfg.Put("web.db.path", "./data/go-ai-agent.db")
+		cfg.Put("system.desktop", true)
+	}
+
 	return cfg, true
 }
 
 func main() {
+	flag.Parse()
+
 	web := Create()
 	if web == nil {
 		return
 	}
-	err := web.Start()
-	if err != nil {
-		log.PanicErrors("启动失败", err)
-		return
+
+	if !webMode {
+		runDesktop(web)
+	} else {
+		err := web.Start()
+		if err != nil {
+			log.PanicErrors("启动失败", err)
+		}
 	}
+}
+
+func runDesktop(web *wf.WebFrame) {
+	// Start HTTP server in background
+	go func() {
+		if err := web.Start(); err != nil {
+			log.PanicErrors("桌面服务启动失败", err)
+		}
+	}()
+
+	// Wait for HTTP server to be ready
+	waitForReady()
+
+	// Launch native window via Wails
+	app := newApp()
+
+	// Always provide embedded assets as a fallback.
+	// In dev mode: Assets is set, no Handler → Wails prefers the Vite dev server for hot reload.
+	// In prod mode: Handler (reverse proxy) takes precedence over Assets.
+	assetOpts := &assetserver.Options{
+		Assets: assetFS(),
+	}
+	if !isWailsDev() {
+		assetOpts.Handler = assetHandler()
+	}
+
+	err := wails.Run(&options.App{
+		Title:        "Go AI Agent",
+		Width:        1200,
+		Height:       800,
+		AssetServer:  assetOpts,
+		OnStartup:    app.startup,
+		OnShutdown:   app.shutdown,
+		Bind:         []interface{}{app},
+	})
+	if err != nil {
+		log.PanicErrors("Wails 启动失败", err)
+	}
+}
+
+func waitForReady() {
+	client := &http.Client{Timeout: 2 * time.Second}
+	for i := 0; i < 50; i++ {
+		resp, err := client.Get("http://localhost:19009/api/setup/status")
+		if err == nil {
+			resp.Body.Close()
+			if resp.StatusCode < 500 {
+				log.Info("HTTP 服务就绪")
+				return
+			}
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	log.Warn("HTTP 服务启动超时，继续启动窗口")
 }

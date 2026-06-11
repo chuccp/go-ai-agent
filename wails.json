@@ -1,0 +1,16 @@
+{
+  "name": "go-ai-agent",
+  "outputfilename": "go-ai-agent-desktop",
+  "frontend:dir": "./view",
+  "frontend:install": "pnpm install",
+  "frontend:build": "pnpm build",
+  "frontend:dev:watcher": "pnpm dev",
+  "frontend:dev:serverUrl": "http://localhost:5173",
+  "author": { "name": "go-ai-agent" },
+  "info": {
+    "productName": "Go AI Agent",
+    "productVersion": "1.0.0",
+    "copyright": "MIT",
+    "comments": "AI Agent Platform with Visual Flow Designer"
+  }
+}
