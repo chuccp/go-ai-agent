@@ -1,29 +1,36 @@
-// ==================== Flow Types ====================
+export type NodeType = 'start' | 'end' | 'llm' | 'user_input' | 'for_each' | 'split' | 'transform' | 'condition' | 'script' | 'iterator' | 'loop' | 'image_gen' | 'audio_gen' | 'video_gen'
 
-// Node type constants (matches backend flow/nodes/const.go)
-export const NodeType = {
-  Start: 'start',
-  End: 'end',
-  LLM: 'llm',
-  UserInput: 'user_input',
-  ForEach: 'for_each',
-  Split: 'split',
-  Transform: 'transform',
-  Condition: 'condition',
-  Script: 'script',
-  Iterator: 'iterator',
-  Loop: 'loop',
-} as const
+export interface NodeDef {
+  type: NodeType
+  labelKey: string
+  icon: string
+  color: string
+  category: string
+}
 
-// Flow event constants (matches backend flow/engine/stream.go)
-export const FlowEventType = {
-  NodeStart: 'flow_node_start',
-  NodeChunk: 'flow_node_chunk',
-  NodeDone: 'flow_node_done',
-  WaitingUser: 'flow_waiting_user',
-  FlowComplete: 'flow_complete',
-  FlowError: 'flow_error',
-} as const
+export const NODE_CATEGORIES = [
+  { key: 'basic', labelKey: 'nodeCategories.basic' },
+  { key: 'ai', labelKey: 'nodeCategories.ai' },
+  { key: 'logic', labelKey: 'nodeCategories.logic' },
+  { key: 'process', labelKey: 'nodeCategories.process' },
+] as const
+
+export const ALL_NODE_TYPES: NodeDef[] = [
+  { type: 'start', labelKey: 'nodes.start', icon: '▶', color: '#17b26a', category: 'basic' },
+  { type: 'end', labelKey: 'nodes.end', icon: '⏹', color: '#f04438', category: 'basic' },
+  { type: 'user_input', labelKey: 'nodes.userInput', icon: '👤', color: '#f79009', category: 'basic' },
+  { type: 'llm', labelKey: 'nodes.llm', icon: '🤖', color: '#6366f1', category: 'ai' },
+  { type: 'image_gen', labelKey: 'nodes.imageGen', icon: '🖼', color: '#36cfc9', category: 'ai' },
+  { type: 'audio_gen', labelKey: 'nodes.audioGen', icon: '🔊', color: '#9254de', category: 'ai' },
+  { type: 'video_gen', labelKey: 'nodes.videoGen', icon: '🎬', color: '#f759ab', category: 'ai' },
+  { type: 'condition', labelKey: 'nodes.condition', icon: '🔀', color: '#f38744', category: 'logic' },
+  { type: 'loop', labelKey: 'nodes.loop', icon: '🔄', color: '#2e90fa', category: 'logic' },
+  { type: 'for_each', labelKey: 'nodes.forEach', icon: '⚡', color: '#dd2590', category: 'logic' },
+  { type: 'iterator', labelKey: 'nodes.iterator', icon: '📋', color: '#fa541c', category: 'logic' },
+  { type: 'split', labelKey: 'nodes.split', icon: '✂', color: '#875bf7', category: 'process' },
+  { type: 'transform', labelKey: 'nodes.transform', icon: '⚙', color: '#15b79e', category: 'process' },
+  { type: 'script', labelKey: 'nodes.script', icon: '🐍', color: '#6172f3', category: 'process' },
+]
 
 export interface FlowDefinition {
   id: number
@@ -61,51 +68,6 @@ export interface FlowEdge {
   label: string
 }
 
-export type NodeType = 'start' | 'end' | 'llm' | 'user_input' | 'for_each' | 'split' | 'transform' | 'condition' | 'script' | 'iterator' | 'loop' | 'image_gen' | 'audio_gen' | 'video_gen'
-
-// ── Centralized node definitions (used by NodePanel, Canvas, PropertyPanel) ──
-export interface NodeDef {
-  type: NodeType
-  label: string
-  icon: string
-  color: string
-  category: string
-}
-
-export const NODE_CATEGORIES: { key: string; label: string }[] = [
-  { key: 'basic', label: '基础' },
-  { key: 'ai', label: 'AI' },
-  { key: 'logic', label: '逻辑' },
-  { key: 'process', label: '处理' },
-]
-
-export const ALL_NODE_TYPES: NodeDef[] = [
-  { type: 'start', label: '开始', icon: '▶', color: '#52c41a', category: 'basic' },
-  { type: 'end', label: '结束', icon: '⏹', color: '#ff4d4f', category: 'basic' },
-  { type: 'user_input', label: '用户输入', icon: '👤', color: '#faad14', category: 'basic' },
-  { type: 'llm', label: 'LLM 调用', icon: '🤖', color: '#4a9eff', category: 'ai' },
-  { type: 'image_gen', label: '图片生成', icon: '🖼', color: '#36cfc9', category: 'ai' },
-  { type: 'audio_gen', label: '音频生成', icon: '🔊', color: '#9254de', category: 'ai' },
-  { type: 'video_gen', label: '视频生成', icon: '🎬', color: '#f759ab', category: 'ai' },
-  { type: 'condition', label: '条件分支', icon: '🔀', color: '#fa8c16', category: 'logic' },
-  { type: 'loop', label: '循环执行', icon: '🔄', color: '#1890ff', category: 'logic' },
-  { type: 'for_each', label: '并发批量', icon: '⚡', color: '#eb2f96', category: 'logic' },
-  { type: 'iterator', label: '按序迭代', icon: '📋', color: '#fa541c', category: 'logic' },
-  { type: 'split', label: '文本拆分', icon: '✂', color: '#722ed1', category: 'process' },
-  { type: 'transform', label: '数据变换', icon: '⚙', color: '#13c2c2', category: 'process' },
-  { type: 'script', label: '脚本', icon: '🐍', color: '#2f54eb', category: 'process' },
-]
-
-export function getNodeLabel(type: NodeType): string { return ALL_NODE_TYPES.find(n => n.type === type)?.label || type }
-export function getNodeIcon(type: NodeType): string { return ALL_NODE_TYPES.find(n => n.type === type)?.icon || '●' }
-export function getNodeColor(type: NodeType): string { return ALL_NODE_TYPES.find(n => n.type === type)?.color || '#999' }
-
-export interface NodeTypeInfo {
-  type: NodeType
-  label: string
-  description: string
-}
-
 export interface FlowExecution {
   id: number
   flow_id: number
@@ -118,7 +80,7 @@ export interface FlowExecution {
 }
 
 export interface FlowEvent {
-  type: 'flow_node_start' | 'flow_node_chunk' | 'flow_node_done' | 'flow_waiting_user' | 'flow_complete' | 'flow_error'
+  type: string
   execution_id: number
   node_id?: number
   node_label?: string
@@ -128,11 +90,6 @@ export interface FlowEvent {
   status?: string
 }
 
-export interface FlowSaveRequest {
-  name: string
-  description: string
-  category: string
-  config: string
-  nodes: Omit<FlowNode, 'flow_id'>[]
-  edges: Omit<FlowEdge, 'id' | 'flow_id'>[]
+export function getNodeDef(type: NodeType): NodeDef | undefined {
+  return ALL_NODE_TYPES.find(n => n.type === type)
 }

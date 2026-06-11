@@ -1,37 +1,26 @@
-// ── Thinking levels ──
-export const THINK_LEVELS = [
-  { value: 'off', label: '关' },
-  { value: 'low', label: '低' },
-  { value: 'medium', label: '中' },
-  { value: 'high', label: '高' },
-  { value: 'max', label: '最高' },
-] as const
+export const API_BASE = ''
 
-export function thinkLabel(v: string): string {
-  return THINK_LEVELS.find(t => t.value === v)?.label || '关'
+export const THINK_LEVELS = ['off', 'low', 'medium', 'high', 'max'] as const
+export type ThinkLevel = typeof THINK_LEVELS[number]
+
+export function thinkLabelKey(level: string): string {
+  return `think.${level}`
 }
 
-// ── File helpers ──
-export function fileIcon(mime: string): string {
-  if (mime.startsWith('image/')) return '🖼'
-  if (mime.startsWith('text/')) return '📄'
-  if (mime.includes('pdf')) return '📕'
-  if (mime.includes('doc')) return '📝'
+export function fileIcon(name: string): string {
+  const ext = name.split('.').pop()?.toLowerCase() || ''
+  if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext)) return '🖼'
+  if (['mp3', 'wav', 'ogg', 'flac'].includes(ext)) return '🎵'
+  if (['mp4', 'avi', 'mov', 'mkv'].includes(ext)) return '🎬'
+  if (['pdf'].includes(ext)) return '📄'
+  if (['doc', 'docx'].includes(ext)) return '📝'
+  if (['xls', 'xlsx'].includes(ext)) return '📊'
+  if (['zip', 'rar', '7z', 'tar'].includes(ext)) return '📦'
   return '📎'
 }
 
 export function formatSize(bytes: number): string {
-  if (bytes < 1024) return bytes + 'B'
-  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + 'KB'
-  return (bytes / 1048576).toFixed(1) + 'MB'
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
 }
-
-// ── API bases ──
-export const API_BASE = ''
-
-// ── Flow designer ──
-export const GRID_SIZE = 20
-export const NODE_WIDTH = 170
-export const NODE_SPACING_X = 220
-export const NODE_SPACING_Y = 140
-export const NODE_COLS = 3

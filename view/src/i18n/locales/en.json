@@ -1,0 +1,113 @@
+{
+  "common": {
+    "save": "Save", "cancel": "Cancel", "delete": "Delete", "edit": "Edit", "copy": "Copy",
+    "close": "Close", "back": "Back", "next": "Next", "prev": "Previous", "confirm": "Confirm",
+    "loading": "Loading...", "noData": "No data", "search": "Search...", "name": "Name",
+    "type": "Type", "description": "Description", "status": "Status", "actions": "Actions",
+    "create": "Create", "import": "Import", "export": "Export", "duplicate": "Duplicate",
+    "default": "Default", "base": "Base", "category": "Category", "settings": "Settings",
+    "success": "Success", "error": "Error", "warning": "Warning"
+  },
+  "nav": {
+    "chat": "Chat", "flowDesigner": "Flow Designer", "flowList": "Flow List", "modelManager": "Model Manager"
+  },
+  "chat": {
+    "newChat": "New Chat", "startNew": "Start a new conversation", "selectModelHint": "Select a model and send a message, AI will reply here",
+    "inputPlaceholder": "Type a message... (Enter to send, Shift+Enter for new line)",
+    "send": "Send", "stop": "Stop", "model": "Model", "thinking": "Thinking", "selectModel": "Select model",
+    "sendHint": "Enter to send · Shift+Enter for new line", "remove": "Remove", "uploadFile": "Upload file",
+    "thinkingProcess": "Thinking Process", "viewFlow": "View Flow",
+    "flowProgress": "Flow Execution Progress", "running": "Running...", "completed": "Completed",
+    "streaming": "Streaming...", "exitFlow": "Exit Flow",
+    "nodeStarted": "[{{label}}] started...", "nodeCompleted": "[{{label}}] completed",
+    "confirmContinue": "Please confirm to continue...", "flowCompleted": "Flow execution completed!",
+    "flowStopped": "Flow stopped",
+    "selectFlow": "Select a flow...", "freeChat": "Free Chat", "freeChatDesc": "Chat directly with AI without selecting a flow",
+    "newSession": "New Session", "selectMode": "Select a mode to start chatting",
+    "confirmDeleteSession": "Delete this session?"
+  },
+  "model": {
+    "title": "Model Manager", "addModel": "Add Model", "editModel": "Edit Model",
+    "apiType": "API Type", "provider": "Provider", "displayName": "Display Name",
+    "modelId": "Model ID", "apiKey": "API Key", "baseUrl": "Base URL", "description": "Description",
+    "setDefault": "Set as Default", "defaultModel": "Default model for this category",
+    "baseModel": "Base Model", "baseModelHint": "Mark as base model (global unique)",
+    "thinkingLevel": "Thinking Level", "multimodal": "Multimodal", "multimodalHint": "Support multimodal (image input)",
+    "fillRequired": "Please fill in display name and model ID",
+    "confirmDelete": "Delete model \"{{name}}\"?",
+    "noModels": "No models yet, click \"Add Model\" to start",
+    "selectCategory": "Select model category",
+    "openaiCompat": "OpenAI Compatible", "claudeCompat": "Claude Compatible", "native": "Native",
+    "categories": { "llm": "LLM", "image": "Image Generation", "voice": "Voice Synthesis", "video": "Video Generation" }
+  },
+  "flow": {
+    "newFlow": "New Flow", "flowName": "Flow Name", "uncategorized": "Uncategorized",
+    "noFlows": "No flows yet, click \"New Flow\" to start",
+    "enterName": "Please enter a flow name", "needStartEnd": "Flow must contain start and end nodes",
+    "saved": "Saved successfully", "saveFailed": "Save failed", "confirmDelete": "Confirm delete?",
+    "jsonError": "Invalid JSON format",
+    "addNode": "Add Node", "pointerMode": "Pointer Mode", "handMode": "Hand Mode",
+    "autoLayout": "Auto Layout", "fullscreen": "Fullscreen", "exitFullscreen": "Exit Fullscreen",
+    "nodeProperties": "Node Properties", "selectNode": "Select a node to edit", "selectNodeHint": "Click a node on the canvas to view and edit its config",
+    "basicInfo": "Basic Info", "config": "Config", "deleteNode": "Delete Node", "copyNode": "Copy Node",
+    "searchNodes": "Search nodes...", "noMatch": "No matching nodes"
+  },
+  "setup": {
+    "title": "go-ai-agent", "subtitle": "First run, please complete the following configuration to get started",
+    "setupComplete": "Setup Complete!", "redirecting": "System initialized successfully, redirecting...",
+    "steps": { "database": "Database Configuration", "admin": "Admin Account", "model": "Base Model" },
+    "db": {
+      "dbType": "Database Type", "sqlite": "SQLite (Local File)", "filePath": "File Path",
+      "host": "Host", "port": "Port", "dbName": "Database Name", "username": "Username",
+      "password": "Password", "charset": "Charset", "sslMode": "SSL Mode",
+      "testConnection": "Test Connection", "testing": "Testing..."
+    },
+    "admin": {
+      "createAdmin": "Create Admin Account", "adminHint": "Set up an admin account to manage the system",
+      "existsHint": "Admin account already exists, entering username and password will reset the admin password.",
+      "confirmPassword": "Confirm Password", "minLength": "At least 6 characters", "retypePassword": "Re-enter password"
+    },
+    "model": {
+      "configBase": "Configure Base LLM Model"
+    },
+    "validation": {
+      "userPassRequired": "Username and password cannot be empty",
+      "passTooShort": "Password must be at least 6 characters",
+      "passMismatch": "Passwords do not match",
+      "modelIdRequired": "Please fill in Model ID",
+      "apiKeyRequired": "Please fill in API Key",
+      "baseUrlRequired": "Please fill in Base URL"
+    },
+    "initializing": "Initializing...", "completeSetup": "Complete Setup", "skip": "Skip"
+  },
+  "think": { "off": "Off", "low": "Low", "medium": "Medium", "high": "High", "max": "Max" },
+  "nodes": {
+    "start": "Start", "end": "End", "llm": "LLM", "userInput": "User Input",
+    "condition": "Condition", "transform": "Transform", "split": "Text Split",
+    "forEach": "Parallel Batch", "iterator": "Sequential Iterator", "loop": "Loop",
+    "script": "Script", "imageGen": "Image Generation", "audioGen": "Audio Generation", "videoGen": "Video Generation"
+  },
+  "nodeCategories": { "basic": "Basic", "ai": "AI", "logic": "Logic", "process": "Process" },
+  "nodeConfig": {
+    "model": "Model", "systemPrompt": "System Prompt", "promptTemplate": "Prompt Template",
+    "temperature": "Temperature", "topP": "Top P", "maxTokens": "Max Tokens",
+    "thinkingLevel": "Thinking Level", "followModel": "Follow Model Setting",
+    "outputFormat": "Output Format", "plainText": "Plain Text", "jsonAuto": "JSON Auto",
+    "jsonObject": "JSON Object", "jsonArray": "JSON Array", "customSchema": "Custom Schema",
+    "jsonDetected": "JSON output requirement detected", "jsonHint": "Please ensure your prompt includes JSON output sample description",
+    "fieldDef": "Field Definitions", "fieldName": "Field Name", "example": "Example (optional)",
+    "elementType": "Element Type", "addField": "Add Field", "jsonSchema": "JSON Schema",
+    "prompt": "Prompt", "count": "Count", "aspectRatio": "Aspect Ratio",
+    "text": "Text", "voice": "Voice", "duration": "Duration (seconds)",
+    "checkField": "Check Field", "operator": "Operator", "contains": "Contains", "equals": "Equals", "notEmpty": "Not Empty",
+    "compareValue": "Compare Value", "dataSource": "Data Source",
+    "parallelHint": "Process each array item in parallel, suitable for independent tasks (e.g. batch image generation)",
+    "sequentialHint": "Pass items to downstream nodes sequentially, skip on failure and continue",
+    "maxIterations": "Max Iterations", "breakField": "Break Condition Field", "breakOperator": "Break Operator", "breakValue": "Break Value",
+    "scriptCode": "Script Code", "scriptHint": "Access upstream data via ctx[\"nodeName.output\"]",
+    "splitMethod": "Split Method", "byParagraph": "By Paragraph (empty line)", "byLine": "By Line", "byComma": "By Comma", "byPeriod": "By Period",
+    "template": "Template", "templateHint": "Reference upstream data via .nodeName.output",
+    "promptText": "Prompt Text", "confirmOnly": "Confirm Only (no text input needed)",
+    "waitingInput": "Waiting for user input", "conditionJudge": "Condition", "loopBody": "Loop Body"
+  }
+}
