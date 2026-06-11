@@ -8,6 +8,8 @@ Built with **Wails v2** + **React** + **Go**.
 
 [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md) | [日本語](README.ja.md)
 
+![Screenshot](screenshot.webp)
+
 ## Why Chat-Created Workflows?
 
 Traditional workflow tools require learning a visual editor — dragging nodes, wiring edges, configuring parameters. With Go AI Agent, you just tell the agent what you need:
