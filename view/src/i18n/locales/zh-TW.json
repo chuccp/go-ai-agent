@@ -46,6 +46,8 @@
     "enterName": "請輸入流程名稱", "needStartEnd": "流程必須包含開始和結束節點",
     "saved": "儲存成功", "saveFailed": "儲存失敗", "confirmDelete": "確定刪除？",
     "jsonError": "JSON 格式錯誤",
+    "exportHint": "將流水線匯出為可分享的 JSON 檔案",
+    "importHint": "從 JSON 檔案匯入流水線",
     "addNode": "新增節點", "pointerMode": "指標模式", "handMode": "拖曳模式",
     "autoLayout": "自動佈局", "fullscreen": "全螢幕", "exitFullscreen": "退出全螢幕",
     "nodeProperties": "節點屬性", "selectNode": "選擇節點編輯屬性", "selectNodeHint": "點擊畫布上的節點檢視和編輯設定",

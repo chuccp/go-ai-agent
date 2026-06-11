@@ -46,6 +46,8 @@
     "enterName": "Please enter a flow name", "needStartEnd": "Flow must contain start and end nodes",
     "saved": "Saved successfully", "saveFailed": "Save failed", "confirmDelete": "Confirm delete?",
     "jsonError": "Invalid JSON format",
+    "exportHint": "Export this flow as a shareable JSON file",
+    "importHint": "Import a flow from a JSON file",
     "addNode": "Add Node", "pointerMode": "Pointer Mode", "handMode": "Hand Mode",
     "autoLayout": "Auto Layout", "fullscreen": "Fullscreen", "exitFullscreen": "Exit Fullscreen",
     "nodeProperties": "Node Properties", "selectNode": "Select a node to edit", "selectNodeHint": "Click a node on the canvas to view and edit its config",

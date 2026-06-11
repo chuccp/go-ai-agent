@@ -46,6 +46,8 @@
     "enterName": "フロー名を入力してください", "needStartEnd": "フローには開始ノードと終了ノードが必要です",
     "saved": "保存成功", "saveFailed": "保存失敗", "confirmDelete": "削除しますか？",
     "jsonError": "JSON形式エラー",
+    "exportHint": "このフローを共有可能なJSONファイルとしてエクスポート",
+    "importHint": "JSONファイルからフローをインポート",
     "addNode": "ノードを追加", "pointerMode": "ポインターモード", "handMode": "ハンドモード",
     "autoLayout": "自動レイアウト", "fullscreen": "フルスクリーン", "exitFullscreen": "フルスクリーン終了",
     "nodeProperties": "ノードプロパティ", "selectNode": "ノードを選択して編集", "selectNodeHint": "キャンバス上のノードをクリックして設定を表示・編集",

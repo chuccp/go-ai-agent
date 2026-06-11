@@ -1091,6 +1091,31 @@ function FlowListView() {
     } catch (e) { console.error(e) }
   }
 
+  const handleExportCard = async (id: number, name: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/flows/${id}`)
+      const body = await res.json()
+      const detail = body.data
+      if (!detail) return
+      const data = {
+        type: 'go-ai-agent-flow',
+        version: 1,
+        name: detail.name,
+        description: detail.description,
+        category: detail.category,
+        nodes: detail.nodes || [],
+        edges: detail.edges || [],
+      }
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${detail.name || 'flow'}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (e) { console.error(e) }
+  }
+
   const handleDelete = async (id: number) => {
     if (!window.confirm(t('flow.confirmDelete'))) return
     await deleteFlow(id)
@@ -1107,9 +1132,25 @@ function FlowListView() {
       try {
         const text = await file.text()
         const data = JSON.parse(text)
-        if (!data.name) { alert(t('flow.jsonError')); return }
-        const saved = await saveFlow(data)
-        if (saved?.id) fetchFlows()
+        // Support both versioned format and raw flow JSON
+        if (data.type === 'go-ai-agent-flow') {
+          // version 1: extract name/description/category/nodes/edges
+          if (!data.name) { alert(t('flow.jsonError')); return }
+          const saved = await saveFlow({
+            name: data.name,
+            description: data.description || '',
+            category: data.category || 'uncategorized',
+            nodes: data.nodes || [],
+            edges: data.edges || [],
+          })
+          if (saved?.id) fetchFlows()
+        } else if (data.nodes || data.name) {
+          // Raw flow JSON (no type marker) — still supported
+          const saved = await saveFlow(data)
+          if (saved?.id) fetchFlows()
+        } else {
+          alert(t('flow.jsonError'))
+        }
       } catch { alert(t('flow.jsonError')) }
       finally { setImporting(false) }
     }
@@ -1196,9 +1237,16 @@ function FlowListView() {
                   </button>
                   <button
                     onClick={() => handleDuplicate(f.id)}
-                    style={{ ...btnStyle(), flex: 1, justifyContent: 'center' }}
+                    style={{ ...btnStyle(), justifyContent: 'center' }}
                   >
-                    <Icon d={ICONS.copy} size={13} /> {t('common.copy')}
+                    <Icon d={ICONS.copy} size={13} />
+                  </button>
+                  <button
+                    onClick={() => handleExportCard(f.id, f.name)}
+                    style={{ ...btnStyle(), justifyContent: 'center' }}
+                    title={t('flow.exportHint')}
+                  >
+                    <Icon d={ICONS.export} size={13} />
                   </button>
                   <button
                     onClick={() => handleDelete(f.id)}
@@ -1653,6 +1701,8 @@ function FlowEditor({ flowId }: { flowId: string }) {
   /* ---- Export ---- */
   const handleExport = useCallback(() => {
     const data = {
+      type: 'go-ai-agent-flow',
+      version: 1,
       name: flowName,
       category: flowCategory,
       nodes: nodes.map(n => rfNodeToFlowNode(n, 0)),
@@ -1678,7 +1728,8 @@ function FlowEditor({ flowId }: { flowId: string }) {
       try {
         const text = await file.text()
         const data = JSON.parse(text)
-        if (data.nodes) {
+        // Support both versioned ("go-ai-agent-flow") and raw flow JSON
+        if (data.nodes && Array.isArray(data.nodes)) {
           const rfn = data.nodes.map((n: FlowNode) => flowNodeToRF(n))
           const rfe = (data.edges || []).map((e: FlowEdge) => flowEdgeToRF(e, data.nodes))
           setNodes(rfn)
