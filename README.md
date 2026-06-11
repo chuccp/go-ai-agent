@@ -145,6 +145,17 @@ AI skills (single prompts or tool calls) are like individual moves — a flow is
 
 Flows orchestrate human judgment together with AI capabilities, instead of calling AI in isolation.
 
+### Why Flows Are More Reliable
+
+A single skill is like a "god function" — one LLM call has to understand, reason, judge, and output all at once. Flows break that into deterministic pieces:
+
+- **Single responsibility** — each node does one thing. The LLM node generates, the condition node routes, the transform node reshapes. No single point of confusion.
+- **Explicit state passing** — `{{node.output}}` template syntax passes data between nodes. The LLM doesn't need to "remember" — downstream nodes get exact input, every time.
+- **Branching is externalized** — condition nodes use simple `contains`/`equals` rules, not LLM reasoning. The LLM doesn't decide where data goes; the DAG does.
+- **Human checkpoints** — `user_input` nodes pause execution. A human can inspect intermediate results and correct course before the flow continues.
+
+Break one big unreliable prompt into small reliable steps + deterministic orchestration + human guardrails.
+
 ## Share & Reuse
 
 Flows are stored as portable JSON — export any flow with one click, share the file, import with one click.
