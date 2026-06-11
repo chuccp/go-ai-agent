@@ -153,6 +153,7 @@ A single skill is like a "god function" — one LLM call has to understand, reas
 - **Explicit state passing** — `{{node.output}}` template syntax passes data between nodes. The LLM doesn't need to "remember" — downstream nodes get exact input, every time.
 - **Branching is externalized** — condition nodes use simple `contains`/`equals` rules, not LLM reasoning. The LLM doesn't decide where data goes; the DAG does.
 - **Human checkpoints** — `user_input` nodes pause execution. A human can inspect intermediate results and correct course before the flow continues.
+- **Reduced context, sharper attention** — a skill stuffs everything into one giant prompt, diluting the model's attention. A flow gives each node a focused, short context. The LLM only needs to think about one thing at a time — shorter context, better attention, more reliable output.
 
 Break one big unreliable prompt into small reliable steps + deterministic orchestration + human guardrails.
 
