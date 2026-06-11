@@ -1,6 +1,6 @@
 # Go AI Agent
 
-> 🚧 **Work in progress** — this project is under active development. We'd love help from anyone using Claude Opus to improve and complete features. Thank you!
+> 🚧 **Work in progress** — this project is under active development. We'd love help from anyone using Claude Fable 5 to improve and complete features. Thank you!
 
 A cross-platform desktop AI agent platform. **Create AI workflows by chatting** — describe what you want in natural language, and the agent designs, builds, and executes the pipeline for you.
 
