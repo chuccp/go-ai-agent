@@ -3,7 +3,7 @@ package runner
 import (
 	"fmt"
 
-	"github.com/bytedance/sonic"
+	"encoding/json"
 	"github.com/chuccp/go-ai-agent/entity"
 	"github.com/gorilla/websocket"
 )
@@ -121,13 +121,13 @@ func (r *ChatRunner) saveFlowNodesEdges(flowId uint, args map[string]any) flowNo
 		return res
 	}
 	res.hasNodes = true
-	nodesBytes, _ := sonic.Marshal(nodesRaw)
+	nodesBytes, _ := json.Marshal(nodesRaw)
 	var nodeInputs []struct {
 		Type   string         `json:"type"`
 		Label  string         `json:"label"`
 		Config map[string]any `json:"config"`
 	}
-	if sonic.Unmarshal(nodesBytes, &nodeInputs) != nil {
+	if json.Unmarshal(nodesBytes, &nodeInputs) != nil {
 		return res
 	}
 	if len(nodeInputs) == 0 {
@@ -136,7 +136,7 @@ func (r *ChatRunner) saveFlowNodesEdges(flowId uint, args map[string]any) flowNo
 
 	res.nodeIDs = make([]uint, len(nodeInputs))
 	for i, ni := range nodeInputs {
-		cfgBytes, _ := sonic.Marshal(ni.Config)
+		cfgBytes, _ := json.Marshal(ni.Config)
 		node := &entity.FlowNode{
 			FlowId:    flowId,
 			Type:      ni.Type,
@@ -152,14 +152,14 @@ func (r *ChatRunner) saveFlowNodesEdges(flowId uint, args map[string]any) flowNo
 	}
 
 	if edgesRaw, ok := args["edges"]; ok {
-		edgesBytes, _ := sonic.Marshal(edgesRaw)
+		edgesBytes, _ := json.Marshal(edgesRaw)
 		var edgeInputs []struct {
 			SourceIndex  int    `json:"source_index"`
 			TargetIndex  int    `json:"target_index"`
 			SourceHandle string `json:"source_handle"`
 			Label        string `json:"label"`
 		}
-		if sonic.Unmarshal(edgesBytes, &edgeInputs) == nil {
+		if json.Unmarshal(edgesBytes, &edgeInputs) == nil {
 			for _, ei := range edgeInputs {
 				if ei.SourceIndex < 0 || ei.SourceIndex >= len(res.nodeIDs) ||
 					ei.TargetIndex < 0 || ei.TargetIndex >= len(res.nodeIDs) {

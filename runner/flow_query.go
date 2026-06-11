@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/bytedance/sonic"
+	"encoding/json"
 	"github.com/chuccp/go-ai-agent/entity"
 )
 
@@ -96,16 +96,18 @@ func (r *ChatRunner) flowGet(args map[string]any) (string, error) {
 	edges, _ := r.edgeModel.FindByFlowId(id)
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("流程 [ID:%d] %s\n描述: %s\n分类: %s\n\n节点 (%d):\n",
-		f.Id, f.Name, f.Description, f.Category, len(nodes)))
+	sb.WriteString(fmt.Sprintf("流程 [ID:%d] %s | %s | %d节点 %d连线\n",
+		f.Id, f.Name, f.Category, len(nodes), len(edges)))
 	for _, n := range nodes {
 		extra := nodeConfigSummary(n)
-		sb.WriteString(fmt.Sprintf("  - [ID:%d] %s (type=%s)%s\n",
-			n.Id, n.Label, n.Type, extra))
+		sb.WriteString(fmt.Sprintf("  [%d] %s(%s)%s\n", n.Id, n.Label, n.Type, extra))
 	}
-	sb.WriteString(fmt.Sprintf("\n连线 (%d):\n", len(edges)))
 	for _, e := range edges {
-		sb.WriteString(fmt.Sprintf("  - [%d] -> [%d] handle=%s\n", e.SourceNodeId, e.TargetNodeId, e.SourceHandle))
+		sb.WriteString(fmt.Sprintf("  %d->%d", e.SourceNodeId, e.TargetNodeId))
+		if e.SourceHandle != "" && e.SourceHandle != "output" {
+			sb.WriteString(fmt.Sprintf("(%s)", e.SourceHandle))
+		}
+		sb.WriteString(" ")
 	}
 	return sb.String(), nil
 }
@@ -242,28 +244,30 @@ func nodeConfigSummary(n *entity.FlowNode) string {
 		return ""
 	}
 	var cfg map[string]any
-	if err := sonic.Unmarshal([]byte(n.Config), &cfg); err != nil {
+	if err := json.Unmarshal([]byte(n.Config), &cfg); err != nil {
 		return ""
 	}
-	parts := make([]string, 0, 2)
+	parts := make([]string, 0, 3)
 	if model, ok := cfg["model"].(string); ok && model != "" {
 		parts = append(parts, "模型:"+model)
 	}
 	if prompt, ok := cfg["prompt"].(string); ok && prompt != "" {
 		p := prompt
-		if len(p) > 40 {
-			p = p[:40] + "..."
-		}
-		parts = append(parts, "提示词:"+p)
+		if len(p) > 40 { p = p[:40] + "..." }
+		parts = append(parts, "提示:"+p)
+	}
+	if tl, ok := cfg["thinking_level"].(string); ok && tl != "" && tl != "off" {
+		parts = append(parts, "思考:"+tl)
+	}
+	if oft, ok := cfg["output_format_type"].(string); ok && oft != "" {
+		parts = append(parts, "格式:"+oft)
 	}
 	if confirm, ok := cfg["confirm_only"].(bool); ok && confirm {
-		parts = append(parts, "确认模式")
+		parts = append(parts, "确认")
 	}
 	if itemsKey, ok := cfg["items_key"].(string); ok && itemsKey != "" {
-		parts = append(parts, "迭代:"+itemsKey)
+		parts = append(parts, "来源:"+itemsKey)
 	}
-	if len(parts) == 0 {
-		return ""
-	}
+	if len(parts) == 0 { return "" }
 	return " (" + strings.Join(parts, ", ") + ")"
 }

@@ -8,7 +8,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/bytedance/sonic"
+	"encoding/json"
 	"github.com/ledongthuc/pdf"
 	"github.com/xuri/excelize/v2"
 )
@@ -303,5 +303,5 @@ func readPDF(path string) (string, error) {
 }
 
 func decodeArgs(argsJSON string, v any) error {
-	return sonic.Unmarshal([]byte(argsJSON), v)
+	return json.Unmarshal([]byte(argsJSON), v)
 }

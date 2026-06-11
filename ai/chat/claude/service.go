@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/bytedance/sonic"
+	"encoding/json"
 	"github.com/chuccp/go-ai-agent/ai/chat/common"
 	"github.com/chuccp/go-web-frame/config"
 	"github.com/chuccp/go-web-frame/log"
@@ -248,7 +248,7 @@ func (c *ChatService) ChatStreamWithContext(ctx context.Context, history []commo
 		}
 		data := strings.TrimPrefix(line, "data: ")
 		var evt anthropicSSE
-		if sonic.Unmarshal([]byte(data), &evt) != nil {
+		if json.Unmarshal([]byte(data), &evt) != nil {
 			continue
 		}
 		if evt.Type == "content_block_delta" && evt.Delta != nil && evt.Delta.Type == "text_delta" {
@@ -289,7 +289,7 @@ func (c *ChatService) ChatWithTools(ctx context.Context, history []common.ChatMe
 		case "text":
 			cr.Text += content.Text
 		case "tool_use":
-			inputJSON, _ := sonic.Marshal(content.Input)
+			inputJSON, _ := json.Marshal(content.Input)
 			cr.ToolCalls = append(cr.ToolCalls, common.ToolCall{
 				ID:        content.ID,
 				Name:      content.Name,

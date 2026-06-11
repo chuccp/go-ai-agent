@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
-	"github.com/bytedance/sonic"
 	"fmt"
 	"io"
 	"strings"
@@ -246,7 +245,7 @@ func (c *GeminiChat) ChatStreamWithContext(ctx context.Context, history []common
 		}
 		data := strings.TrimPrefix(line, "data: ")
 		var evt geminiResponse
-		if sonic.Unmarshal([]byte(data), &evt) != nil {
+		if json.Unmarshal([]byte(data), &evt) != nil {
 			continue
 		}
 		if evt.Error != nil {
@@ -296,7 +295,7 @@ func (c *GeminiChat) ChatWithTools(ctx context.Context, history []common.ChatMes
 				cr.Text += part.Text
 			}
 			if part.FunctionCall != nil {
-				argsJSON, _ := sonic.Marshal(part.FunctionCall.Args)
+				argsJSON, _ := json.Marshal(part.FunctionCall.Args)
 				cr.ToolCalls = append(cr.ToolCalls, common.ToolCall{
 					Name:      part.FunctionCall.Name,
 					Arguments: string(argsJSON),

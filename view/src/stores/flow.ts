@@ -1,8 +1,8 @@
+import { API_BASE } from '@/constants'
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { FlowDefinition, FlowDetail, FlowEvent } from '@/types/flow'
 
-const API_BASE = ''
 
 export const useFlowStore = defineStore('flow', () => {
   const flows = ref<FlowDefinition[]>([])

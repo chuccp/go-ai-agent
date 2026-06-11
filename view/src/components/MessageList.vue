@@ -11,12 +11,34 @@
 
       <!-- Content -->
       <div :class="['msg-content', msg.role]">
-        <div v-if="msg.role === 'tool'" class="tool-msg">{{ msg.content }}</div>
-        <div
-          v-else
-          :class="['bubble', msg.role]"
-          v-html="renderContent(msg.content)"
-        ></div>
+        <!-- Group A: tool / thinking / normal — mutually exclusive -->
+        <details v-if="msg.role === 'tool' && msg.content.length > 80" class="tool-detail">
+          <summary class="tool-summary">{{ msg.content.slice(0, 80) }}...</summary>
+          <div class="tool-body">{{ msg.content }}</div>
+        </details>
+        <div v-else-if="msg.role === 'tool'" class="tool-msg">{{ msg.content }}</div>
+
+        <div v-else-if="msg.status === 'thinking'" class="thinking-label">
+          <span class="thinking-text">{{ msg.content }}</span>
+          <span class="thinking-dots">
+            <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          </span>
+        </div>
+
+        <template v-else>
+          <!-- Group B: reasoning + content — both can appear together -->
+          <details v-if="msg.reasoning" :open="msg.status === 'streaming'" class="reasoning-block">
+            <summary>💭 思考过程</summary>
+            <div class="reasoning-content" v-html="renderContent(msg.reasoning)"></div>
+          </details>
+          <div v-if="msg.content" :class="['bubble', msg.role]" v-html="renderContent(msg.content)"></div>
+        </template>
+
+        <!-- Streaming cursor after last assistant message -->
+        <div v-if="isLastAssistant(index) && msg.status === 'streaming'" class="streaming-cursor">
+          <span class="cursor-dot"></span><span class="cursor-dot"></span><span class="cursor-dot"></span>
+        </div>
+
         <!-- Attachments in user messages -->
         <div v-if="msg.role === 'user' && msg.attachments?.length" class="attachments">
           <div v-for="(att, i) in msg.attachments" :key="i" class="att-item">
@@ -31,26 +53,13 @@
         >查看流程 →</router-link>
       </div>
     </div>
-
-    <!-- Thinking indicator -->
-    <div v-if="thinking" class="msg-row assistant">
-      <div class="avatar assistant">AI</div>
-      <div class="thinking-label">{{ thinking }}</div>
-    </div>
-
-    <!-- Streaming cursor -->
-    <div v-if="isStreaming && lastMsgIsAssistant && !thinking" class="msg-row assistant">
-      <div class="avatar assistant">AI</div>
-      <div class="streaming-cursor">
-        <span class="dot"></span><span class="dot"></span><span class="dot"></span>
-      </div>
-    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue'
+import { ref, watch } from 'vue'
 import { marked } from 'marked'
+import { fileIcon } from '@/constants'
 
 interface Attachment {
   id?: string; name: string; type: string; size?: number; path?: string
@@ -59,25 +68,26 @@ interface Attachment {
 interface Message {
   role: string
   content: string
+  reasoning?: string
   flowId?: number
   attachments?: Attachment[]
+  status?: 'thinking' | 'streaming'
 }
 
 const props = defineProps<{
   messages: Message[]
   isStreaming: boolean
-  thinking: string
 }>()
 
 const listRef = ref<HTMLElement | null>(null)
 
-const lastMsgIsAssistant = computed(() => {
+function isLastAssistant(index: number): boolean {
   const len = props.messages.length
-  return len > 0 && props.messages[len - 1].role === 'assistant'
-})
+  return index === len - 1 && props.messages[index].role === 'assistant'
+}
 
 watch(
-  () => [props.messages, props.messages.length, props.thinking],
+  () => [props.messages, props.messages.length] as const,
   () => {
     requestAnimationFrame(() => {
       if (listRef.value) {
@@ -89,14 +99,6 @@ watch(
 )
 
 marked.setOptions({ breaks: true, gfm: true })
-
-function fileIcon(mime: string): string {
-  if (mime.startsWith('image/')) return '🖼'
-  if (mime.startsWith('text/')) return '📄'
-  if (mime.includes('pdf')) return '📕'
-  if (mime.includes('doc')) return '📝'
-  return '📎'
-}
 
 function renderContent(text: string): string {
   if (!text) return ''
@@ -263,21 +265,84 @@ function renderContent(text: string): string {
 .att-icon { font-size: 13px; }
 .att-name { max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* Tool messages — subtle, no icon prefix */
+/* Tool messages — subtle, collapsible when long */
 .tool-msg {
   font-size: 12px;
   color: #94a3b8;
   padding: 4px 0;
   line-height: 1.5;
 }
+.tool-detail {
+  font-size: 12px;
+  color: #94a3b8;
+}
+.tool-summary {
+  cursor: pointer;
+  padding: 2px 0;
+  color: #94a3b8;
+}
+.tool-summary:hover { color: #6366f1; }
+.tool-body {
+  padding: 4px 0;
+  white-space: pre-wrap;
+  line-height: 1.5;
+  color: #64748b;
+}
 
 /* Thinking indicator */
 .thinking-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 13px;
   color: #94a3b8;
   padding: 6px 0;
   font-style: italic;
   animation: fadeInUp 0.2s ease;
+}
+.thinking-dots {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+}
+.thinking-dots .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #6366f1;
+  animation: bounce 1.4s infinite both;
+}
+.thinking-dots .dot:nth-child(2) { animation-delay: 0.2s; }
+.thinking-dots .dot:nth-child(3) { animation-delay: 0.4s; }
+
+/* Reasoning block (Grok/Claude collapsible thinking) */
+.reasoning-block {
+  margin-bottom: 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+  font-size: 13px;
+}
+.reasoning-block[open] {
+  border-color: #c7d2fe;
+}
+.reasoning-block summary {
+  padding: 6px 12px;
+  cursor: pointer;
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 500;
+  user-select: none;
+  background: #f8fafc;
+}
+.reasoning-block summary:hover {
+  color: #6366f1;
+}
+.reasoning-content {
+  padding: 8px 12px 10px;
+  color: #64748b;
+  line-height: 1.6;
+  border-top: 1px solid #f1f5f9;
 }
 
 /* Flow link */
@@ -298,15 +363,15 @@ function renderContent(text: string): string {
   align-items: center;
   padding: 4px 0;
 }
-.streaming-cursor .dot {
+.streaming-cursor .cursor-dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
   background: #cbd5e1;
   animation: bounce 1.4s infinite both;
 }
-.streaming-cursor .dot:nth-child(2) { animation-delay: 0.2s; }
-.streaming-cursor .dot:nth-child(3) { animation-delay: 0.4s; }
+.streaming-cursor .cursor-dot:nth-child(2) { animation-delay: 0.2s; }
+.streaming-cursor .cursor-dot:nth-child(3) { animation-delay: 0.4s; }
 
 @keyframes bounce {
   0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }

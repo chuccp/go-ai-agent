@@ -1,7 +1,7 @@
 package engine
 
 import (
-	"github.com/bytedance/sonic"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -262,7 +262,7 @@ func (e *Engine) FindStartNode() (uint, error) {
 
 func GetNodeConfig[T any](config string) (T, error) {
 	var cfg T
-	if err := sonic.Unmarshal([]byte(config), &cfg); err != nil {
+	if err := json.Unmarshal([]byte(config), &cfg); err != nil {
 		return cfg, fmt.Errorf("failed to parse node config: %w", err)
 	}
 	return cfg, nil

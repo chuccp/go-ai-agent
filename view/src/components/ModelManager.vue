@@ -25,6 +25,7 @@
               <th>分类</th>
               <th>API Key</th>
               <th>Base URL</th>
+              <th>思考</th>
               <th>默认</th>
               <th>操作</th>
             </tr>
@@ -37,6 +38,7 @@
               <td>{{ categoryLabel(m.category) }}</td>
               <td>{{ maskKey(m.api_key) }}</td>
               <td>{{ m.base_url || '-' }}</td>
+              <td><span :class="['think-badge', 'think-' + (m.thinking_level || 'off')]">{{ thinkLabel(m.thinking_level) }}</span></td>
               <td>
                 <button :class="['default-badge', { active: m.is_default }]" @click="setDefault(m)">
                   {{ m.is_default ? '默认' : '设为默认' }}
@@ -49,7 +51,7 @@
               </td>
             </tr>
             <tr v-if="filteredModels.length === 0">
-              <td colspan="8" class="empty-row">暂无模型，点击「添加模型」开始配置</td>
+              <td colspan="9" class="empty-row">暂无模型，点击「添加模型」开始配置</td>
             </tr>
           </tbody>
         </table>
@@ -126,6 +128,11 @@
               <label class="checkbox"><input type="checkbox" v-model="form.is_base" /> 标记为基础模型（全局唯一）</label>
 
               <template v-if="form.category === 'llm'">
+                <label>思考等级</label>
+                <select v-model="form.thinking_level">
+                  <option v-for="t in THINK_LEVELS" :key="t.value" :value="t.value">{{ t.label }}</option>
+                </select>
+
                 <label>多模态</label>
                 <label class="checkbox"><input type="checkbox" v-model="form.supports_multimodal" /> 支持多模态（图片输入）</label>
               </template>
@@ -146,6 +153,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useModelStore, API_TYPES, PROVIDERS_BY_API, CATEGORIES } from '@/stores/model'
 import type { AIModel } from '@/stores/model'
+import { THINK_LEVELS, thinkLabel } from '@/constants'
 
 const store = useModelStore()
 const filterCategory = ref('llm')
@@ -159,6 +167,7 @@ const form = ref({
   name: '', provider: 'openai', model: '', category: 'llm',
   api_key: '', base_url: '', description: '', is_default: false, is_base: false,
   supports_multimodal: false,
+  thinking_level: 'off',
 })
 
 const availableProviders = computed(() => PROVIDERS_BY_API[apiType.value] || [])
@@ -221,6 +230,7 @@ async function openEditor(m?: AIModel) {
       api_key: m.api_key || '', base_url: m.base_url || '', description: m.description || '',
       is_default: m.is_default, is_base: m.is_base,
       supports_multimodal: m.supports_multimodal || false,
+	      thinking_level: m.thinking_level || 'off',
     }
     // Try to infer API type from provider
     for (const [k, providers] of Object.entries(PROVIDERS_BY_API)) {
@@ -237,6 +247,7 @@ async function openEditor(m?: AIModel) {
       name: '', provider: 'openai', model: '', category: filterCategory.value,
       api_key: '', base_url: '', description: '', is_default: false, is_base: false,
       supports_multimodal: false,
+	      thinking_level: 'off',
     }
   }
   showEditor.value = true
@@ -321,6 +332,14 @@ onMounted(() => store.fetchModels())
 .base-btn { background: none; border: 1px solid #ddd; padding: 3px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; color: #999; margin-left: 4px; }
 .base-btn:hover { border-color: #f0a030; color: #f0a030; }
 .base-tag { font-size: 12px; margin-left: 4px; }
+
+/* Thinking badge */
+.think-badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
+.think-off { background: #f1f5f9; color: #94a3b8; }
+.think-low { background: #fef3c7; color: #d97706; }
+.think-medium { background: #e0e7ff; color: #4f46e5; }
+.think-high { background: #dcfce7; color: #16a34a; }
+.think-max { background: #fce7f3; color: #db2777; }
 
 .dialog-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1000; display: flex; align-items: center; justify-content: center; }
 .dialog { background: #fff; border-radius: 12px; padding: 24px; width: 540px; max-height: 85vh; overflow-y: auto; box-shadow: 0 8px 30px rgba(0,0,0,0.15); }

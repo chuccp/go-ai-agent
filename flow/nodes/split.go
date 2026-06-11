@@ -1,7 +1,7 @@
 package nodes
 
 import (
-	"github.com/bytedance/sonic"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -72,7 +72,7 @@ func (n *SplitNode) Execute(ctx *engine.ExecutionContext, config string) (*engin
 			// fallback: 全文作为一个 item
 			items = append(items, text)
 		}
-		result, _ := sonic.Marshal(items)
+		result, _ := json.Marshal(items)
 		return &engine.NodeOutput{
 			Data:   map[string]any{KeyOutput: string(result), "count": len(items)},
 			Status: engine.StatusSuccess,
@@ -88,7 +88,7 @@ func (n *SplitNode) Execute(ctx *engine.ExecutionContext, config string) (*engin
 				items = append(items, line)
 			}
 		}
-		result, _ := sonic.Marshal(items)
+		result, _ := json.Marshal(items)
 		return &engine.NodeOutput{
 			Data:   map[string]any{KeyOutput: string(result), "count": len(items)},
 			Status: engine.StatusSuccess,
@@ -104,7 +104,7 @@ func (n *SplitNode) Execute(ctx *engine.ExecutionContext, config string) (*engin
 				items = append(items, p)
 			}
 		}
-		result, _ := sonic.Marshal(items)
+		result, _ := json.Marshal(items)
 		return &engine.NodeOutput{
 			Data:   map[string]any{KeyOutput: string(result), "count": len(items)},
 			Status: engine.StatusSuccess,

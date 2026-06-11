@@ -44,24 +44,24 @@
         </div>
       </header>
       <div class="designer-body">
-        <NodePanel />
-        <Canvas :nodes="nodes" :edges="edges" @update:nodes="nodes = $event" @update:edges="edges = $event" @select-node="selectedNode = $event" />
-        <PropertyPanel :node="selectedNode" :nodes="nodes" :edges="edges" @update:node="updateNode" @delete:node="deleteNode" />
+        <Canvas ref="canvasRef" :nodes="nodes" :edges="edges" @update:nodes="nodes = $event; debouncedAutoSave()" @update:edges="edges = $event; debouncedAutoSave()" @select-node="selectedNode = $event" />
+        <NodePanel @add-node="onAddNode" @zoom-to="(pct: number) => canvasRef?.zoomTo(pct)" />
+        <PropertyPanel :node="selectedNode" :nodes="nodes" :edges="edges" @update:node="updateNode" @delete:node="deleteNode" @close="selectedNode = null" />
       </div>
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
+import { API_BASE } from '@/constants'
 import { useRoute, useRouter } from 'vue-router'
 import { useFlowStore } from '@/stores/flow'
-import type { FlowNode, FlowEdge } from '@/types/flow'
+import type { FlowNode, FlowEdge, NodeType } from '@/types/flow'
 import NodePanel from './NodePanel.vue'
 import Canvas from './Canvas.vue'
 import PropertyPanel from './PropertyPanel.vue'
 
-const API_BASE = ''
 
 const route = useRoute()
 const router = useRouter()
@@ -79,11 +79,12 @@ const isEdit = computed(() => flowId.value !== null || isNew.value)
 
 const flowName = ref('')
 const flowCategory = ref('picture_book')
+const canvasRef = ref<InstanceType<typeof Canvas> | null>(null)
 const nodes = ref<FlowNode[]>([])
 const edges = ref<FlowEdge[]>([])
 const selectedNode = ref<FlowNode | null>(null)
 
-onMounted(async () => {
+async function loadFlow() {
   if (flowId.value) {
     const flow = await flowStore.fetchFlow(flowId.value)
     if (flow) {
@@ -95,14 +96,16 @@ onMounted(async () => {
   } else {
     flowStore.fetchFlows()
   }
-  // new flow: keep empty defaults
-})
+}
+
+onMounted(loadFlow)
+watch(flowId, loadFlow)
 
 function autoLayout(flowNodes: FlowNode[]): FlowNode[] {
   if (flowNodes.length === 0) return flowNodes
   const allAtOrigin = flowNodes.every(n => n.position_x === 0 && n.position_y === 0)
   if (!allAtOrigin) return flowNodes
-  const SPACING_X = 220
+  const SPACING_X = 300
   const SPACING_Y = 140
   const COLS = 3
   return flowNodes.map((n, i) => ({
@@ -112,16 +115,56 @@ function autoLayout(flowNodes: FlowNode[]): FlowNode[] {
   }))
 }
 
+function onAddNode(type: NodeType, label: string) {
+  if (type === 'for_each' || type === 'iterator' || type === 'loop') {
+    // Container nodes: create a config node (left) + container node (right), connected by edge
+    const now = Date.now()
+    const baseY = 200 + nodes.value.length * 40
+    const configNode: FlowNode = {
+      id: now, flow_id: 0, type, label: label + '配置', config: { items_key: '' },
+      position_x: 200, position_y: baseY,
+    }
+    const containerNode: FlowNode = {
+      id: now + 1, flow_id: 0, type: type + '_container' as NodeType, label,
+      config: {}, position_x: 500, position_y: baseY,
+    }
+    const edge: FlowEdge = {
+      id: now + 2, flow_id: 0,
+      source_node_id: configNode.id, target_node_id: containerNode.id,
+      source_handle: 'output', target_handle: 'input', label: '',
+    }
+    nodes.value = [...nodes.value, configNode, containerNode]
+    edges.value = [...edges.value, edge]
+    selectedNode.value = configNode
+  } else {
+    const n: FlowNode = {
+      id: Date.now(), flow_id: 0, type, label, config: {},
+      position_x: 300, position_y: 200 + nodes.value.length * 20,
+    }
+    nodes.value = [...nodes.value, n]
+    selectedNode.value = n
+  }
+  debouncedAutoSave()
+}
+
+let autoSaveTimer: ReturnType<typeof setTimeout> | null = null
+function debouncedAutoSave() {
+  if (autoSaveTimer) clearTimeout(autoSaveTimer)
+  autoSaveTimer = setTimeout(() => saveFlow(true), 800)
+}
+
 function updateNode(updated: FlowNode) {
   const idx = nodes.value.findIndex(n => n.id === updated.id)
   if (idx >= 0) {
     nodes.value[idx] = updated
   }
+  debouncedAutoSave()
 }
 
 function deleteNode(nodeId: number) {
   nodes.value = nodes.value.filter(n => n.id !== nodeId)
   edges.value = edges.value.filter(e => e.source_node_id !== nodeId && e.target_node_id !== nodeId)
+  debouncedAutoSave()
   if (selectedNode.value?.id === nodeId) {
     selectedNode.value = null
   }
@@ -134,21 +177,27 @@ const saveOk = ref(false)
 function toggleDark() { darkMode.value = !darkMode.value; document.documentElement.classList.toggle("dark", darkMode.value) }
 function exportFlow() { const blob = new Blob([JSON.stringify({name:flowName.value,category:flowCategory.value,nodes:nodes.value,edges:edges.value},null,2)],{type:"application/json"}); const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=(flowName.value||"flow")+".json"; a.click() }
 function importFlow() { const input=document.createElement("input"); input.type="file"; input.accept=".json"; input.onchange=async(e)=>{ const f=e.target.files[0]; if(!f)return; const text=await f.text(); try{ const data=JSON.parse(text); flowName.value=data.name||""; flowCategory.value=data.category||""; nodes.value=data.nodes||[]; edges.value=data.edges||[] }catch(ex){ alert("JSON 格式错误") } }; input.click() }
-async function saveFlow() {
-  saveMsg.value = ''
+async function saveFlow(silent = false) {
+  if (silent) {
+    // Silent auto-save: skip validation if no flow ID yet (not created yet)
+    if (!flowId.value) return
+  } else {
+    saveMsg.value = ''
+  }
   if (!flowName.value.trim()) {
-    saveMsg.value = '请输入流程名称'; saveOk.value = false; return
+    if (!silent) { saveMsg.value = '请输入流程名称'; saveOk.value = false }
+    return
   }
   const hasStart = nodes.value.some(n => n.type === 'start')
   const hasEnd = nodes.value.some(n => n.type === 'end')
   if (!hasStart || !hasEnd) {
-    saveMsg.value = '流程必须包含开始和结束节点'; saveOk.value = false; return
+    if (!silent) { saveMsg.value = '流程必须包含开始和结束节点'; saveOk.value = false; return }
   }
 
   const result = await flowStore.saveFlow({
     name: flowName.value, description: '', category: flowCategory.value,
     nodes: nodes.value.map(n => ({
-      type: n.type, label: n.label,
+      id: n.id, type: n.type, label: n.label,
       config: typeof n.config === 'string' ? n.config : JSON.stringify(n.config),
       position_x: n.position_x, position_y: n.position_y,
     })),
@@ -161,12 +210,12 @@ async function saveFlow() {
   }, flowId.value || undefined)
 
   if (result) {
-    saveMsg.value = '保存成功'; saveOk.value = true
+    if (!silent) { saveMsg.value = '保存成功'; saveOk.value = true }
     if (!flowId.value) router.push(`/designer/${result.id}`)
   } else {
-    saveMsg.value = '保存失败'; saveOk.value = false
+    if (!silent) { saveMsg.value = '保存失败'; saveOk.value = false }
   }
-  setTimeout(() => { saveMsg.value = '' }, 2000)
+  if (!silent) setTimeout(() => { saveMsg.value = '' }, 2000)
 }
 
 function createNew() {
@@ -205,7 +254,7 @@ async function deleteFlow(id: number) {
 .save-msg { font-size: 12px; padding: 2px 8px; border-radius: 4px; white-space: nowrap; }
 .save-msg.ok { color: #52c41a; background: #f6ffed; }
 .save-msg.err { color: #ff4d4f; background: #fff2f0; }
-.designer-body { flex: 1; display: flex; overflow: hidden; }
+.designer-body { flex: 1; display: flex; overflow: hidden; position: relative; }
 .flow-list-page { flex: 1; overflow-y: auto; }
 .flow-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; padding: 20px; }
 .flow-card { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px; }

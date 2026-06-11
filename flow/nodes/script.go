@@ -1,7 +1,7 @@
 package nodes
 
 import (
-	"github.com/bytedance/sonic"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -58,7 +58,7 @@ func (n *ScriptNode) Execute(ctx *engine.ExecutionContext, config string) (*engi
 				return nil, err
 			}
 			var v any
-			if err := sonic.Unmarshal([]byte(string(s)), &v); err != nil {
+			if err := json.Unmarshal([]byte(string(s)), &v); err != nil {
 				return nil, fmt.Errorf("json_parse: %w", err)
 			}
 			return toStarlark(v), nil
@@ -70,7 +70,7 @@ func (n *ScriptNode) Execute(ctx *engine.ExecutionContext, config string) (*engi
 			if err := starlark.UnpackArgs("json_string", args, kwargs, "v", &v); err != nil {
 				return nil, err
 			}
-			b, err := sonic.Marshal(fromStarlark(v))
+			b, err := json.Marshal(fromStarlark(v))
 			if err != nil {
 				return nil, err
 			}
@@ -179,4 +179,4 @@ func fromStarlark(v starlark.Value) any {
 }
 
 var _ = starlarkjson.Module
-var _ = sonic.Marshal
+var _ = json.Marshal

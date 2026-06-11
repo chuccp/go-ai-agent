@@ -1,7 +1,7 @@
 package rest
 
 import (
-	"github.com/bytedance/sonic"
+	"encoding/json"
 	"strconv"
 
 	"github.com/chuccp/go-ai-agent/entity"
@@ -126,8 +126,8 @@ func (r *FlowRest) saveNodesAndEdges(flowId uint, jsonMap map[string]any) {
 	var ns []*entity.FlowNode
 	idMap := make(map[uint]uint)
 	if nodesRaw, ok := jsonMap["nodes"]; ok {
-		nodesBytes, _ := sonic.Marshal(nodesRaw)
-		if sonic.Unmarshal(nodesBytes, &ns) != nil { return }
+		nodesBytes, _ := json.Marshal(nodesRaw)
+		if json.Unmarshal(nodesBytes, &ns) != nil { return }
 		r.nodeModel.DeleteByFlowId(flowId)
 		oldIds := make([]uint, len(ns))
 		for i, n := range ns {
@@ -145,9 +145,9 @@ func (r *FlowRest) saveNodesAndEdges(flowId uint, jsonMap map[string]any) {
 		}
 	}
 	if edgesRaw, ok := jsonMap["edges"]; ok {
-		edgesBytes, _ := sonic.Marshal(edgesRaw)
+		edgesBytes, _ := json.Marshal(edgesRaw)
 		var es []*entity.FlowEdge
-		if sonic.Unmarshal(edgesBytes, &es) != nil { return }
+		if json.Unmarshal(edgesBytes, &es) != nil { return }
 		r.edgeModel.DeleteByFlowId(flowId)
 		for _, e := range es {
 			e.Id = 0

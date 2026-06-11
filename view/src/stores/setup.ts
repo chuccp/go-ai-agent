@@ -1,7 +1,7 @@
+import { API_BASE } from '@/constants'
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
-const API_BASE = ''
 
 export interface SetupStatus {
   initialized: boolean

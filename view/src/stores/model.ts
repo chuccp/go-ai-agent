@@ -1,7 +1,7 @@
+import { API_BASE } from '@/constants'
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
-const API_BASE = ''
 
 export interface AIModel {
   id: number
@@ -14,6 +14,7 @@ export interface AIModel {
   is_default: boolean
   is_base: boolean
   supports_multimodal: boolean
+  thinking_level: string
   description: string
   created_at: string
   updated_at: string

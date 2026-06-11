@@ -1,7 +1,7 @@
 package nodes
 
 import (
-	"github.com/bytedance/sonic"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -104,7 +104,7 @@ func (n *ForEachNode) Execute(ctx *engine.ExecutionContext, config string) (*eng
 		})
 	}
 
-	resultJSON, _ := sonic.Marshal(results)
+	resultJSON, _ := json.Marshal(results)
 	return &engine.NodeOutput{
 		Data: map[string]any{
 			KeyOutput: string(resultJSON),
@@ -121,17 +121,17 @@ func parseJSONArray(v any) ([]any, error) {
 		return arr, nil
 	case string:
 		var parsed []any
-		if err := sonic.Unmarshal([]byte(arr), &parsed); err != nil {
+		if err := json.Unmarshal([]byte(arr), &parsed); err != nil {
 			return nil, err
 		}
 		return parsed, nil
 	default:
-		b, err := sonic.Marshal(v)
+		b, err := json.Marshal(v)
 		if err != nil {
 			return nil, err
 		}
 		var parsed []any
-		if err := sonic.Unmarshal(b, &parsed); err != nil {
+		if err := json.Unmarshal(b, &parsed); err != nil {
 			return nil, err
 		}
 		return parsed, nil
@@ -158,7 +158,7 @@ func cloneForItem(ctx *engine.ExecutionContext, item any) *engine.ExecutionConte
 		data[KeyOutput] = fmt.Sprintf("%v", v)
 	}
 
-	itemJSON, _ := sonic.Marshal(item)
+	itemJSON, _ := json.Marshal(item)
 	data["_json"] = string(itemJSON)
 
 	clone.SetNodeOutput("item", &engine.NodeOutput{

@@ -1,11 +1,11 @@
 package runner
 
 import (
+	"encoding/json"
 	"strconv"
 	"sync"
 	"time"
 
-	"github.com/bytedance/sonic"
 	"github.com/chuccp/go-ai-agent/agent/tool"
 	"github.com/chuccp/go-ai-agent/ai/chat"
 	"github.com/chuccp/go-ai-agent/ai/chat/common"
@@ -184,7 +184,7 @@ func (r *ChatRunner) HandleWebSocket(conn *websocket.Conn) error {
 		}
 
 		var req WSRequest
-		if err := sonic.Unmarshal(message, &req); err != nil {
+		if err := json.Unmarshal(message, &req); err != nil {
 			r.sendJSON(conn, WSResponse{Type: "error", Message: "无效的请求格式: " + err.Error()})
 			continue
 		}

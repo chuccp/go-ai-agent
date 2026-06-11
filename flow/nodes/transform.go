@@ -2,7 +2,7 @@ package nodes
 
 import (
 	"bytes"
-	"github.com/bytedance/sonic"
+	"encoding/json"
 	"fmt"
 	"text/template"
 
@@ -55,7 +55,7 @@ func (n *TransformNode) Execute(ctx *engine.ExecutionContext, config string) (*e
 
 	// 尝试解析为 JSON 验证
 	var jsonCheck any
-	isJSON := sonic.Unmarshal([]byte(result), &jsonCheck) == nil
+	isJSON := json.Unmarshal([]byte(result), &jsonCheck) == nil
 
 	return &engine.NodeOutput{
 		Data: map[string]any{

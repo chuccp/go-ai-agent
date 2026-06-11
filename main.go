@@ -30,18 +30,23 @@ func Create() *wf.WebFrame {
 
 	flowRun := runner.NewFlowRunner()
 
-	// Build REST handler list
+	// Build REST handler list.
+	// During first-run, only Api, ChatRest (for /ws/chat), and SetupRest are registered.
+	// Model-dependent endpoints return errors instead of panicking thanks to nil guards.
+	// FlowRest and ModelRest are only registered when fully initialized.
 	rests := []core.IRest{
 		&rest.Api{},
 		rest.NewChatRest(chatRunner, flowRun),
-		rest.NewFlowRest(flowRun),
-		rest.NewModelRest(),
 	}
 
-	// Register setup REST when system is not initialized
 	if isFirstRun {
 		log.Info("检测到首次运行，启用初始化向导", zap.String("configPath", configFilePath))
 		rests = append(rests, rest.NewSetupRest(configFilePath))
+	} else {
+		rests = append(rests,
+			rest.NewFlowRest(flowRun),
+			rest.NewModelRest(),
+		)
 	}
 
 	builder.Rest(rests...)

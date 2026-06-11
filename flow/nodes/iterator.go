@@ -1,7 +1,7 @@
 package nodes
 
 import (
-	"github.com/bytedance/sonic"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -118,7 +118,7 @@ func (n *IteratorNode) Execute(ctx *engine.ExecutionContext, config string) (*en
 		}
 	}
 
-	resultJSON, _ := sonic.Marshal(results)
+	resultJSON, _ := json.Marshal(results)
 	return &engine.NodeOutput{
 		Data: map[string]any{
 			KeyOutput: fullOutput.String(),

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/bytedance/sonic"
+	"encoding/json"
 	"github.com/chuccp/go-ai-agent/ai/chat/common"
 	"github.com/chuccp/go-web-frame/config"
 	"github.com/chuccp/go-web-frame/log"
@@ -35,6 +35,10 @@ var ProviderDefaults = map[string][2]string{
 
 // ==================== Chat Completions API JSON ====================
 
+type thinkingParam struct {
+	Type string `json:"type"`
+}
+
 type chatRequest struct {
 	Model         string         `json:"model"`
 	Messages      []messageParam `json:"messages"`
@@ -43,6 +47,7 @@ type chatRequest struct {
 	TopP          *float64       `json:"top_p,omitempty"`
 	MaxTokens     *int           `json:"max_tokens,omitempty"`
 	StreamOptions *streamOptions `json:"stream_options,omitempty"`
+	Thinking      *thinkingParam `json:"thinking,omitempty"`
 	Tools         any            `json:"tools,omitempty"`
 	ToolChoice    any            `json:"tool_choice,omitempty"`
 }
@@ -248,7 +253,7 @@ func (c *ChatService) ChatStreamWithContext(ctx context.Context, history []commo
 			break
 		}
 		var sr streamResponse
-		if sonic.Unmarshal([]byte(data), &sr) != nil {
+		if json.Unmarshal([]byte(data), &sr) != nil {
 			continue
 		}
 		for _, choice := range sr.Choices {
@@ -296,6 +301,7 @@ func (c *ChatService) ChatWithTools(ctx context.Context, history []common.ChatMe
 	if len(crResp.Choices) > 0 {
 		msg := crResp.Choices[0].Message
 		cr.Text = msg.Content
+		cr.Reasoning = msg.ReasoningContent
 		for _, tc := range msg.ToolCalls {
 			cr.ToolCalls = append(cr.ToolCalls, common.ToolCall{
 				ID:        tc.ID,
@@ -324,6 +330,10 @@ func (c *ChatService) buildRequest(messages []messageParam, opts *common.LLMOpti
 		}
 		if tokens := opts.GetMaxTokens(); tokens > 0 {
 			mt = tokens
+		}
+		level := opts.GetThinkingLevel()
+		if level != common.ThinkOff {
+			req.Thinking = &thinkingParam{Type: "enabled"}
 		}
 	}
 	req.Temperature = &t

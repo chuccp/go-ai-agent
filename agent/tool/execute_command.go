@@ -1,7 +1,7 @@
 package tool
 
 import (
-	"github.com/bytedance/sonic"
+	"encoding/json"
 	"os/exec"
 	"runtime"
 	"strings"
@@ -36,7 +36,7 @@ func (t *ExecuteCommand) Execute(call Call) (string, error) {
 	var params struct {
 		Command string `json:"command"`
 	}
-	if err := sonic.Unmarshal([]byte(call.Arguments), &params); err != nil {
+	if err := json.Unmarshal([]byte(call.Arguments), &params); err != nil {
 		return "", err
 	}
 

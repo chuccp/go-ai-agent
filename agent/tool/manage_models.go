@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bytedance/sonic"
+	"encoding/json"
 )
 
 // ModelActionHandler is the handler for AI model CRUD operations (injected by runner).
@@ -147,7 +147,7 @@ func (t *ManageModels) Execute(call Call) (string, error) {
 	}
 
 	var params map[string]any
-	if err := sonic.Unmarshal([]byte(call.Arguments), &params); err != nil {
+	if err := json.Unmarshal([]byte(call.Arguments), &params); err != nil {
 		return "", fmt.Errorf("invalid arguments: %w", err)
 	}
 

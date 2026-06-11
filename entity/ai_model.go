@@ -17,7 +17,8 @@ type AIModel struct {
 	InputTypes         string    `gorm:"size:256" json:"input_types,omitempty"`          // 支持的输入类型: text,image,audio (逗号分隔)
 	OutputTypes        string    `gorm:"size:256" json:"output_types,omitempty"`         // 支持的输出类型: text,image,audio (逗号分隔)
 	SupportsMultimodal bool      `gorm:"default:false" json:"supports_multimodal"`       // 是否支持多模态（图片输入）
-	CreatedAt   time.Time `json:"created_at"`
+	ThinkingLevel      string    `gorm:"size:16;default:off" json:"thinking_level"`       // 思考等级: off, low, medium, high, max
+	CreatedAt          time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 

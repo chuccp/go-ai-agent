@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
-	"github.com/bytedance/sonic"
 	"fmt"
 	"io"
 	"strings"
@@ -286,7 +285,7 @@ func (c *VolcengineChat) ChatStreamWithContext(ctx context.Context, history []co
 
 	req := c.buildRequest(input, options, true)
 
-	reqBody, _ := sonic.Marshal(req)
+	reqBody, _ := json.Marshal(req)
 	log.Debug("Responses API 流式请求", zap.String("body", string(reqBody)))
 
 	resp, err := c.restyClient.R().
@@ -321,7 +320,7 @@ func (c *VolcengineChat) ChatStreamWithContext(ctx context.Context, history []co
 		}
 
 		var event sseEvent
-		if err := sonic.Unmarshal([]byte(data), &event); err != nil {
+		if err := json.Unmarshal([]byte(data), &event); err != nil {
 			continue
 		}
 
@@ -374,7 +373,7 @@ func (c *VolcengineChat) ChatWithTools(ctx context.Context, history []common.Cha
 		req.ToolChoice = &responsesToolChoice{Type: "required"}
 	}
 
-	reqBody, _ := sonic.Marshal(req)
+	reqBody, _ := json.Marshal(req)
 	log.Info("ChatWithTools 请求", zap.String("body", string(reqBody)))
 
 	resp, err := c.doRequest(ctx, req)
@@ -389,7 +388,7 @@ func (c *VolcengineChat) ChatWithTools(ctx context.Context, history []common.Cha
 		switch item.Type {
 		case "message":
 			var contentItems []contentItem
-			if err := sonic.Unmarshal(item.Content, &contentItems); err == nil {
+			if err := json.Unmarshal(item.Content, &contentItems); err == nil {
 				for _, ci := range contentItems {
 					if ci.Type == "output_text" {
 						cr.Text += ci.Text
@@ -466,7 +465,7 @@ func (c *VolcengineChat) buildRequest(input any, opts *common.LLMOptions, stream
 func (c *VolcengineChat) doRequest(ctx context.Context, req responsesRequest) (*responsesObject, error) {
 	var obj responsesObject
 
-	reqBody, _ := sonic.Marshal(req)
+	reqBody, _ := json.Marshal(req)
 	log.Debug("Responses API 请求", zap.String("body", string(reqBody)))
 
 	resp, err := c.restyClient.R().
@@ -505,7 +504,7 @@ func getOutputText(resp *responsesObject) string {
 		}
 
 		var contentItems []contentItem
-		if err := sonic.Unmarshal(item.Content, &contentItems); err != nil {
+		if err := json.Unmarshal(item.Content, &contentItems); err != nil {
 			continue
 		}
 

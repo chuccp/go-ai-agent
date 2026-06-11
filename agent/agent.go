@@ -154,6 +154,11 @@ func (c *Chat) Process() {
 			return
 		}
 
+		// Emit reasoning first if present (mainstream pattern: thinking before content/tool)
+		if resp.Reasoning != "" {
+			c.emit(Event{Type: "chunk", Content: resp.Reasoning, Reasoning: resp.Reasoning, Iteration: c.iteration})
+		}
+
 		// 有工具调用 → 执行
 		if len(resp.ToolCalls) > 0 {
 			c.addToolCalls(resp)

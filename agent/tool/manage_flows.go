@@ -1,7 +1,7 @@
 package tool
 
 import (
-	"github.com/bytedance/sonic"
+	"encoding/json"
 	"fmt"
 )
 
@@ -50,24 +50,23 @@ WORKFLOW for editing/deleting by name:
 2. If exactly 1 match → use that flow_id; if multiple → ask user to pick; if 0 → report not found
 3. For updates: describe the change and confirm before calling update
 
-Available node types and their config fields:
-- start: 流程入口，无配置
-- end: 流程出口，无配置
-- llm: 调用大语言模型，config: {model, prompt (支持{{NodeLabel.output}}模板), system, max_tokens, json_type, json_format}
-- user_input: 等待用户输入或确认，config: {prompt, confirm_only (bool)}
-- split: 拆分文本为JSON数组，config: {source_key, delimiter: "paragraph"|"line"|"custom"}
-- condition: if/else条件分支，config: {field, operator: "contains"|"equals"|"not_empty"|"is_json"|"confirmed", value}，从"yes"/"no"出口分别连线
-- transform: Go模板数据变换，config: {template}
-- for_each: 遍历JSON数组逐项调用LLM，config: {items_key, model, prompt, system, max_tokens}
-- iterator: 按序迭代，失败跳过，config: {items_key, prompt, model}
-- loop: 循环容器，config: {max_iterations, break_field, break_operator, break_value}
-- script: Starlark Python脚本，config: {code}
+Node types:
+- start: 开始节点，无配置
+- end: 结束节点，无配置
+- llm: LLM调用。config: {model, prompt(支持{{NodeLabel.output}}模板), system, temperature(0-2,默认0.7), top_p(0-1,默认0.9), max_tokens, thinking_level(off|low|medium|high|max), output_format_type(空|json_auto|json_object|json_array|custom)}
+- user_input: 用户输入。config: {prompt, confirm_only(bool)}
+- split: 文本拆分。config: {source_key, delimiter(paragraph|line|，|。)}
+- condition: 条件分支。config: {field, operator(contains|equals|not_empty), value}。从"yes"/"no"出口连线
+- transform: 数据变换。config: {template}
+- for_each: 并发批量处理，数组各项独立并发执行，互不依赖。config: {items_key(数据来源键)}
+- iterator: 按序迭代，逐项顺序执行，下一项可使用前一项结果。config: {items_key(数据来源键)}
+- loop: 循环。config: {max_iterations, break_field, break_operator, break_value}
+- script: 脚本。config: {script(Python/Starlark代码)}
+- image_gen: 图片生成。config: {prompt, model}
+- audio_gen: 音频合成。config: {text, model, voice}
+- video_gen: 视频生成。config: {prompt, model, duration}
 
-When you finally call create: nodes must include at least a start node (index 0) and an end node (last index), connected by an edge. Use source_index/target_index (0-based array indices) to wire edges.
-
-When listing or describing flows, ALWAYS include the model used by each LLM/for_each/iterator node. Use action="get" to retrieve full node details including model config, then present them to the user.
-
-When updating: describe the planned changes to the user and confirm before calling update. You can change name/description/category, or replace nodes+edges.`,
+创建规则：nodes必须包含start和end节点。edges用source_index/target_index(0-based)。先讨论方案→用户确认→再创建。`,
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -133,7 +132,7 @@ func (t *ManageFlows) Execute(call Call) (string, error) {
 	}
 
 	var params map[string]any
-	if err := sonic.Unmarshal([]byte(call.Arguments), &params); err != nil {
+	if err := json.Unmarshal([]byte(call.Arguments), &params); err != nil {
 		return "", fmt.Errorf("invalid arguments: %w", err)
 	}
 

@@ -1,6 +1,8 @@
 package model
 
 import (
+	"errors"
+
 	"github.com/chuccp/go-ai-agent/entity"
 	"github.com/chuccp/go-web-frame/core"
 	"github.com/chuccp/go-web-frame/db"
@@ -18,73 +20,139 @@ func (m *AIModelModel) Init(d *db.DB, ctx *core.Context) error {
 	return m.CreateTable()
 }
 
+var errNotInitialized = errors.New("AI model not initialized: database not configured")
+
+// entry returns the underlying EntryModel, or an error if the model has not been
+// initialized (e.g. during first-run before the database is configured).
+func (m *AIModelModel) entry() (*fwModel.EntryModel[*entity.AIModel, uint], error) {
+	if m.EntryModel == nil {
+		return nil, errNotInitialized
+	}
+	return m.EntryModel, nil
+}
+
 func (m *AIModelModel) Create(model *entity.AIModel) error {
-	return m.EntryModel.Save(model)
+	em, err := m.entry()
+	if err != nil {
+		return err
+	}
+	return em.Save(model)
 }
 
 func (m *AIModelModel) FindById(id uint) (*entity.AIModel, error) {
-	return m.FindByPK(id)
+	em, err := m.entry()
+	if err != nil {
+		return nil, err
+	}
+	return em.FindByPK(id)
 }
 
 func (m *AIModelModel) List() ([]*entity.AIModel, error) {
-	return m.EntryModel.Query().
+	em, err := m.entry()
+	if err != nil {
+		return nil, err
+	}
+	return em.Query().
 		Order("category ASC, provider ASC, name ASC").
 		All()
 }
 
 func (m *AIModelModel) ListByCategory(category string) ([]*entity.AIModel, error) {
-	return m.EntryModel.Query().
+	em, err := m.entry()
+	if err != nil {
+		return nil, err
+	}
+	return em.Query().
 		Where("category = ?", category).
 		Order("provider ASC, name ASC").
 		All()
 }
 
 func (m *AIModelModel) FindDefault(category string) (*entity.AIModel, error) {
-	return m.EntryModel.Query().
+	em, err := m.entry()
+	if err != nil {
+		return nil, err
+	}
+	return em.Query().
 		Where("category = ? AND is_default = ?", category, true).
 		One()
 }
 
 func (m *AIModelModel) FindBase() ([]*entity.AIModel, error) {
-	return m.EntryModel.Query().
+	em, err := m.entry()
+	if err != nil {
+		return nil, err
+	}
+	return em.Query().
 		Where("is_base = ?", true).
 		Order("id ASC").
 		All()
 }
 
 func (m *AIModelModel) Update(model *entity.AIModel) error {
-	return m.EntryModel.Save(model)
+	em, err := m.entry()
+	if err != nil {
+		return err
+	}
+	return em.Save(model)
 }
 
 func (m *AIModelModel) Delete(id uint) error {
-	return m.EntryModel.DeleteByPK(id)
+	em, err := m.entry()
+	if err != nil {
+		return err
+	}
+	return em.DeleteByPK(id)
 }
 
 func (m *AIModelModel) ClearDefaultByCategory(category string) error {
-	return m.EntryModel.Update().
+	em, err := m.entry()
+	if err != nil {
+		return err
+	}
+	return em.Update().
 		Where("category = ? AND is_default = ?", category, true).
 		UpdateColumn("is_default", false)
 }
 
 func (m *AIModelModel) ClearBase() error {
-	return m.EntryModel.Update().
+	em, err := m.entry()
+	if err != nil {
+		return err
+	}
+	return em.Update().
 		Where("is_base = ?", true).
 		UpdateColumn("is_base", false)
 }
 
 func (m *AIModelModel) IsExist() (bool, error) {
-	return m.EntryModel.IsExist()
+	em, err := m.entry()
+	if err != nil {
+		return false, err
+	}
+	return em.IsExist()
 }
 
 func (m *AIModelModel) CreateTable() error {
-	return m.EntryModel.CreateTable()
+	em, err := m.entry()
+	if err != nil {
+		return err
+	}
+	return em.CreateTable()
 }
 
 func (m *AIModelModel) DeleteTable() error {
-	return m.EntryModel.DeleteTable()
+	em, err := m.entry()
+	if err != nil {
+		return err
+	}
+	return em.DeleteTable()
 }
 
 func (m *AIModelModel) GetTableName() string {
+	if m.EntryModel == nil {
+		return ""
+	}
 	return m.EntryModel.GetTableName()
 }
 

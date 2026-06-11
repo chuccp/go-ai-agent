@@ -1,6 +1,8 @@
 package model
 
 import (
+	"errors"
+
 	"github.com/chuccp/go-ai-agent/entity"
 	"github.com/chuccp/go-web-frame/core"
 	"github.com/chuccp/go-web-frame/db"
@@ -18,36 +20,76 @@ func (m *AdminUserModel) Init(d *db.DB, ctx *core.Context) error {
 	return m.CreateTable()
 }
 
+var errAdminNotInitialized = errors.New("admin user model not initialized: database not configured")
+
+func (m *AdminUserModel) entry() (*fwModel.EntryModel[*entity.AdminUser, uint], error) {
+	if m.EntryModel == nil {
+		return nil, errAdminNotInitialized
+	}
+	return m.EntryModel, nil
+}
+
 func (m *AdminUserModel) Create(user *entity.AdminUser) error {
-	return m.EntryModel.Save(user)
+	em, err := m.entry()
+	if err != nil {
+		return err
+	}
+	return em.Save(user)
 }
 
 func (m *AdminUserModel) FindByUsername(username string) (*entity.AdminUser, error) {
-	return m.EntryModel.FindOne("username = ?", username)
+	em, err := m.entry()
+	if err != nil {
+		return nil, err
+	}
+	return em.FindOne("username = ?", username)
 }
 
 func (m *AdminUserModel) HasAdminUser() (bool, error) {
-	count, err := m.EntryModel.Query().Where("is_admin = ?", true).Count()
+	em, err := m.entry()
+	if err != nil {
+		return false, err
+	}
+	count, err := em.Query().Where("is_admin = ?", true).Count()
 	return count > 0, err
 }
 
 func (m *AdminUserModel) UpdatePassword(id uint, passwordHash string) error {
-	return m.EntryModel.UpdateColumn(id, "password_hash", passwordHash)
+	em, err := m.entry()
+	if err != nil {
+		return err
+	}
+	return em.UpdateColumn(id, "password_hash", passwordHash)
 }
 
 func (m *AdminUserModel) IsExist() (bool, error) {
-	return m.EntryModel.IsExist()
+	em, err := m.entry()
+	if err != nil {
+		return false, err
+	}
+	return em.IsExist()
 }
 
 func (m *AdminUserModel) CreateTable() error {
-	return m.EntryModel.CreateTable()
+	em, err := m.entry()
+	if err != nil {
+		return err
+	}
+	return em.CreateTable()
 }
 
 func (m *AdminUserModel) DeleteTable() error {
-	return m.EntryModel.DeleteTable()
+	em, err := m.entry()
+	if err != nil {
+		return err
+	}
+	return em.DeleteTable()
 }
 
 func (m *AdminUserModel) GetTableName() string {
+	if m.EntryModel == nil {
+		return ""
+	}
 	return m.EntryModel.GetTableName()
 }
 

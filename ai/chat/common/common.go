@@ -12,12 +12,22 @@ import (
 
 // ---- Options constants ----
 
+// Thinking levels — unified across all providers
 const (
-	OptionThinking    = "thinking"
-	OptionReasoning   = "reasoning"
-	OptionJSONMode    = "json_mode"
-	OptionTools       = "tools"
-	OptionModel       = "model"
+	ThinkOff = "off"
+	ThinkLow = "low"
+	ThinkMed = "medium"
+	ThinkHigh = "high"
+	ThinkMax = "max"
+)
+
+const (
+	OptionThinking      = "thinking"
+	OptionThinkingLevel = "thinking_level"
+	OptionReasoning     = "reasoning"
+	OptionJSONMode      = "json_mode"
+	OptionTools         = "tools"
+	OptionModel         = "model"
 	OptionTemperature = "temperature"
 	OptionMaxTokens   = "max_tokens"
 	OptionTopP        = "top_p"
@@ -103,6 +113,7 @@ type ToolResult struct {
 // ChatResponse 聊天响应（含工具调用）
 type ChatResponse struct {
 	Text      string
+	Reasoning string // model's thinking/reasoning content (e.g. DeepSeek reasoning_content)
 	ToolCalls []ToolCall
 }
 
@@ -193,6 +204,18 @@ func (o *LLMOptions) SetThinking(thinking bool) *LLMOptions {
 
 func (o *LLMOptions) GetThinking() bool {
 	return o.GetBool(OptionThinking)
+}
+
+func (o *LLMOptions) SetThinkingLevel(level string) *LLMOptions {
+	return o.Set(OptionThinkingLevel, level)
+}
+
+func (o *LLMOptions) GetThinkingLevel() string {
+	l := o.GetString(OptionThinkingLevel)
+	if l == "" {
+		return ThinkOff
+	}
+	return l
 }
 
 func (o *LLMOptions) SetReasoning(reasoning string) *LLMOptions {

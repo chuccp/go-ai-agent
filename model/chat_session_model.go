@@ -1,6 +1,8 @@
 package model
 
 import (
+	"errors"
+
 	"github.com/chuccp/go-ai-agent/entity"
 	"github.com/chuccp/go-web-frame/core"
 	"github.com/chuccp/go-web-frame/db"
@@ -14,6 +16,15 @@ type ChatSessionModel struct {
 	messageModel *ChatMessageModel
 }
 
+var errSessionNotInitialized = errors.New("chat session model not initialized: database not configured")
+
+func (m *ChatSessionModel) entry() (*fwModel.EntryModel[*entity.ChatSession, uint], error) {
+	if m.EntryModel == nil {
+		return nil, errSessionNotInitialized
+	}
+	return m.EntryModel, nil
+}
+
 func (m *ChatSessionModel) Init(d *db.DB, ctx *core.Context) error {
 	tableName := (&entity.ChatSession{}).TableName()
 	m.EntryModel = fwModel.NewEntryModel[*entity.ChatSession, uint](d, tableName)
@@ -22,43 +33,80 @@ func (m *ChatSessionModel) Init(d *db.DB, ctx *core.Context) error {
 }
 
 func (m *ChatSessionModel) Create(session *entity.ChatSession) error {
-	return m.EntryModel.Save(session)
+	em, err := m.entry()
+	if err != nil {
+		return err
+	}
+	return em.Save(session)
 }
 
 func (m *ChatSessionModel) FindById(id uint) (*entity.ChatSession, error) {
-	return m.FindByPK(id)
+	em, err := m.entry()
+	if err != nil {
+		return nil, err
+	}
+	return em.FindByPK(id)
 }
 
 func (m *ChatSessionModel) List() ([]*entity.ChatSession, error) {
-	return m.EntryModel.Query().
+	em, err := m.entry()
+	if err != nil {
+		return nil, err
+	}
+	return em.Query().
 		Order("updated_at desc").
 		All()
 }
 
 func (m *ChatSessionModel) Delete(id uint) error {
-	if err := m.messageModel.DeleteBySessionId(id); err != nil {
+	em, err := m.entry()
+	if err != nil {
 		return err
 	}
-	return m.EntryModel.DeleteByPK(id)
+	if m.messageModel != nil {
+		if err := m.messageModel.DeleteBySessionId(id); err != nil {
+			return err
+		}
+	}
+	return em.DeleteByPK(id)
 }
 
 func (m *ChatSessionModel) Update(session *entity.ChatSession) error {
-	return m.EntryModel.Save(session)
+	em, err := m.entry()
+	if err != nil {
+		return err
+	}
+	return em.Save(session)
 }
 
 func (m *ChatSessionModel) IsExist() (bool, error) {
-	return m.EntryModel.IsExist()
+	em, err := m.entry()
+	if err != nil {
+		return false, err
+	}
+	return em.IsExist()
 }
 
 func (m *ChatSessionModel) CreateTable() error {
-	return m.EntryModel.CreateTable()
+	em, err := m.entry()
+	if err != nil {
+		return err
+	}
+	return em.CreateTable()
 }
 
 func (m *ChatSessionModel) DeleteTable() error {
-	return m.EntryModel.DeleteTable()
+	em, err := m.entry()
+	if err != nil {
+		return err
+	}
+	return em.DeleteTable()
 }
 
 func (m *ChatSessionModel) GetTableName() string {
+	if m.EntryModel == nil {
+		return ""
+	}
 	return m.EntryModel.GetTableName()
 }
 
@@ -75,6 +123,15 @@ type ChatMessageModel struct {
 	*fwModel.EntryModel[*entity.ChatMessage, uint]
 }
 
+var errMessageNotInitialized = errors.New("chat message model not initialized: database not configured")
+
+func (m *ChatMessageModel) entry() (*fwModel.EntryModel[*entity.ChatMessage, uint], error) {
+	if m.EntryModel == nil {
+		return nil, errMessageNotInitialized
+	}
+	return m.EntryModel, nil
+}
+
 func (m *ChatMessageModel) Init(d *db.DB, ctx *core.Context) error {
 	tableName := (&entity.ChatMessage{}).TableName()
 	m.EntryModel = fwModel.NewEntryModel[*entity.ChatMessage, uint](d, tableName)
@@ -82,39 +139,70 @@ func (m *ChatMessageModel) Init(d *db.DB, ctx *core.Context) error {
 }
 
 func (m *ChatMessageModel) Create(msg *entity.ChatMessage) error {
-	return m.EntryModel.Save(msg)
+	em, err := m.entry()
+	if err != nil {
+		return err
+	}
+	return em.Save(msg)
 }
 
 func (m *ChatMessageModel) CreateBatch(msgs []*entity.ChatMessage) error {
-	return m.EntryModel.Saves(msgs)
+	em, err := m.entry()
+	if err != nil {
+		return err
+	}
+	return em.Saves(msgs)
 }
 
 func (m *ChatMessageModel) FindBySessionId(sessionId uint) ([]*entity.ChatMessage, error) {
-	return m.EntryModel.Query().
+	em, err := m.entry()
+	if err != nil {
+		return nil, err
+	}
+	return em.Query().
 		Where("session_id = ?", sessionId).
 		Order("created_at asc").
 		All()
 }
 
 func (m *ChatMessageModel) DeleteBySessionId(sessionId uint) error {
-	return m.EntryModel.Delete().
+	em, err := m.entry()
+	if err != nil {
+		return err
+	}
+	return em.Delete().
 		Where("session_id = ?", sessionId).
 		Delete()
 }
 
 func (m *ChatMessageModel) IsExist() (bool, error) {
-	return m.EntryModel.IsExist()
+	em, err := m.entry()
+	if err != nil {
+		return false, err
+	}
+	return em.IsExist()
 }
 
 func (m *ChatMessageModel) CreateTable() error {
-	return m.EntryModel.CreateTable()
+	em, err := m.entry()
+	if err != nil {
+		return err
+	}
+	return em.CreateTable()
 }
 
 func (m *ChatMessageModel) DeleteTable() error {
-	return m.EntryModel.DeleteTable()
+	em, err := m.entry()
+	if err != nil {
+		return err
+	}
+	return em.DeleteTable()
 }
 
 func (m *ChatMessageModel) GetTableName() string {
+	if m.EntryModel == nil {
+		return ""
+	}
 	return m.EntryModel.GetTableName()
 }
 

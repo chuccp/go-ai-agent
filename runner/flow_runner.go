@@ -2,7 +2,7 @@ package runner
 
 import (
 	"context"
-	"github.com/bytedance/sonic"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -266,7 +266,7 @@ func (r *FlowRunner) HandleFlowStart(flowId uint, executionId uint, sessionId ui
 			exec.Context = fmt.Sprintf(`{"error":"%s"}`, err.Error())
 		} else {
 			exec.Status = engine.ExecCompleted
-			ctxJSON, _ := sonic.Marshal(map[string]any{
+			ctxJSON, _ := json.Marshal(map[string]any{
 				"data":         execCtx.Data,
 				"node_outputs": execCtx.NodeOutputs,
 			})
@@ -324,7 +324,7 @@ func (r *FlowRunner) Emit(event engine.FlowEvent) {
 	if r.sendFn == nil {
 		return
 	}
-	data, err := sonic.Marshal(event)
+	data, err := json.Marshal(event)
 	if err != nil {
 		log.Error("序列化流程事件失败", zap.Error(err))
 		return

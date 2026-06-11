@@ -20,10 +20,10 @@
       <ChatPanel
         :messages="messages"
         :is-streaming="isStreaming"
-        :thinking="thinking"
         @send="sendMessage"
         @upload="onFilesSelected"
         @model-change="onModelChange"
+        @think-change="onThinkChange"
       />
     </div>
   </div>
@@ -31,30 +31,31 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { API_BASE } from '@/constants'
 import { useFlowStore } from '@/stores/flow'
+import { useChatStream } from '@/composables/useChatStream'
 import type { FlowEvent } from '@/types/flow'
 import SessionList from './SessionList.vue'
 import ChatPanel from './ChatPanel.vue'
 import FlowProgress from './FlowProgress.vue'
 
 interface Session { id: number; title: string; created_at: string; updated_at: string }
-interface Message { role: string; content: string; flowId?: number; attachments?: Attachment[] }
+interface Message { id?: number; role: string; content: string; reasoning?: string; flowId?: number; attachments?: Attachment[]; status?: 'thinking' | 'streaming' }
 interface Attachment { id: string; name: string; type: string; size: number; path: string }
 
 const sessions = ref<Session[]>([])
 const messages = ref<Message[]>([])
 const activeSessionId = ref<number | null>(null)
 const isStreaming = ref(false)
-const thinking = ref('')
 const isFlowRunning = ref(false)
 const selectedModelId = ref('')
+const thinkLevel = ref('off')
 const selectedFlowId = ref<number | null>(null)
 const flowEvents = ref<FlowEvent[]>([])
 const currentExecutionId = ref<number | null>(null)
 const ws = ref<WebSocket | null>(null)
 const flowStore = useFlowStore()
 const pendingAttachments = ref<Attachment[]>([])
-const API_BASE = ''
 
 const selectedFlowName = computed(() => {
   if (!selectedFlowId.value) return ''
@@ -86,8 +87,12 @@ async function deleteSession(id: number) {
 }
 function selectSession(id: number) { activeSessionId.value = id; fetchMessages(id) }
 function onModelChange(id: string) { selectedModelId.value = id }
+function onThinkChange(level: string) { thinkLevel.value = level }
 
-// WebSocket
+// ── Streaming composable ──
+const { beginStream, addReasoning, acceptContent, appendDelta, setThinkingText, endStream } = useChatStream(messages, isStreaming, isFlowRunning)
+
+// ── WebSocket ──
 function connectWebSocket() {
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
   ws.value = new WebSocket(`${protocol}//${location.host}/ws/chat`)
@@ -96,33 +101,47 @@ function connectWebSocket() {
     if (data.type && data.type.startsWith('flow_')) { handleFlowEvent(data as FlowEvent); return }
     if (data.type === 'pong') return
     if (data.type === 'session_created') { activeSessionId.value = data.session_id; fetchSessions(); return }
+
     if (data.type === 'chunk') {
-      if (data.done) { isStreaming.value = false; isFlowRunning.value = false; thinking.value = '' }
-      else if (data.reasoning && data.content) {
-        thinking.value = '💭 ' + data.content
+      if (data.done) { endStream(); return }
+
+      if (data.reasoning && data.content) {
+        addReasoning(data.content)
       } else if (data.content && !data.reasoning) {
-        thinking.value = ''
-        const last = messages.value[messages.value.length - 1]
-        if (last && last.role === 'assistant') last.content += data.content
-        else messages.value.push({ role: 'assistant', content: data.content })
+        const m = findStream()
+        if (m && m.status === 'thinking') acceptContent(data.content)
+        else appendDelta(data.content)
       }
       return
     }
-    if (data.type === 'tool_call') { thinking.value = '🔧 ' + (data.message || '处理中...'); return }
+
+    if (data.type === 'tool_call') {
+      setThinkingText(data.message || '处理中...')
+      return
+    }
+
     if (data.type === 'tool_result') {
-      thinking.value = ''
+      popStale()
       let flowId: number | undefined
       const m = data.message || ''
       const fm = m.match(/ID:\s*(\d+)/)
-      if (fm && (m.includes('流程创建成功') || m.includes('流程更新成功'))) { flowId = parseInt(fm[1]); flowStore.fetchFlows() }
-      messages.value.push({ role: 'tool', content: m, flowId }); return
+      if (fm && (m.includes('流程创建成功') || m.includes('流程更新成功'))) {
+        flowId = parseInt(fm[1]); flowStore.fetchFlows()
+      }
+      messages.value.push({ role: 'tool', content: m, flowId })
+      beginStream()
+      return
     }
-    if (data.type === 'error') { isStreaming.value = false; isFlowRunning.value = false; thinking.value = ''; messages.value.push({ role: 'tool', content: '❌ ' + data.message }) }
+
+    if (data.type === 'error') {
+      endStream()
+      messages.value.push({ role: 'tool', content: '❌ ' + data.message })
+    }
   }
   ws.value.onclose = () => setTimeout(connectWebSocket, 2000)
 }
 
-// Send
+// ── Send ──
 async function sendMessage(content: string) {
   if (isStreaming.value) return
   if (!content.trim() && pendingAttachments.value.length === 0) return
@@ -139,22 +158,23 @@ async function sendMessage(content: string) {
 
   const wsMsgs = [...messages.value.map(m => ({ role: m.role, content: m.content })), { role: 'user', content }]
   messages.value.push({ role: 'user', content, attachments: atts })
+  isStreaming.value = true
 
   if (selectedFlowId.value) {
+    // Flow mode: flow events provide their own progress indicators
     if (isFlowRunning.value && currentExecutionId.value) {
-      isStreaming.value = true
       ws.value!.send(JSON.stringify({ type: 'flow_user_response', session_id: activeSessionId.value, options: { execution_id: currentExecutionId.value, response: content } }))
     } else {
-      isStreaming.value = true; isFlowRunning.value = true; flowEvents.value = []; flowStore.clearFlowEvents()
+      isFlowRunning.value = true; flowEvents.value = []; flowStore.clearFlowEvents()
       const er = await fetch(`${API_BASE}/api/flows/${selectedFlowId.value}/execute`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id: activeSessionId.value }) })
       const ed = await er.json(); currentExecutionId.value = ed.data?.execution_id
-      ws.value!.send(JSON.stringify({ type: 'flow_start', session_id: activeSessionId.value, model: selectedModelId.value, messages: wsMsgs, stream: true, options: { flow_id: selectedFlowId.value, execution_id: currentExecutionId.value }, attachments: atts }))
+      ws.value!.send(JSON.stringify({ type: 'flow_start', session_id: activeSessionId.value, model: selectedModelId.value, messages: wsMsgs, stream: true, options: { flow_id: selectedFlowId.value, execution_id: currentExecutionId.value, thinking_level: thinkLevel.value }, attachments: atts }))
     }
   } else {
-    isStreaming.value = true
-    thinking.value = '正在处理用户请求...'
+    // Agent/chat mode: create thinking placeholder, transitioned to content on first chunk
+    beginStream()
     const msgType = atts.length > 0 ? 'chat' : 'agent'
-    ws.value!.send(JSON.stringify({ type: msgType, session_id: activeSessionId.value, model: selectedModelId.value, messages: wsMsgs, stream: true, attachments: atts }))
+    ws.value!.send(JSON.stringify({ type: msgType, session_id: activeSessionId.value, model: selectedModelId.value, messages: wsMsgs, stream: true, options: { thinking_level: thinkLevel.value }, attachments: atts }))
   }
 }
 

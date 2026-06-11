@@ -1,7 +1,7 @@
 package nodes
 
 import (
-	"github.com/bytedance/sonic"
+	"encoding/json"
 	"strconv"
 
 	"github.com/chuccp/go-ai-agent/flow/cache"
@@ -10,12 +10,15 @@ import (
 )
 
 type LLMNodeConfig struct {
-	Model        string `json:"model"`
-	Prompt       string `json:"prompt"`
-	System       string `json:"system"`
-	MaxTokens    int    `json:"max_tokens"`
-	OutputFormat string `json:"output_format"` // OutFormat JSON
-	CacheEnabled *bool  `json:"cache_enabled"` // nil = 跟随全局配置
+	Model         string  `json:"model"`
+	Prompt        string  `json:"prompt"`
+	System        string  `json:"system"`
+	Temperature   float64 `json:"temperature"`
+	TopP          float64 `json:"top_p"`
+	MaxTokens     int     `json:"max_tokens"`
+	ThinkingLevel string  `json:"thinking_level"`
+	OutputFormat  string  `json:"output_format"`
+	CacheEnabled  *bool   `json:"cache_enabled"`
 }
 
 type LLMNode struct{}
@@ -42,7 +45,7 @@ func (n *LLMNode) Execute(ctx *engine.ExecutionContext, config string) (*engine.
 	// 结构化输出
 	if cfg.OutputFormat != "" {
 		var of out.OutFormat
-		if sonic.Unmarshal([]byte(cfg.OutputFormat), &of) == nil {
+		if json.Unmarshal([]byte(cfg.OutputFormat), &of) == nil {
 			if inst := of.BuildPromptInstruction(); inst != "" {
 				if system != "" {
 					system += "\n\n"
@@ -73,12 +76,15 @@ func (n *LLMNode) Execute(ctx *engine.ExecutionContext, config string) (*engine.
 
 	// 通过函数注册表调用 LLM
 	args := map[string]any{
-		"model":      cfg.Model,
-		"prompt":     prompt,
-		"system":     system,
-		"max_tokens": cfg.MaxTokens,
-		"json_mode":  cfg.OutputFormat != "",
-		"stream":     true,
+		"model":          cfg.Model,
+		"prompt":         prompt,
+		"system":         system,
+		"max_tokens":     cfg.MaxTokens,
+		"json_mode":      cfg.OutputFormat != "",
+		"stream":         true,
+		"temperature":    cfg.Temperature,
+		"top_p":          cfg.TopP,
+		"thinking_level": cfg.ThinkingLevel,
 	}
 
 	result, err := ctx.InvokeFunction("llm", args)

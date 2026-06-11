@@ -1,7 +1,7 @@
 package cache
 
 import (
-	"github.com/bytedance/sonic"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"sync"
@@ -64,7 +64,7 @@ func (m *CacheManager) Get(cacheKey string) (string, bool) {
 		return "", false
 	}
 	var entry cacheEntry
-	if sonic.Unmarshal(data, &entry) != nil {
+	if json.Unmarshal(data, &entry) != nil {
 		return "", false
 	}
 	return entry.Result, true
@@ -79,7 +79,7 @@ func (m *CacheManager) Set(cacheKey string, result string) error {
 	defer m.mu.Unlock()
 
 	entry := cacheEntry{Result: result}
-	data, err := sonic.Marshal(entry)
+	data, err := json.Marshal(entry)
 	if err != nil {
 		return err
 	}

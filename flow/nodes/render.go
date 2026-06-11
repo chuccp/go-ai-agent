@@ -1,7 +1,7 @@
 package nodes
 
 import (
-	"github.com/bytedance/sonic"
+	"encoding/json"
 	"fmt"
 	"regexp"
 
@@ -26,7 +26,7 @@ func renderPrompt(tmpl string, ctx *engine.ExecutionContext) string {
 
 		// 匹配整个 label，返回 JSON
 		if output, ok := ctx.GetNodeOutput(key); ok {
-			b, err := sonic.MarshalIndent(output.Data, "", "  ")
+			b, err := json.MarshalIndent(output.Data, "", "  ")
 			if err != nil {
 				return match
 			}
