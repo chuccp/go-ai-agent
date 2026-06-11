@@ -35,3 +35,7 @@ go.work.sum
 *.yml
 /data
 go-ai-agent
+/build
+/view/wailsjs
+/view/package.json.md5
+/view/tsconfig.tsbuildinfo
