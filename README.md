@@ -97,6 +97,33 @@ You: "Create a content review flow"
 └─────────────────────────────────┘
 ```
 
+## Flows Inside Conversations
+
+Flows aren't just standalone pipelines — you can run them directly inside a chat conversation. The agent becomes the runtime: it loads the flow, walks through each node, and reports progress as you talk.
+
+```
+Chat: "Run the news review flow on this article: [paste]"
+         │
+         ▼
+┌───────────────────────────────────────┐
+│  Agent executes flow step by step     │
+│  while conversing with you            │
+│                                       │
+│  Agent: "Step 1/4 - Summarizing..."   │
+│  Agent: "Step 2/4 - Sentiment: mixed" │
+│  ┌──────────────────────────┐        │
+│  │  user_input node reached  │        │
+│  │  "This looks negative —   │        │
+│  │   publish anyway or skip?" │        │
+│  └──────────────────────────┘        │
+│                                       │
+│  You: "Skip it"                       │
+│  Agent: "Skipped. Flow complete."     │
+└───────────────────────────────────────┘
+```
+
+This means flows **handle the structured work** while conversation **handles the decisions**. The flow drives the process; you stay in the loop whenever judgment is needed. Run an existing flow mid-chat, or create a new one on the fly — the boundary between chatting and executing is seamless.
+
 ## Flows vs Skills
 
 AI skills (single prompts or tool calls) are like individual moves — a flow is the entire playbook.
