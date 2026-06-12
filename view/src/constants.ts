@@ -1,4 +1,13 @@
-export const API_BASE = ''
+// In Wails dev mode, the webview is served via wails:// but API calls go through
+// the Wails dev server (wails.localhost:34115) which does NOT proxy /api to the
+// Go backend. We detect this and point to the Vite dev server (which has /api
+// proxy configured) instead.
+export const API_BASE = (() => {
+  if (typeof window !== 'undefined' && window.location.hostname === 'wails.localhost') {
+    return 'http://localhost:5173'
+  }
+  return ''
+})()
 
 export const THINK_LEVELS = ['off', 'low', 'medium', 'high', 'max'] as const
 export type ThinkLevel = typeof THINK_LEVELS[number]
