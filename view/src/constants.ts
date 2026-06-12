@@ -1,10 +1,8 @@
-// In Wails dev mode, the webview is served via wails:// but API calls go through
-// the Wails dev server (wails.localhost:34115) which does NOT proxy /api to the
-// Go backend. We detect this and point to the Vite dev server (which has /api
-// proxy configured) instead.
+// In Wails dev mode, the webview loads from wails.localhost but the Go backend
+// runs on its own port (19009). Point API calls directly to the Go backend.
 export const API_BASE = (() => {
   if (typeof window !== 'undefined' && window.location.hostname === 'wails.localhost') {
-    return 'http://localhost:5173'
+    return 'http://localhost:19009'
   }
   return ''
 })()

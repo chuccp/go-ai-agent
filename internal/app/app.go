@@ -7,6 +7,7 @@ import (
 	"github.com/chuccp/go-ai-agent/runner"
 	wf "github.com/chuccp/go-web-frame"
 	"github.com/chuccp/go-web-frame/component/cache"
+	"github.com/chuccp/go-web-frame/component/cors"
 	"github.com/chuccp/go-web-frame/config"
 	"github.com/chuccp/go-web-frame/core"
 	"github.com/chuccp/go-web-frame/log"
@@ -61,7 +62,7 @@ func Create(webMode bool) *wf.WebFrame {
 		&model.FlowExecutionModel{},
 		&model.AdminUserModel{},
 	)
-
+	builder.Filter(cors.NewCrosFilter())
 	return builder.Build()
 }
 
@@ -111,7 +112,7 @@ func CreateDesktop() *wf.WebFrame {
 		&model.FlowExecutionModel{},
 		&model.AdminUserModel{},
 	)
-
+	builder.Filter(cors.NewCrosFilter())
 	return builder.Build()
 }
 
