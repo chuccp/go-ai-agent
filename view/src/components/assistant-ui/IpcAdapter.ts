@@ -46,12 +46,12 @@ export function createIpcAdapter(opts: IpcAdapterOptions): ChatModelAdapter {
       const thinkLevel = opts.thinkLevel()
       const flowId = opts.flowId() ?? 0
 
-      const rawResult = app.AgentChat(sessionId, modelId, textContent.trim(), thinkLevel, flowId)
+      const rawResult: string = await app.AgentChat(sessionId, modelId, textContent.trim(), thinkLevel, flowId)
       let result: any = {}
       try {
         result = JSON.parse(rawResult)
       } catch {
-        yield { content: [{ type: 'text', text: rawResult }] }
+        yield { content: [{ type: 'text', text: String(rawResult) }] }
         return
       }
 

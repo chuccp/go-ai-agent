@@ -11,6 +11,8 @@ import (
 	"github.com/chuccp/go-ai-agent/ai/chat/common"
 	"github.com/chuccp/go-ai-agent/entity"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
+	"github.com/chuccp/go-web-frame/log"
+	"go.uber.org/zap"
 )
 
 // ── IPC Sender (agent.Sender via Wails runtime events) ──
@@ -30,6 +32,7 @@ func newIpcSender(ctx context.Context, sessionID uint) *ipcSender {
 
 func (s *ipcSender) Send(event agent.Event) {
 	eventName := fmt.Sprintf("chat:%d:%s", s.sessionID, event.Type)
+	log.Info("[IPC] emitting event", zap.String("name", eventName), zap.String("type", event.Type), zap.Bool("done", event.Done))
 	wailsRuntime.EventsEmit(s.ctx, eventName, event)
 
 	switch event.Type {
@@ -40,6 +43,8 @@ func (s *ipcSender) Send(event agent.Event) {
 		if event.Done && s.onDone != nil {
 			s.onDone()
 		}
+	case "error":
+		log.Error("[IPC] agent error", zap.String("msg", event.Message))
 	}
 }
 
@@ -74,6 +79,25 @@ func (r *ChatRunner) StartAgentIPC(ctx context.Context, sessionID uint, modelPat
 
 	if modelPath == "" {
 		modelPath = r.defaultModelPath
+	}
+
+	log.Info("[IPC] StartAgentIPC",
+		zap.Uint("sessionID", sessionID),
+		zap.String("modelPath", modelPath),
+		zap.String("userMessage", truncateText(userMessage, 50)),
+		zap.Bool("providersLoaded", r.providersLoaded),
+	)
+
+	if !r.providersLoaded {
+		r.loadProvidersFromDB()
+	}
+	if modelPath == "" {
+		wailsRuntime.EventsEmit(ctx, fmt.Sprintf("chat:%d:error", sessionID), agent.Event{
+			Type:    "error",
+			Message: "No model configured. Please add a model in Settings.",
+			Done:    true,
+		})
+		return sessionID, nil
 	}
 
 	opts := common.NewLLMOptions()

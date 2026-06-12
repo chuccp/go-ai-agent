@@ -33,22 +33,9 @@ export function MyRuntimeProvider({
   const adapter = useMemo(
     () => {
       if (IS_DESKTOP) {
-        return createIpcAdapter({
-          sessionId,
-          modelId,
-          thinkLevel,
-          flowId,
-          onSessionCreated,
-        })
+        return createIpcAdapter({ sessionId, modelId, thinkLevel, flowId, onSessionCreated })
       }
-      return createStreamingWebSocketAdapter({
-        getWs: getWs!,
-        sessionId,
-        modelId,
-        thinkLevel,
-        flowId,
-        onSessionCreated,
-      })
+      return createStreamingWebSocketAdapter({ getWs: getWs!, sessionId, modelId, thinkLevel, flowId, onSessionCreated })
     },
     [getWs, sessionId, modelId, thinkLevel, flowId, onSessionCreated]
   )
