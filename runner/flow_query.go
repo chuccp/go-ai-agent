@@ -130,6 +130,11 @@ func (r *ChatRunner) flowCreate(args map[string]any) (string, error) {
 	}
 
 	res := r.saveFlowNodesEdges(f.Id, args)
+	if res.err != nil {
+		// Clean up the created flow on validation error
+		r.flowModel.Delete(f.Id)
+		return "", res.err
+	}
 	nodeCount := res.nodeCnt
 	edgeCount := res.edgeCnt
 
@@ -189,12 +194,19 @@ func (r *ChatRunner) flowUpdate(args map[string]any) (string, error) {
 	nodeCount := 0
 	edgeCount := 0
 
-	// New nodes provided -- replacing all nodes and edges
+	// New nodes provided -- validate, then replace all nodes and edges
 	res := r.saveFlowNodesEdges(id, args)
+	if res.err != nil {
+		return "", res.err
+	}
 	if res.hasNodes {
+		// Validation passed, now replace: delete old, then re-save
 		r.nodeModel.DeleteByFlowId(id)
 		r.edgeModel.DeleteByFlowId(id)
 		res = r.saveFlowNodesEdges(id, args)
+		if res.err != nil {
+			return "", res.err
+		}
 		nodeCount = res.nodeCnt
 		edgeCount = res.edgeCnt
 	}

@@ -72,6 +72,14 @@ func (r *ChatRunner) handleAgent(conn *websocket.Conn, req WSRequest) {
 	sender := &wsSender{conn: conn, runner: r}
 	chatID := fmt.Sprintf("%d", cp.sessionID)
 	c := agent.NewChat(context.Background(), chatID, cp.modelPath, r.chatService, cp.opts, sender)
+	c.SetSystemPrompt(`You are an AI assistant that helps users create and manage workflows (flows) and AI models.
+
+When creating LLM nodes in flows, you MUST:
+- Always fill in the PROMPT field (what the LLM should do) — ask the user if they haven't specified one.
+- Always fill in the MODEL field (which model to use) — use manage_models list to discover available models first.
+- NEVER create an llm node without both prompt and model — this is an error.
+
+When designing flows, follow the workflow: discover models → understand requirements → design → confirm → create.`)
 
 	startIter := len(cp.history) / 2
 	c.SetIteration(startIter)

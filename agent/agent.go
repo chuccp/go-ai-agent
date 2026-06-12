@@ -84,7 +84,8 @@ type Chat struct {
 	messages []Message   // Full message history
 	mu       sync.Mutex
 
-	iteration int
+	iteration    int
+	systemPrompt string
 }
 
 // NewChat creates a new agent conversation
@@ -114,6 +115,11 @@ func (c *Chat) AddUserMessage(content string) {
 // SetIteration sets the starting iteration (based on existing conversation turns)
 func (c *Chat) SetIteration(n int) {
 	c.iteration = n
+}
+
+// SetSystemPrompt sets the agent's system prompt
+func (c *Chat) SetSystemPrompt(prompt string) {
+	c.systemPrompt = prompt
 }
 
 // LoadHistory loads historical messages
@@ -259,6 +265,15 @@ func (c *Chat) buildLLMMessages() []common.ChatMessage {
 	defer c.mu.Unlock()
 
 	var result []common.ChatMessage
+
+	// Prepend system prompt if set
+	if c.systemPrompt != "" {
+		result = append(result, common.ChatMessage{
+			Role:    "system",
+			Content: c.systemPrompt,
+		})
+	}
+
 	for _, m := range c.messages {
 		// Process tool results first (attached to assistant message)
 		if len(m.ToolResults) > 0 {

@@ -29,12 +29,14 @@ func (t *ManageFlows) Definition() Definition {
 
 WORKFLOW for CREATING a flow — CRITICAL: NEVER auto-create! Follow these steps:
 
-1. UNDERSTAND: Ask the user what the flow should do. What's the input? What steps are needed? What should the output be? If the user's request is vague (e.g. "create a flow for me"), ask specific questions: purpose, data source, processing steps, output format.
+0. DISCOVER models: Before designing any flow that uses LLM nodes, call manage_models with action="list" to discover available models and their identifiers. Note the "Model" column values (e.g. gpt-4o, claude-sonnet-4-6) — you will need these for the model field in llm node configs.
 
-2. DESIGN: Based on the user's answers, propose a concrete node structure in plain language. For example:
+1. UNDERSTAND: Ask the user what the flow should do. What's the input? What steps are needed? What should the output be? If the user's request is vague (e.g. "create a flow for me"), ask specific questions: purpose, data source, processing steps, output format. Also ask: "Which model should I use?" and "What prompt should the LLM use for each step?"
+
+2. DESIGN: Based on the user's answers, propose a concrete node structure that includes model and prompt for every LLM node. For example:
    "I suggest the following flow structure:
    - Start node
-   - LLM node for... (model: xxx, prompt: ...)
+   - LLM node: model=gpt-4o, prompt='Summarize the key points from: {{user_input.output}}'
    - User confirmation node to let the user review results
    - End node
    Nodes connected as: Start → LLM → User Confirm → End. Does this look good? Any adjustments needed?"
@@ -53,7 +55,7 @@ WORKFLOW for editing/deleting by name:
 Node types:
 - start: Entry point, no config
 - end: Exit point, no config
-- llm: LLM call. config: {model, prompt(supports {{NodeLabel.output}} template), system, temperature(0-2, default 0.7), top_p(0-1, default 0.9), max_tokens, thinking_level(off|low|medium|high|max), output_format_type(empty|json_auto|json_object|json_array|custom)}
+- llm: LLM call. CRITICAL — config fields prompt and model are REQUIRED: {prompt (the instruction/prompt text, supports {{NodeLabel.output}} templates), model (model identifier e.g. gpt-4o, claude-sonnet-4-6 — use manage_models list to find available models)}. Optional config fields: {system, temperature(0-2, default 0.7), top_p(0-1, default 0.9), max_tokens, thinking_level(off|low|medium|high|max), output_format_type(empty|json_auto|json_object|json_array|custom)}. NEVER create an llm node with empty prompt or model — this is an error.
 - user_input: User input. config: {prompt, confirm_only(bool)}
 - split: Text split. config: {source_key, delimiter(paragraph|line|，|。)}
 - condition: Conditional branch. config: {script(Starlark expression, assign bool to 'result')}. Access upstream data via ctx["node_label"]["field"]. Built-ins: json_parse(s), split(s, sep). Route from "yes"/"no" output handles.
@@ -68,7 +70,7 @@ Node types:
 - audio_gen: Audio synthesis. config: {text, model, voice}
 - video_gen: Video generation. config: {prompt, model, duration}
 
-Creation rules: nodes must include start and end nodes. edges use source_index/target_index (0-based). Discuss plan → get user confirmation → then create.`,
+Creation rules: nodes must include start and end nodes. edges use source_index/target_index (0-based). Each llm node MUST have prompt and model in its config — never create an llm node without them. Discuss plan → get user confirmation → then create.`,
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -104,10 +106,10 @@ Creation rules: nodes must include start and end nodes. edges use source_index/t
 						"properties": map[string]any{
 							"type":   map[string]any{"type": "string", "description": "Node type"},
 							"label":  map[string]any{"type": "string", "description": "Node display label"},
-							"config": map[string]any{"type": "object", "description": "Node config — see node type descriptions above"},
+							"config": map[string]any{"type": "object", "description": "Node config — see node type descriptions above. For llm nodes, prompt and model are REQUIRED."},
 						},
 					},
-					"description": "Array of nodes. Must include start and end nodes. Only call after user confirmation",
+					"description": "Array of nodes. Must include start and end nodes. For llm nodes, config MUST contain prompt and model. Only call after user confirmation",
 				},
 				"edges": map[string]any{
 					"type": "array",

@@ -110,7 +110,8 @@ type flowNodesEdgesResult struct {
 	nodeIDs  []uint // Ordered list of node IDs
 	nodeCnt  int
 	edgeCnt  int
-	hasNodes bool // Whether nodes were provided
+	hasNodes bool   // Whether nodes were provided
+	err      error  // Validation error (returns early, nodes/edges not saved)
 }
 
 // saveFlowNodesEdges parses and saves nodes + edges (shared by create/update)
@@ -132,6 +133,22 @@ func (r *ChatRunner) saveFlowNodesEdges(flowId uint, args map[string]any) flowNo
 	}
 	if len(nodeInputs) == 0 {
 		return res
+	}
+
+	// Validate llm nodes: must have prompt and model in config
+	for _, ni := range nodeInputs {
+		if ni.Type == "llm" {
+			prompt, _ := ni.Config["prompt"].(string)
+			model, _ := ni.Config["model"].(string)
+			if prompt == "" || model == "" {
+				label := ni.Label
+				if label == "" {
+					label = ni.Type
+				}
+				res.err = fmt.Errorf("LLM node '%s': prompt and model are required. Use manage_models list to find available models.", label)
+				return res
+			}
+		}
 	}
 
 	res.nodeIDs = make([]uint, len(nodeInputs))

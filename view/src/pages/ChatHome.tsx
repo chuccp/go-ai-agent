@@ -8,6 +8,7 @@ import { Thread } from '@/components/assistant-ui/Thread'
 
 interface Session { id: number; title: string; flow_id?: number | null; created_at: string }
 interface LLMModel { id: string; name: string; provider: string; model: string; category: string; is_default: boolean }
+interface ThreadMessageLike { role: 'assistant' | 'user' | 'system'; content: string }
 
 export default function ChatHome() {
   const { t } = useTranslation()
@@ -16,6 +17,8 @@ export default function ChatHome() {
   // State
   const [sessions, setSessions] = useState<Session[]>([])
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null)
+  const [sessionMessages, setSessionMessages] = useState<readonly ThreadMessageLike[]>([])
+  const [sessionKey, setSessionKey] = useState(0)
   const [models, setModels] = useState<LLMModel[]>([])
   const [selectedModelId, setSelectedModelId] = useState('')
   const [thinkLevel, setThinkLevel] = useState('off')
@@ -108,9 +111,20 @@ export default function ChatHome() {
     setSessionToDelete(null)
   }, [activeSessionId])
 
-  const selectSession = useCallback((id: number) => {
+  const selectSession = useCallback(async (id: number) => {
     setActiveSessionId(id)
     setSelectedFlowId(null)
+    setSessionMessages([])
+    // Fetch message history for this session
+    try {
+      const res = await fetch(`${API_BASE}/api/sessions/${id}/messages`)
+      const data = await res.json()
+      const msgs = Array.isArray(data.data) ? data.data : []
+      setSessionMessages(msgs.map((m: any) => ({ role: m.role, content: m.content })))
+    } catch {
+      setSessionMessages([])
+    }
+    setSessionKey(k => k + 1)
   }, [])
 
   // Adapter getters
@@ -130,12 +144,14 @@ export default function ChatHome() {
 
   return (
     <MyRuntimeProvider
+      key={sessionKey}
       getWs={getWs}
       sessionId={getSessionId}
       modelId={getModelId}
       thinkLevel={getThinkLevel}
       flowId={getFlowId}
       onSessionCreated={handleSessionCreated}
+      initialMessages={sessionMessages}
     >
       <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: '#fff' }}>
         {/* ── Sidebar ── */}
