@@ -73,24 +73,27 @@ export function createIpcAdapter(opts: IpcAdapterOptions): ChatModelAdapter {
 
       const eventPrefix = `chat:${newSessionId}:`
 
-      const unsubChunk = wailsEventsOn(`${eventPrefix}chunk`, (event: any) => {
-        if (event.done) {
-          done = true
-          return
+      const flush = () => {
+        const parts: any[] = []
+        if (accumulatedText) {
+          parts.push({ type: 'text', text: accumulatedText })
         }
+        parts.push(...toolCalls)
+        if (parts.length > 0) {
+          queue.push({ content: parts })
+        }
+      }
+
+      const unsubChunk = wailsEventsOn(`${eventPrefix}chunk`, (event: any) => {
         if (event.content) {
           accumulatedText += event.content
         }
         if (event.reasoning) {
-          // Emit reasoning as system message
+          accumulatedText += event.reasoning
         }
-        const content: any[] = []
-        if (accumulatedText) {
-          content.push({ type: 'text', text: accumulatedText })
-        }
-        content.push(...toolCalls)
-        if (content.length > 0) {
-          queue.push({ content: [...content] })
+        flush()
+        if (event.done) {
+          done = true
         }
       })
 
@@ -126,17 +129,18 @@ export function createIpcAdapter(opts: IpcAdapterOptions): ChatModelAdapter {
       })
 
       // Yield loop
-      while (!done) {
+      while (!done || queue.length > 0) {
         if (queue.length > 0) {
           yield queue.shift()!
-        } else {
+        } else if (!done) {
           await new Promise(r => setTimeout(r, 50))
+        } else {
+          // Done with empty queue: yield empty result so the library knows we finished
+          if (!accumulatedText) {
+            yield { content: [{ type: 'text', text: '' }] }
+          }
+          break
         }
-      }
-
-      // Drain remaining
-      while (queue.length > 0) {
-        yield queue.shift()!
       }
 
       // Cleanup

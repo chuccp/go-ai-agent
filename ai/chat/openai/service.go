@@ -310,6 +310,12 @@ func (c *ChatService) ChatWithTools(ctx context.Context, history []common.ChatMe
 			})
 		}
 	}
+	log.Info("[OpenAI] ChatWithTools response",
+		zap.Int("choices", len(crResp.Choices)),
+		zap.Int("textLen", len(cr.Text)),
+		zap.Int("reasoningLen", len(cr.Reasoning)),
+		zap.Int("toolCalls", len(cr.ToolCalls)),
+	)
 	return cr, nil
 }
 
