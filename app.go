@@ -1,18 +1,43 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"io/fs"
+	"net/http"
+	"net/http/httputil"
+	"net/url"
 )
 
 //go:embed view/dist/*
 var embeddedAssets embed.FS
 
-// assetFS returns the embedded frontend assets (nil in dev mode if no dist built).
+// App is the Wails application struct.
+type App struct {
+	ctx context.Context
+}
+
+func newApp() *App {
+	return &App{}
+}
+
+func (a *App) startup(ctx context.Context) {
+	a.ctx = ctx
+}
+
+func (a *App) shutdown(_ context.Context) {}
+
+// assetFS returns the embedded frontend assets.
 func assetFS() fs.FS {
 	sub, err := fs.Sub(embeddedAssets, "view/dist")
 	if err != nil {
 		return nil
 	}
 	return sub
+}
+
+// assetHandler returns a reverse proxy to the Go HTTP server.
+func assetHandler() http.Handler {
+	target, _ := url.Parse("http://localhost:19009")
+	return httputil.NewSingleHostReverseProxy(target)
 }

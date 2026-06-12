@@ -1,6 +1,4 @@
-//go:build !web
-
-package main
+package app
 
 import (
 	"github.com/chuccp/go-ai-agent/entity"
@@ -12,8 +10,7 @@ import (
 )
 
 // DesktopInitService auto-configures SQLite database and default admin account
-// during the framework initialization. It only runs when system.desktop is true
-// and the system is not yet fully initialized.
+// during the framework initialization.
 type DesktopInitService struct{}
 
 func (s *DesktopInitService) Init(ctx *core.Context) error {
@@ -28,7 +25,6 @@ func (s *DesktopInitService) Init(ctx *core.Context) error {
 
 	log.Info("[desktop] auto-initializing desktop mode (SQLite + default admin)")
 
-	// Auto-create default admin if not exists
 	adminModel := core.GetModel[*model.AdminUserModel](ctx)
 	if adminModel != nil {
 		hasAdmin, err := adminModel.HasAdminUser()
