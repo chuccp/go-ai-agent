@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import i18n from '@/i18n'
-import { API_BASE } from '@/constants'
+import { API_BASE, IS_DESKTOP } from '@/constants'
 import { useFlowStore } from '@/stores/flowStore'
 import { MyRuntimeProvider } from '@/components/assistant-ui/MyRuntimeProvider'
 import { Thread } from '@/components/assistant-ui/Thread'
@@ -53,8 +53,9 @@ export default function ChatHome() {
 
   useEffect(() => { fetchSessions(); fetchModels(); fetchFlows() }, [fetchSessions, fetchModels, fetchFlows])
 
-  // WebSocket connection
+  // WebSocket connection (web mode only; desktop uses IPC)
   useEffect(() => {
+    if (IS_DESKTOP) return
     let ws: WebSocket | null = null
     let reconnecting = false
     const connect = () => {

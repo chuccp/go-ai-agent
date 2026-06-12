@@ -12,6 +12,25 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// agentSystemPrompt is the system prompt for the agent in both WebSocket and IPC modes.
+const agentSystemPrompt = `You are an AI assistant that helps users create and manage workflows (flows) and AI models.
+
+When creating flows, every node type has REQUIRED config fields that MUST be filled in:
+- llm: prompt + model (use manage_models list first)
+- user_input: prompt
+- condition: script (Starlark, assign bool to 'result')
+- switch: script (Starlark, assign string to 'result')
+- transform: template
+- for_each / iterator: items_key
+- loop: max_iterations
+- script: script (code)
+- execute: command
+- split: source_key + delimiter
+- image_gen / video_gen: prompt
+- audio_gen: text + model
+
+Ask the user for any required fields they haven't specified. In the DESIGN step, list the key config values for every node. Never create a node with empty required fields.`
+
 // ── wsSender (agent → WebSocket bridge) ──
 
 type wsSender struct {
@@ -72,23 +91,7 @@ func (r *ChatRunner) handleAgent(conn *websocket.Conn, req WSRequest) {
 	sender := &wsSender{conn: conn, runner: r}
 	chatID := fmt.Sprintf("%d", cp.sessionID)
 	c := agent.NewChat(context.Background(), chatID, cp.modelPath, r.chatService, cp.opts, sender)
-	c.SetSystemPrompt(`You are an AI assistant that helps users create and manage workflows (flows) and AI models.
-
-When creating flows, every node type has REQUIRED config fields that MUST be filled in:
-- llm: prompt + model (use manage_models list first)
-- user_input: prompt
-- condition: script (Starlark, assign bool to 'result')
-- switch: script (Starlark, assign string to 'result')
-- transform: template
-- for_each / iterator: items_key
-- loop: max_iterations
-- script: script (code)
-- execute: command
-- split: source_key + delimiter
-- image_gen / video_gen: prompt
-- audio_gen: text + model
-
-Ask the user for any required fields they haven't specified. In the DESIGN step, list the key config values for every node. Never create a node with empty required fields.`)
+	c.SetSystemPrompt(agentSystemPrompt)
 
 	startIter := len(cp.history) / 2
 	c.SetIteration(startIter)

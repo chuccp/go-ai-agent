@@ -1,6 +1,7 @@
 {
   "name": "go-ai-agent",
   "outputfilename": "go-ai-agent-desktop",
+  "build:tags": "wails",
   "frontend:dir": "./view",
   "frontend:install": "pnpm install",
   "frontend:build": "pnpm build",

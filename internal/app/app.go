@@ -67,7 +67,8 @@ func Create(webMode bool) *wf.WebFrame {
 }
 
 // CreateDesktop builds the web framework for desktop mode (with desktop services).
-func CreateDesktop() *wf.WebFrame {
+// Also returns the ChatRunner for Wails IPC binding.
+func CreateDesktop() (*wf.WebFrame, *runner.ChatRunner) {
 	loadConfig, isFirstRun := loadOrCreateConfig(false)
 
 	builder := wf.NewBuilder(loadConfig)
@@ -113,7 +114,7 @@ func CreateDesktop() *wf.WebFrame {
 		&model.AdminUserModel{},
 	)
 	builder.Filter(cors.NewCrosFilter())
-	return builder.Build()
+	return builder.Build(), chatRunner
 }
 
 func loadOrCreateConfig(webMode bool) (*config.Config, bool) {

@@ -12,7 +12,7 @@ import (
 )
 
 func main() {
-	web := app.CreateDesktop()
+	web, chatRunner := app.CreateDesktop()
 	if web == nil {
 		return
 	}
@@ -29,6 +29,7 @@ func main() {
 
 	// Launch native window via Wails
 	win := newApp()
+	win.chatRunner = chatRunner
 
 	assetOpts := &assetserver.Options{
 		Assets: assetFS(),

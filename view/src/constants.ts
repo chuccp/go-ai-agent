@@ -7,6 +7,9 @@ export const API_BASE = (() => {
   return ''
 })()
 
+// IS_DESKTOP is true when running inside a Wails desktop window (IPC available).
+export const IS_DESKTOP = typeof window !== 'undefined' && !!(window as any).go?.main?.App
+
 export const THINK_LEVELS = ['off', 'low', 'medium', 'high', 'max'] as const
 export type ThinkLevel = typeof THINK_LEVELS[number]
 
