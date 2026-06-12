@@ -38,7 +38,7 @@ desktop-dmg: desktop-build-mac
 
 web-build:
 	cd view && pnpm build
-	go build -o go-ai-agent .
+	go build -tags web -o go-ai-agent .
 
 web-run: web-build
-	./go-ai-agent
+	./go-ai-agent -web

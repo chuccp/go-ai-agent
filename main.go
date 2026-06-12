@@ -2,8 +2,6 @@ package main
 
 import (
 	"flag"
-	"net/http"
-	"time"
 
 	"github.com/chuccp/go-ai-agent/ai/chat"
 	"github.com/chuccp/go-ai-agent/model"
@@ -14,9 +12,6 @@ import (
 	"github.com/chuccp/go-web-frame/config"
 	"github.com/chuccp/go-web-frame/core"
 	"github.com/chuccp/go-web-frame/log"
-	"github.com/wailsapp/wails/v2"
-	"github.com/wailsapp/wails/v2/pkg/options"
-	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"go.uber.org/zap"
 )
 
@@ -123,58 +118,4 @@ func main() {
 			log.PanicErrors("Startup failed", err)
 		}
 	}
-}
-
-func runDesktop(web *wf.WebFrame) {
-	// Start HTTP server in background
-	go func() {
-		if err := web.Start(); err != nil {
-			log.PanicErrors("Desktop service startup failed", err)
-		}
-	}()
-
-	// Wait for HTTP server to be ready
-	waitForReady()
-
-	// Launch native window via Wails
-	app := newApp()
-
-	// Always provide embedded assets as a fallback.
-	// In dev mode: Assets is set, no Handler → Wails prefers the Vite dev server for hot reload.
-	// In prod mode: Handler (reverse proxy) takes precedence over Assets.
-	assetOpts := &assetserver.Options{
-		Assets: assetFS(),
-	}
-	if !isWailsDev() {
-		assetOpts.Handler = assetHandler()
-	}
-
-	err := wails.Run(&options.App{
-		Title:        "Go AI Agent",
-		Width:        1200,
-		Height:       800,
-		AssetServer:  assetOpts,
-		OnStartup:    app.startup,
-		OnShutdown:   app.shutdown,
-		Bind:         []interface{}{app},
-	})
-	if err != nil {
-		log.PanicErrors("Wails startup failed", err)
-	}
-}
-
-func waitForReady() {
-	client := &http.Client{Timeout: 2 * time.Second}
-	for i := 0; i < 50; i++ {
-		resp, err := client.Get("http://localhost:19009/api/setup/status")
-		if err == nil {
-			resp.Body.Close()
-			if resp.StatusCode < 500 {
-				log.Info("HTTP server ready")
-				return
-			}
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-	log.Warn("HTTP server startup timed out, continuing to launch window")
 }
