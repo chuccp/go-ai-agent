@@ -9,14 +9,14 @@ import (
 	"github.com/chuccp/go-web-frame/util"
 )
 
-// CacheManager LLM 结果缓存管理器
+// CacheManager LLM result cache manager
 type CacheManager struct {
 	cachePath string
 	enabled   bool
 	mu        sync.RWMutex
 }
 
-// NewCacheManager 创建缓存管理器
+// NewCacheManager Create cache manager
 func NewCacheManager(cachePath string, enabled bool) *CacheManager {
 	m := &CacheManager{
 		cachePath: cachePath,
@@ -28,12 +28,12 @@ func NewCacheManager(cachePath string, enabled bool) *CacheManager {
 	return m
 }
 
-// IsEnabled 是否启用
+// IsEnabled Whether enabled
 func (m *CacheManager) IsEnabled() bool {
 	return m.enabled
 }
 
-// GenerateKey 生成缓存键
+// GenerateKey Generate cache key
 func GenerateKey(parts ...string) string {
 	return util.MD5Str(joinKey(parts))
 }
@@ -46,12 +46,12 @@ func joinKey(parts []string) string {
 	return key
 }
 
-// cacheEntry 缓存条目
+// cacheEntry Cache entry
 type cacheEntry struct {
 	Result string `json:"result"`
 }
 
-// Get 获取缓存
+// Get Get cache
 func (m *CacheManager) Get(cacheKey string) (string, bool) {
 	if !m.enabled {
 		return "", false
@@ -70,7 +70,7 @@ func (m *CacheManager) Get(cacheKey string) (string, bool) {
 	return entry.Result, true
 }
 
-// Set 写入缓存
+// Set Write cache
 func (m *CacheManager) Set(cacheKey string, result string) error {
 	if !m.enabled {
 		return nil
@@ -86,7 +86,7 @@ func (m *CacheManager) Set(cacheKey string, result string) error {
 	return util.WriteFile(data, filepath.Join(m.cachePath, cacheKey))
 }
 
-// GetOrCompute 获取或计算缓存
+// GetOrCompute Get or compute cache
 func (m *CacheManager) GetOrCompute(cacheKey string, fn func() (string, error)) (string, error) {
 	if cached, ok := m.Get(cacheKey); ok {
 		return cached, nil
@@ -99,7 +99,7 @@ func (m *CacheManager) GetOrCompute(cacheKey string, fn func() (string, error)) 
 	return result, nil
 }
 
-// Clear 清空缓存
+// Clear Clear cache
 func (m *CacheManager) Clear() {
 	if !m.enabled || m.cachePath == "" {
 		return

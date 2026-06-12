@@ -8,13 +8,13 @@ import (
 	"github.com/chuccp/go-ai-agent/flow/engine"
 )
 
-// SplitNodeConfig 文本拆分节点配置
+// SplitNodeConfig Text split node config
 type SplitNodeConfig struct {
-	SourceKey string `json:"source_key"` // 上游数据键，如 "生成故事"
-	Delimiter string `json:"delimiter"`  // 分隔符：\n\n(段落), \n(按行), 或自定义正则
+	SourceKey string `json:"source_key"` // Upstream data key, e.g. "generate_story"
+	Delimiter string `json:"delimiter"`  // Delimiter: \n\n(paragraph), \n(by line), or custom regex
 }
 
-// SplitNode 将上游文本拆分为 JSON 数组，供 ForEach 使用
+// SplitNode Split upstream text into JSON array for ForEach
 type SplitNode struct{}
 
 func NewSplitNode() *SplitNode { return &SplitNode{} }
@@ -27,7 +27,7 @@ func (n *SplitNode) Execute(ctx *engine.ExecutionContext, config string) (*engin
 		return nil, err
 	}
 
-	// 自动补全 key
+	// Auto-complete key
 	key := cfg.SourceKey
 	if !strings.Contains(key, ".") {
 		key = key + "." + KeyOutput
@@ -35,7 +35,7 @@ func (n *SplitNode) Execute(ctx *engine.ExecutionContext, config string) (*engin
 
 	raw, ok := ctx.Get(key)
 	if !ok {
-		// fallback: 遍历 NodeOutputs
+		// fallback: iterate NodeOutputs
 		for label, output := range ctx.AllNodeOutputs() {
 			if label+"."+KeyOutput == key {
 				raw = output.Data[KeyOutput]
@@ -53,11 +53,11 @@ func (n *SplitNode) Execute(ctx *engine.ExecutionContext, config string) (*engin
 		return nil, fmt.Errorf("split: source value is not a string")
 	}
 
-	// 选择分隔符
+	// Select delimiter
 	delim := cfg.Delimiter
 	switch delim {
 	case "paragraph", "":
-		// 按空行 / 双换行拆分
+		// Split by empty lines / double newlines
 		text = strings.ReplaceAll(text, "\r\n\r\n", "\n\n")
 		text = strings.ReplaceAll(text, "\r\n", "\n")
 		parts := strings.Split(text, "\n\n")
@@ -69,7 +69,7 @@ func (n *SplitNode) Execute(ctx *engine.ExecutionContext, config string) (*engin
 			}
 		}
 		if len(items) == 0 {
-			// fallback: 全文作为一个 item
+			// fallback: entire text as single item
 			items = append(items, text)
 		}
 		result, _ := json.Marshal(items)
@@ -79,7 +79,7 @@ func (n *SplitNode) Execute(ctx *engine.ExecutionContext, config string) (*engin
 		}, nil
 
 	case "line":
-		// 按行拆分（去掉空行）
+		// Split by line (skip empty lines)
 		lines := strings.Split(text, "\n")
 		items := make([]any, 0)
 		for _, line := range lines {
@@ -95,7 +95,7 @@ func (n *SplitNode) Execute(ctx *engine.ExecutionContext, config string) (*engin
 		}, nil
 
 	default:
-		// 自定义分隔符
+		// Custom delimiter
 		parts := strings.Split(text, delim)
 		items := make([]any, 0)
 		for _, p := range parts {

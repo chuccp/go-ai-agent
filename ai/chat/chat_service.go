@@ -18,7 +18,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// UnifiedChatService 统一聊天服务
+// UnifiedChatService Unified chat service
 type UnifiedChatService struct {
 	mu               sync.RWMutex
 	providers        map[uint]common.ChatProvider
@@ -46,7 +46,7 @@ func NewUnifiedChatService() *UnifiedChatService {
 	}
 }
 
-// Init 实现 IService 接口
+// Init implements IService interface
 func (s *UnifiedChatService) Init(ctx *core.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

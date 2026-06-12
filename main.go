@@ -55,7 +55,7 @@ func Create() *wf.WebFrame {
 	}
 
 	if isFirstRun {
-		log.Info("检测到首次运行，启用初始化向导", zap.String("configPath", configFilePath))
+		log.Info("First run detected, enabling setup wizard", zap.String("configPath", configFilePath))
 		rests = append(rests, rest.NewSetupRest(configFilePath))
 	} else {
 		rests = append(rests,
@@ -87,11 +87,11 @@ func loadOrCreateConfig() (*config.Config, bool) {
 		if init {
 			return loadConfig, false
 		}
-		log.Info("配置文件存在但系统未完成初始化，进入设置模式")
+		log.Info("Config file exists but system not initialized, entering setup mode")
 		return loadConfig, true
 	}
 
-	log.Info("未找到 application.yml，进入首次运行初始化模式")
+	log.Info("No application.yml found, entering first-run initialization mode")
 	cfg := config.NewConfig()
 	cfg.Put("system.apiPrefix", "/api")
 	cfg.Put("system.debug", true)
@@ -120,7 +120,7 @@ func main() {
 	} else {
 		err := web.Start()
 		if err != nil {
-			log.PanicErrors("启动失败", err)
+			log.PanicErrors("Startup failed", err)
 		}
 	}
 }
@@ -129,7 +129,7 @@ func runDesktop(web *wf.WebFrame) {
 	// Start HTTP server in background
 	go func() {
 		if err := web.Start(); err != nil {
-			log.PanicErrors("桌面服务启动失败", err)
+			log.PanicErrors("Desktop service startup failed", err)
 		}
 	}()
 
@@ -159,7 +159,7 @@ func runDesktop(web *wf.WebFrame) {
 		Bind:         []interface{}{app},
 	})
 	if err != nil {
-		log.PanicErrors("Wails 启动失败", err)
+		log.PanicErrors("Wails startup failed", err)
 	}
 }
 
@@ -170,11 +170,11 @@ func waitForReady() {
 		if err == nil {
 			resp.Body.Close()
 			if resp.StatusCode < 500 {
-				log.Info("HTTP 服务就绪")
+				log.Info("HTTP server ready")
 				return
 			}
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	log.Warn("HTTP 服务启动超时，继续启动窗口")
+	log.Warn("HTTP server startup timed out, continuing to launch window")
 }

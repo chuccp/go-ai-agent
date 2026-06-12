@@ -5,12 +5,12 @@ import (
 	"fmt"
 )
 
-// FlowActionHandler 流程操作处理器（由 runner 注入）
+// FlowActionHandler handles flow operations (injected by runner)
 type FlowActionHandler func(action string, args map[string]any) (string, error)
 
 var flowHandler FlowActionHandler
 
-// SetFlowHandler 注册流程操作处理器
+// SetFlowHandler registers a flow operation handler
 func SetFlowHandler(handler FlowActionHandler) {
 	flowHandler = handler
 }
@@ -19,7 +19,7 @@ func init() {
 	Register(&ManageFlows{})
 }
 
-// ManageFlows 流程管理工具 - 通过对话创建/查询/更新/删除流程
+// ManageFlows is a flow management tool - create/query/update/delete flows via conversation
 type ManageFlows struct{}
 
 func (t *ManageFlows) Definition() Definition {
@@ -32,18 +32,18 @@ WORKFLOW for CREATING a flow — CRITICAL: NEVER auto-create! Follow these steps
 1. UNDERSTAND: Ask the user what the flow should do. What's the input? What steps are needed? What should the output be? If the user's request is vague (e.g. "create a flow for me"), ask specific questions: purpose, data source, processing steps, output format.
 
 2. DESIGN: Based on the user's answers, propose a concrete node structure in plain language. For example:
-   "我建议这个流程包含以下步骤：
-   - 开始节点
-   - LLM调用节点，用来...（模型：xxx，提示词：...）
-   - 用户确认节点，让用户审核结果
-   - 结束节点
-   节点按 开始→LLM→用户确认→结束 的顺序连接。这样可以吗？需要调整吗？"
+   "I suggest the following flow structure:
+   - Start node
+   - LLM node for... (model: xxx, prompt: ...)
+   - User confirmation node to let the user review results
+   - End node
+   Nodes connected as: Start → LLM → User Confirm → End. Does this look good? Any adjustments needed?"
 
 3. CONFIRM: Wait for the user to explicitly confirm or request changes. Do NOT call create until the user says yes/ok/confirm.
 
 4. CREATE: Only after confirmation, call action="create" with the agreed-upon name, description, category, nodes and edges.
 
-If a user just says "create a flow called X" without describing what it does, ask: "这个流程需要做什么？包含哪些处理步骤？"
+If a user just says "create a flow called X" without describing what it does, ask: "What should this flow do? What processing steps are needed?"
 
 WORKFLOW for editing/deleting by name:
 1. First use action="search" with a query string to find the flow
@@ -51,74 +51,76 @@ WORKFLOW for editing/deleting by name:
 3. For updates: describe the change and confirm before calling update
 
 Node types:
-- start: 开始节点，无配置
-- end: 结束节点，无配置
-- llm: LLM调用。config: {model, prompt(支持{{NodeLabel.output}}模板), system, temperature(0-2,默认0.7), top_p(0-1,默认0.9), max_tokens, thinking_level(off|low|medium|high|max), output_format_type(空|json_auto|json_object|json_array|custom)}
-- user_input: 用户输入。config: {prompt, confirm_only(bool)}
-- split: 文本拆分。config: {source_key, delimiter(paragraph|line|，|。)}
-- condition: 条件分支。config: {field, operator(contains|equals|not_empty), value}。从"yes"/"no"出口连线
-- transform: 数据变换。config: {template}
-- for_each: 并发批量处理，数组各项独立并发执行，互不依赖。config: {items_key(数据来源键)}
-- iterator: 按序迭代，逐项顺序执行，下一项可使用前一项结果。config: {items_key(数据来源键)}
-- loop: 循环。config: {max_iterations, break_field, break_operator, break_value}
-- script: 脚本。config: {script(Python/Starlark代码)}
-- image_gen: 图片生成。config: {prompt, model}
-- audio_gen: 音频合成。config: {text, model, voice}
-- video_gen: 视频生成。config: {prompt, model, duration}
+- start: Entry point, no config
+- end: Exit point, no config
+- llm: LLM call. config: {model, prompt(supports {{NodeLabel.output}} template), system, temperature(0-2, default 0.7), top_p(0-1, default 0.9), max_tokens, thinking_level(off|low|medium|high|max), output_format_type(empty|json_auto|json_object|json_array|custom)}
+- user_input: User input. config: {prompt, confirm_only(bool)}
+- split: Text split. config: {source_key, delimiter(paragraph|line|，|。)}
+- condition: Conditional branch. config: {script(Starlark expression, assign bool to 'result')}. Access upstream data via ctx["node_label"]["field"]. Built-ins: json_parse(s), split(s, sep). Route from "yes"/"no" output handles.
+- switch: Multi-branch switch. config: {script(Starlark expression, assign string to 'result')}. Each outgoing edge's source_handle matches a case value. Falls back to "default" if empty. Built-ins: json_parse(s), split(s, sep).
+- transform: Data transform. config: {template}
+- for_each: Concurrent batch processing. For each item in ctx[items_key], invokes function with args in parallel. config: {items_key, function(default "llm"), args(map, supports {{item.field}} placeholders)}
+- iterator: Sequential iteration. Like for_each but processes items one at a time, skipping on failure. config: {items_key, function(default "llm"), args(map, supports {{item.field}} placeholders)}
+- loop: Loop. config: {max_iterations, break_field, break_operator, break_value}
+- script: Script. config: {script(Python/Starlark code)}
+- execute: Run a local shell command. config: {command(supports {{node.output}} placeholders), timeout(int, seconds, 0=no timeout, default 30)}. Returns stdout, failures don't block the flow.
+- image_gen: Image generation. config: {prompt, model}
+- audio_gen: Audio synthesis. config: {text, model, voice}
+- video_gen: Video generation. config: {prompt, model, duration}
 
-创建规则：nodes必须包含start和end节点。edges用source_index/target_index(0-based)。先讨论方案→用户确认→再创建。`,
+Creation rules: nodes must include start and end nodes. edges use source_index/target_index (0-based). Discuss plan → get user confirmation → then create.`,
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
 				"action": map[string]any{
 					"type": "string",
 					"enum": []string{"create", "list", "search", "get", "update", "delete"},
-					"description": "操作类型：create(创建流程), list(列出所有流程), search(按名称模糊搜索), get(查看详情), update(更新), delete(删除)",
+					"description": "Action type: create(create flow), list(list all), search(fuzzy search by name), get(view details), update(update), delete(delete)",
 				},
 				"query": map[string]any{
 					"type":        "string",
-					"description": "搜索关键词（search 操作时使用），按名称模糊匹配",
+					"description": "Search keyword (for search action), fuzzy match by name",
 				},
 				"name": map[string]any{
 					"type":        "string",
-					"description": "流程名称（create/update 时需要）",
+					"description": "Flow name (required for create/update)",
 				},
 				"description": map[string]any{
 					"type":        "string",
-					"description": "流程描述",
+					"description": "Flow description",
 				},
 				"category": map[string]any{
 					"type":        "string",
-					"description": "流程分类",
+					"description": "Flow category",
 				},
 				"flow_id": map[string]any{
 					"type":        "integer",
-					"description": "流程ID（get/update/delete 时需要）",
+					"description": "Flow ID (required for get/update/delete)",
 				},
 				"nodes": map[string]any{
 					"type": "array",
 					"items": map[string]any{
 						"type": "object",
 						"properties": map[string]any{
-							"type":   map[string]any{"type": "string", "description": "节点类型"},
-							"label":  map[string]any{"type": "string", "description": "节点显示标签"},
-							"config": map[string]any{"type": "object", "description": "节点配置，参见节点类型说明"},
+							"type":   map[string]any{"type": "string", "description": "Node type"},
+							"label":  map[string]any{"type": "string", "description": "Node display label"},
+							"config": map[string]any{"type": "object", "description": "Node config — see node type descriptions above"},
 						},
 					},
-					"description": "节点列表。创建时必须包含start和end节点。仅用户确认后调用",
+					"description": "Array of nodes. Must include start and end nodes. Only call after user confirmation",
 				},
 				"edges": map[string]any{
 					"type": "array",
 					"items": map[string]any{
 						"type": "object",
 						"properties": map[string]any{
-							"source_index":  map[string]any{"type": "integer", "description": "源节点在nodes数组中的索引（从0开始）"},
-							"target_index":  map[string]any{"type": "integer", "description": "目标节点在nodes数组中的索引（从0开始）"},
-							"source_handle": map[string]any{"type": "string", "description": "源出口：output(默认), yes(条件为真), no(条件为假)"},
-							"label":         map[string]any{"type": "string", "description": "连线标签"},
+							"source_index":  map[string]any{"type": "integer", "description": "Source node index in nodes array (0-based)"},
+							"target_index":  map[string]any{"type": "integer", "description": "Target node index in nodes array (0-based)"},
+							"source_handle": map[string]any{"type": "string", "description": "Source handle: output(default), yes(condition met), no(condition not met)"},
+							"label":         map[string]any{"type": "string", "description": "Edge label"},
 						},
 					},
-					"description": "连线列表，用节点索引连接",
+					"description": "Array of edges, connecting nodes by index",
 				},
 			},
 			"required": []string{"action"},

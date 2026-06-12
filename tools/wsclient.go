@@ -24,7 +24,7 @@ func main() {
 		"model":      "deepseek.default",
 		"stream":     true,
 		"messages": []map[string]string{
-			{"role": "user", "content": "一只小兔子在森林里迷路了，它要找到回家的路"},
+			{"role": "user", "content": "A little bunny got lost in the forest and needs to find its way home"},
 		},
 		"options": map[string]interface{}{
 			"flow_id":      float64(2),
@@ -33,13 +33,13 @@ func main() {
 	}
 	data, _ := sonic.Marshal(msg)
 	conn.WriteMessage(websocket.TextMessage, data)
-	fmt.Println(">>> flow_start 已发送")
+	fmt.Println(">>> flow_start sent")
 
 	conn.SetReadDeadline(time.Now().Add(120 * time.Second))
 	for {
 		_, msg, err := conn.ReadMessage()
 		if err != nil {
-			fmt.Println("连接关闭:", err)
+			fmt.Println("Connection closed:", err)
 			break
 		}
 		var event map[string]interface{}
@@ -48,30 +48,30 @@ func main() {
 
 		switch t {
 		case "flow_node_start":
-			fmt.Printf("[开始] %v\n", event["node_label"])
+			fmt.Printf("[Start] %v\n", event["node_label"])
 		case "flow_node_chunk":
 			if c, ok := event["content"].(string); ok {
 				fmt.Print(c)
 			}
 		case "flow_node_done":
-			fmt.Printf("\n[完成] %v %v\n", event["node_label"], event["content"])
+			fmt.Printf("\n[Done] %v %v\n", event["node_label"], event["content"])
 		case "flow_waiting_user":
-			fmt.Printf("[等待] %v\n>>> 自动回复确认\n", event["message"])
+			fmt.Printf("[Waiting] %v\n>>> Auto-reply confirm\n", event["message"])
 			resp := map[string]interface{}{
 				"type":       "flow_user_response",
 				"session_id": float64(3),
 				"options": map[string]interface{}{
 					"execution_id": float64(2),
-					"response":     "确认",
+					"response":     "confirm",
 				},
 			}
 			d, _ := sonic.Marshal(resp)
 			conn.WriteMessage(websocket.TextMessage, d)
 		case "flow_complete":
-			fmt.Println("[流程完成]")
+			fmt.Println("[Flow complete]")
 			return
 		case "flow_error":
-			fmt.Printf("[错误] %v\n", event["message"])
+			fmt.Printf("[Error] %v\n", event["message"])
 			return
 		}
 	}

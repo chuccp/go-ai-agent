@@ -5,30 +5,30 @@ import (
 	"sync"
 )
 
-// FunctionHandler 函数处理器
+// FunctionHandler Function handler
 type FunctionHandler func(ctx *ExecutionContext, name string, args map[string]any) (map[string]any, error)
 
-// FunctionRegistry 函数注册表
+// FunctionRegistry Function registry
 type FunctionRegistry struct {
 	mu        sync.RWMutex
 	functions map[string]FunctionHandler
 }
 
-// NewFunctionRegistry 创建函数注册表
+// NewFunctionRegistry creates a function registry
 func NewFunctionRegistry() *FunctionRegistry {
 	return &FunctionRegistry{
 		functions: make(map[string]FunctionHandler),
 	}
 }
 
-// Register 注册函数
+// Register Register function
 func (r *FunctionRegistry) Register(name string, handler FunctionHandler) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.functions[name] = handler
 }
 
-// Invoke 调用函数
+// Invoke Invoke function
 func (r *FunctionRegistry) Invoke(ctx *ExecutionContext, name string, args map[string]any) (map[string]any, error) {
 	r.mu.RLock()
 	handler, ok := r.functions[name]
@@ -40,7 +40,7 @@ func (r *FunctionRegistry) Invoke(ctx *ExecutionContext, name string, args map[s
 	return handler(ctx, name, args)
 }
 
-// Has 检查函数是否存在
+// Has Check if function exists
 func (r *FunctionRegistry) Has(name string) bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -48,7 +48,7 @@ func (r *FunctionRegistry) Has(name string) bool {
 	return ok
 }
 
-// ListFunctions 列出所有已注册函数
+// ListFunctions lists all registered functions
 func (r *FunctionRegistry) ListFunctions() []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

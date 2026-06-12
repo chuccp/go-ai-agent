@@ -8,10 +8,10 @@ import (
 	"go.uber.org/zap"
 )
 
-// TaskFunc 任务执行函数
+// TaskFunc Task execution function
 type TaskFunc func() error
 
-// TaskManager 任务管理器，统一调度并行节点执行
+// TaskManager Task manager, orchestrates parallel node execution
 type TaskManager struct {
 	maxWorker int
 	tasks     chan taskItem
@@ -60,8 +60,8 @@ func (tm *TaskManager) worker() {
 	}
 }
 
-// Submit 提交一组任务并行执行，等待全部完成
-// 返回第一个错误（如果有）
+// Submit Submit a set of tasks for parallel execution, wait for all
+// Returns first error if any
 func (tm *TaskManager) Submit(funcs []TaskFunc) error {
 	if len(funcs) == 0 {
 		return nil
@@ -86,7 +86,7 @@ func (tm *TaskManager) Submit(funcs []TaskFunc) error {
 	return firstErr
 }
 
-// Shutdown 关闭 TaskManager
+// Shutdown Shutdown TaskManager
 func (tm *TaskManager) Shutdown() {
 	tm.cancel()
 	close(tm.tasks)

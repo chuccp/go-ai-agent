@@ -1,6 +1,6 @@
 package openai
 
-// Config OpenAI 兼容配置
+// Config OpenAI compatible config
 type Config struct {
 	BaseURL string `mapstructure:"baseUrl" yaml:"baseUrl" json:"baseUrl"`
 	APIKey  string `mapstructure:"apiKey" yaml:"apiKey" json:"apiKey"`

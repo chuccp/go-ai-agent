@@ -1,4 +1,4 @@
-export type NodeType = 'start' | 'end' | 'llm' | 'user_input' | 'for_each' | 'split' | 'transform' | 'condition' | 'script' | 'iterator' | 'loop' | 'image_gen' | 'audio_gen' | 'video_gen'
+export type NodeType = 'start' | 'end' | 'llm' | 'user_input' | 'for_each' | 'split' | 'transform' | 'condition' | 'switch' | 'execute' | 'script' | 'iterator' | 'loop' | 'image_gen' | 'audio_gen' | 'video_gen'
 
 export interface NodeDef {
   type: NodeType
@@ -24,11 +24,13 @@ export const ALL_NODE_TYPES: NodeDef[] = [
   { type: 'audio_gen', labelKey: 'nodes.audioGen', icon: '🔊', color: '#9254de', category: 'ai' },
   { type: 'video_gen', labelKey: 'nodes.videoGen', icon: '🎬', color: '#f759ab', category: 'ai' },
   { type: 'condition', labelKey: 'nodes.condition', icon: '🔀', color: '#f38744', category: 'logic' },
+  { type: 'switch', labelKey: 'nodes.switch', icon: '🔘', color: '#d444f1', category: 'logic' },
   { type: 'loop', labelKey: 'nodes.loop', icon: '🔄', color: '#2e90fa', category: 'logic' },
   { type: 'for_each', labelKey: 'nodes.forEach', icon: '⚡', color: '#dd2590', category: 'logic' },
   { type: 'iterator', labelKey: 'nodes.iterator', icon: '📋', color: '#fa541c', category: 'logic' },
   { type: 'split', labelKey: 'nodes.split', icon: '✂', color: '#875bf7', category: 'process' },
   { type: 'transform', labelKey: 'nodes.transform', icon: '⚙', color: '#15b79e', category: 'process' },
+  { type: 'execute', labelKey: 'nodes.execute', icon: '💻', color: '#0ea5e9', category: 'process' },
   { type: 'script', labelKey: 'nodes.script', icon: '🐍', color: '#6172f3', category: 'process' },
 ]
 

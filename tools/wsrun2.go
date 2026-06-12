@@ -3,7 +3,7 @@ package main
 import ("github.com/bytedance/sonic";"fmt";"time";"github.com/gorilla/websocket")
 func main() {
 	conn,_,_:=websocket.DefaultDialer.Dial("ws://127.0.0.1:19009/ws/chat",nil);defer conn.Close()
-	msg:=map[string]interface{}{"type":"flow_start","session_id":7.0,"model":"deepseek.default","stream":true,"messages":[]map[string]string{{"role":"user","content":"小兔子找妈妈"}},"options":map[string]interface{}{"flow_id":15.0,"execution_id":9.0}}
+	msg:=map[string]interface{}{"type":"flow_start","session_id":7.0,"model":"deepseek.default","stream":true,"messages":[]map[string]string{{"role":"user","content":"Bunny looks for mom"}},"options":map[string]interface{}{"flow_id":15.0,"execution_id":9.0}}
 	d,_:=sonic.Marshal(msg);conn.WriteMessage(websocket.TextMessage,d)
 	conn.SetReadDeadline(time.Now().Add(120*time.Second))
 	for{_,m,err:=conn.ReadMessage();if err!=nil{fmt.Println("end:",err);break}

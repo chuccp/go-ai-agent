@@ -46,8 +46,8 @@
     "enterName": "请输入流程名称", "needStartEnd": "流程必须包含开始和结束节点",
     "saved": "保存成功", "saveFailed": "保存失败", "confirmDelete": "确定删除？",
     "jsonError": "JSON 格式错误",
-    "exportHint": "将流水线导出为可分享的 JSON 文件",
-    "importHint": "从 JSON 文件导入流水线",
+    "exportHint": "将流程导出为可分享的 ZIP 包",
+    "importHint": "从 ZIP 包导入流程",
     "addNode": "添加节点", "pointerMode": "指针模式", "handMode": "拖拽模式",
     "autoLayout": "自动布局", "fullscreen": "全屏", "exitFullscreen": "退出全屏",
     "nodeProperties": "节点属性", "selectNode": "选择节点编辑属性", "selectNodeHint": "点击画布上的节点查看和编辑配置",
@@ -85,9 +85,9 @@
   "think": { "off": "关", "low": "低", "medium": "中", "high": "高", "max": "最高" },
   "nodes": {
     "start": "开始", "end": "结束", "llm": "LLM 调用", "userInput": "用户输入",
-    "condition": "条件分支", "transform": "数据变换", "split": "文本拆分",
+    "condition": "条件分支", "switch": "分支选择", "transform": "数据变换", "split": "文本拆分",
     "forEach": "并发批量", "iterator": "按序迭代", "loop": "循环执行",
-    "script": "脚本", "imageGen": "图片生成", "audioGen": "音频生成", "videoGen": "视频生成"
+    "execute": "执行命令", "script": "脚本", "imageGen": "图片生成", "audioGen": "音频生成", "videoGen": "视频生成"
   },
   "nodeCategories": { "basic": "基础", "ai": "AI", "logic": "逻辑", "process": "处理" },
   "nodeConfig": {
@@ -106,10 +106,12 @@
     "parallelHint": "并发处理数组每一项，适合独立任务（如批量生成图片）",
     "sequentialHint": "按顺序逐项传给下游节点，失败跳过继续下一项",
     "maxIterations": "最大循环次数", "breakField": "中断条件字段", "breakOperator": "中断判断", "breakValue": "中断比较值",
+    "command": "命令", "runCommand": "执行命令",
     "scriptCode": "脚本代码", "scriptHint": "可通过 ctx[\"节点名.output\"] 访问上游数据",
     "splitMethod": "拆分方式", "byParagraph": "按段落（空行）", "byLine": "按行", "byComma": "按逗号", "byPeriod": "按句号",
     "template": "模板", "templateHint": "通过 .节点名.output 引用上游数据",
     "promptText": "提示文本", "confirmOnly": "仅确认（无需输入文本）",
-    "waitingInput": "等待用户输入", "conditionJudge": "条件判断", "loopBody": "循环体"
+    "waitingInput": "等待用户输入", "conditionJudge": "条件判断", "switchExpr": "分支表达式", "loopBody": "循环体",
+    "switchHint": "将字符串赋值给 'result'，根据值路由到对应 source_handle 的连线，空值使用 'default'"
   }
 }

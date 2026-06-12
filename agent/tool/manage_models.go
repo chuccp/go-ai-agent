@@ -75,9 +75,9 @@ func (t *ManageModels) Definition() Definition {
 		Description: `Manage AI model configurations through conversation. Use this to list, get, create, update, or delete AI models.
 
 IMPORTANT — Confirmation required for modify operations (create / update / delete):
-1. When you call create/update/delete, the tool returns a confirmation prompt with a HIDDEN confirm_key. DO NOT display the raw tool response or the confirm_key to the user. DO NOT show [tool_call ...] or any technical details. Simply tell the user in plain language: "涉及敏感操作，需要再次确认。" followed by a brief description of what will be done, and ask "确认执行？" or "确认删除？".
-2. Wait for the user to reply. If they say "确认" / "yes" / "ok" / "好" / "可以" / "执行", call action="confirm" with the confirm_key (NOT the original create/update/delete action).
-3. If the user says "取消" / "no" / "不" / "算了", call action="cancel" with the confirm_key to discard the pending operation.
+1. When you call create/update/delete, the tool returns a confirmation prompt with a HIDDEN confirm_key. DO NOT display the raw tool response or the confirm_key to the user. DO NOT show [tool_call ...] or any technical details. Simply tell the user in plain language: "This is a sensitive operation and requires confirmation." followed by a brief description of what will be done, and ask "Confirm execution?" or "Confirm deletion?".
+2. Wait for the user to reply. If they say "confirm" / "yes" / "ok" / "yep" / "sure" / "go ahead", call action="confirm" with the confirm_key (NOT the original create/update/delete action).
+3. If the user says "cancel" / "no" / "nope" / "never mind", call action="cancel" with the confirm_key to discard the pending operation.
 4. list and get execute immediately without confirmation.
 
 When listing or getting models, API keys are always masked as "****" for security. Never reveal them.
@@ -89,51 +89,51 @@ For creating a model, you need: name (display name), provider (e.g. openai, deep
 				"action": map[string]any{
 					"type":        "string",
 					"enum":        []string{"list", "get", "create", "update", "delete", "confirm", "cancel"},
-					"description": "操作类型：list(列出所有), get(查看详情), create(创建), update(更新), delete(删除), confirm(确认执行), cancel(取消操作)",
+					"description": "Action type: list(list all), get(view details), create(create), update(update), delete(delete), confirm(confirm execution), cancel(cancel operation)",
 				},
 				"id": map[string]any{
 					"type":        "integer",
-					"description": "模型ID（get/update/delete 操作需要）",
+					"description": "Model ID (required for get/update/delete operations)",
 				},
 				"name": map[string]any{
 					"type":        "string",
-					"description": "显示名称（create 时需要）",
+					"description": "Display name (required for create)",
 				},
 				"provider": map[string]any{
 					"type":        "string",
-					"description": "提供商，如 openai, deepseek-openai, anthropic, gemini, volcengine, openai_compat, claude_compat",
+					"description": "Provider, e.g. openai, deepseek-openai, anthropic, gemini, volcengine, openai_compat, claude_compat",
 				},
 				"model": map[string]any{
 					"type":        "string",
-					"description": "模型标识，如 gpt-4o, claude-sonnet-4-6",
+					"description": "Model identifier, e.g. gpt-4o, claude-sonnet-4-6",
 				},
 				"api_key": map[string]any{
 					"type":        "string",
-					"description": "API 密钥",
+					"description": "API key",
 				},
 				"base_url": map[string]any{
 					"type":        "string",
-					"description": "API 基础地址",
+					"description": "API base URL",
 				},
 				"category": map[string]any{
 					"type":        "string",
-					"description": "模型分类（llm/image/voice/video），默认 llm",
+					"description": "Model category (llm/image/voice/video), default: llm",
 				},
 				"input_types": map[string]any{
 					"type":        "string",
-					"description": "支持的输入类型，逗号分隔（text,image,audio,video）",
+					"description": "Supported input types, comma-separated (text,image,audio,video)",
 				},
 				"output_types": map[string]any{
 					"type":        "string",
-					"description": "支持的输出类型，逗号分隔（text,image,audio,video）",
+					"description": "Supported output types, comma-separated (text,image,audio,video)",
 				},
 				"supports_multimodal": map[string]any{
 					"type":        "boolean",
-					"description": "是否支持多模态（图片输入），仅 LLM 模型有效",
+					"description": "Whether multimodal input (image) is supported, only applies to LLM models",
 				},
 				"confirm_key": map[string]any{
 					"type":        "string",
-					"description": "确认码（内部使用，不要展示给用户）。create/update/delete 首次调用返回此码，用户确认后用 action=confirm 提交",
+					"description": "Confirmation key (internal use, do NOT show to user). Returned by first create/update/delete call; submit with action=confirm after user approval",
 				},
 			},
 			"required": []string{"action"},
@@ -164,22 +164,22 @@ func (t *ManageModels) Execute(call Call) (string, error) {
 		if confirmKey, _ := params["confirm_key"].(string); confirmKey != "" {
 			op, found := loadPendingOp(confirmKey)
 			if !found {
-				return "确认码无效或已过期，请重新发起操作。", nil
+				return "Confirmation key is invalid or expired. Please retry the operation.", nil
 			}
 			return modelHandler(op.action, op.params)
 		}
 		key := storePendingOp(action, params)
 		desc := describePendingOp(action, params)
-		return fmt.Sprintf("[confirm_key:%s]\n涉及敏感操作，需要再次确认。\n\n%s\n\n请回复\"确认\"执行，或\"取消\"放弃。", key, desc), nil
+		return fmt.Sprintf("[confirm_key:%s]\nThis is a sensitive operation and requires confirmation.\n\n%s\n\nReply \"confirm\" to execute, or \"cancel\" to abort.", key, desc), nil
 
 	case "confirm":
 		confirmKey, _ := params["confirm_key"].(string)
 		if confirmKey == "" {
-			return "缺少 confirm_key。", nil
+			return "Missing confirm_key.", nil
 		}
 		op, found := loadPendingOp(confirmKey)
 		if !found {
-			return "确认码无效或已过期，请重新发起操作。", nil
+			return "Confirmation key is invalid or expired. Please retry the operation.", nil
 		}
 		return modelHandler(op.action, op.params)
 
@@ -188,7 +188,7 @@ func (t *ManageModels) Execute(call Call) (string, error) {
 		if confirmKey != "" {
 			dropPendingOp(confirmKey)
 		}
-		return "操作已取消。", nil
+		return "Operation cancelled.", nil
 
 	default:
 		return "", fmt.Errorf("unknown action: %s", action)
@@ -203,11 +203,11 @@ func describePendingOp(action string, params map[string]any) string {
 
 	switch action {
 	case "delete":
-		return fmt.Sprintf("删除模型 #%d", uint(id))
+		return fmt.Sprintf("Delete model #%d", uint(id))
 	case "create":
-		return fmt.Sprintf("创建模型「%s」(%s.%s)", name, provider, modelName)
+		return fmt.Sprintf("Create model \"%s\" (%s.%s)", name, provider, modelName)
 	case "update":
-		return fmt.Sprintf("更新模型 #%d", uint(id))
+		return fmt.Sprintf("Update model #%d", uint(id))
 	}
-	return fmt.Sprintf("执行 %s 操作", action)
+	return fmt.Sprintf("Execute %s operation", action)
 }

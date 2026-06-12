@@ -2,22 +2,22 @@ package entity
 
 import "time"
 
-// AIModel AI 模型配置
+// AIModel AI model configuration
 type AIModel struct {
 	Id          uint      `gorm:"primaryKey" json:"id"`
-	Name        string    `gorm:"size:128" json:"name"`                // 显示名称
-	Provider    string    `gorm:"size:64;index" json:"provider"`       // 提供商: openai, anthropic, gemini, deepseek, volcengine, openai_compat
-	Model       string    `gorm:"size:128" json:"model"`               // 模型标识: gpt-4o, claude-sonnet-4-20250514 等
-	Category    string    `gorm:"size:64;index" json:"category"`       // 分类: llm, image, voice, video
-	APIKey      string    `gorm:"size:512" json:"api_key,omitempty"`   // API Key (可选，覆盖全局配置)
-	BaseURL     string    `gorm:"size:512" json:"base_url,omitempty"`  // 自定义 BaseURL (可选)
-	IsDefault   bool      `gorm:"default:false" json:"is_default"`     // 是否为该分类的默认模型
-	IsBase      bool      `gorm:"default:false" json:"is_base"`       // 是否为基础模型（首次初始化时配置）
-	Description string    `gorm:"size:512" json:"description"`         // 描述
-	InputTypes         string    `gorm:"size:256" json:"input_types,omitempty"`          // 支持的输入类型: text,image,audio (逗号分隔)
-	OutputTypes        string    `gorm:"size:256" json:"output_types,omitempty"`         // 支持的输出类型: text,image,audio (逗号分隔)
-	SupportsMultimodal bool      `gorm:"default:false" json:"supports_multimodal"`       // 是否支持多模态（图片输入）
-	ThinkingLevel      string    `gorm:"size:16;default:off" json:"thinking_level"`       // 思考等级: off, low, medium, high, max
+	Name        string    `gorm:"size:128" json:"name"`                // Display name
+	Provider    string    `gorm:"size:64;index" json:"provider"`       // Provider: openai, anthropic, gemini, deepseek, volcengine, openai_compat
+	Model       string    `gorm:"size:128" json:"model"`               // Model identifier: gpt-4o, claude-sonnet-4-20250514 , etc.
+	Category    string    `gorm:"size:64;index" json:"category"`       // Category: llm, image, voice, video
+	APIKey      string    `gorm:"size:512" json:"api_key,omitempty"`   // API Key (optional, overrides global config)
+	BaseURL     string    `gorm:"size:512" json:"base_url,omitempty"`  // Custom BaseURL (optional)
+	IsDefault   bool      `gorm:"default:false" json:"is_default"`     // Whether this is the default model for the category
+	IsBase      bool      `gorm:"default:false" json:"is_base"`       // Whether this is a base model (configured during initial setup)
+	Description string    `gorm:"size:512" json:"description"`         // Description
+	InputTypes         string    `gorm:"size:256" json:"input_types,omitempty"`          // Supported input types: text,image,audio (comma-separated)
+	OutputTypes        string    `gorm:"size:256" json:"output_types,omitempty"`         // Supported output types: text,image,audio (comma-separated)
+	SupportsMultimodal bool      `gorm:"default:false" json:"supports_multimodal"`       // Whether multimodal input (images) is supported
+	ThinkingLevel      string    `gorm:"size:16;default:off" json:"thinking_level"`       // Thinking level: off, low, medium, high, max
 	CreatedAt          time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }

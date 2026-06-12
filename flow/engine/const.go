@@ -1,13 +1,13 @@
 package engine
 
-// 节点执行状态
+// Node execution status
 const (
 	StatusSuccess      = "success"
 	StatusError        = "error"
 	StatusWaitingUser  = "waiting_user"
 )
 
-// 流程执行状态
+// Flow execution status
 const (
 	ExecRunning   = "running"
 	ExecCompleted = "completed"
@@ -15,7 +15,7 @@ const (
 	ExecError     = "error"
 )
 
-// 边连接点
+// Edge connection points
 const (
 	HandleOutput = "output"
 	HandleInput  = "input"

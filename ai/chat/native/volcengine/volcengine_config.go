@@ -1,6 +1,6 @@
 package volcengine
 
-// VolcengineConfig 火山引擎配置
+// VolcengineConfig Volcengine config
 type VolcengineConfig struct {
 	APIKey string `mapstructure:"apiKey" yaml:"apiKey" json:"apiKey"`
 	Model  string `mapstructure:"model" yaml:"model" json:"model"`

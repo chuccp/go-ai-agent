@@ -9,13 +9,13 @@ import (
 	"github.com/chuccp/go-ai-agent/flow/engine"
 )
 
-// TransformNodeConfig 数据变换节点配置
+// TransformNodeConfig Data transform node config
 type TransformNodeConfig struct {
-	Template string `json:"template"` // Go template，输出 JSON
+	Template string `json:"template"` // Go template, outputs JSON
 }
 
-// TransformNode 使用 Go template 对上游数据进行变换
-// 模板中可访问所有上游节点输出：{{.生成故事.output}} {{.分段.count}}
+// TransformNode Use Go template to transform upstream data
+// All upstream node outputs accessible in template: {{.generate_story.output}} {{.split.count}}
 type TransformNode struct{}
 
 func NewTransformNode() *TransformNode { return &TransformNode{} }
@@ -31,12 +31,12 @@ func (n *TransformNode) Execute(ctx *engine.ExecutionContext, config string) (*e
 		return nil, fmt.Errorf("transform: template is required")
 	}
 
-	// 构建模板数据：所有上游节点输出 + 全局数据
+	// Build template data: all upstream node outputs + global data
 	data := make(map[string]any)
 	for k, v := range ctx.Data {
 		data[k] = v
 	}
-	// 把 NodeOutputs 作为嵌套结构，方便模板中 .生成故事.output 访问
+	// Use NodeOutputs as nested structure for template access, e.g. .generate_story.output
 	for label, output := range ctx.AllNodeOutputs() {
 		data[label] = output.Data
 	}
@@ -53,7 +53,7 @@ func (n *TransformNode) Execute(ctx *engine.ExecutionContext, config string) (*e
 
 	result := buf.String()
 
-	// 尝试解析为 JSON 验证
+	// Attempt JSON parse for validation
 	var jsonCheck any
 	isJSON := json.Unmarshal([]byte(result), &jsonCheck) == nil
 

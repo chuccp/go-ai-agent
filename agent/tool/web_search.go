@@ -14,9 +14,9 @@ func init() {
 	Register(&WebSearch{})
 }
 
-// WebSearch 联网搜索工具。
-// 对于 Claude 模型，type=web_search_20260209 由 API 原生处理，不走 Execute。
-// 对于其他模型（OpenAI/Gemini 等），Execute 通过 DuckDuckGo 执行实际搜索。
+// WebSearch is an internet search tool.
+// For Claude models, type=web_search_20260209 is handled natively by the API, bypassing Execute.
+// For other models (OpenAI/Gemini etc.), Execute performs actual search via DuckDuckGo.
 type WebSearch struct{}
 
 var WebSearchType = "web_search_20260209"
@@ -25,13 +25,13 @@ func (t *WebSearch) Definition() Definition {
 	return Definition{
 		Type:        WebSearchType,
 		Name:        "web_search",
-		Description: "搜索互联网获取最新信息。当需要查找实时数据、新闻、或模型知识截止日期之后的信息时使用。",
+		Description: "Search the internet for the latest information. Use when you need real-time data, news, or information beyond the model's knowledge cutoff date.",
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
 				"query": map[string]any{
 					"type":        "string",
-					"description": "搜索关键词",
+					"description": "Search query",
 				},
 			},
 			"required": []string{"query"},
@@ -58,7 +58,7 @@ func (t *WebSearch) Execute(call Call) (string, error) {
 		return "", fmt.Errorf("search failed: %w", err)
 	}
 	if results == "" {
-		return fmt.Sprintf("搜索「%s」未找到相关结果", query), nil
+		return fmt.Sprintf("No results found for \"%s\"", query), nil
 	}
 	return results, nil
 }

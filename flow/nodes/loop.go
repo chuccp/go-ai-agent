@@ -7,15 +7,15 @@ import (
 	"github.com/chuccp/go-ai-agent/flow/engine"
 )
 
-// LoopNodeConfig 循环节点配置
+// LoopNodeConfig Loop node config
 type LoopNodeConfig struct {
-	MaxIterations int    `json:"max_iterations"` // 最大循环次数，0=不限(最多100)
-	BreakField    string `json:"break_field"`    // 中断条件检查字段，如 "子节点.output"
+	MaxIterations int    `json:"max_iterations"` // Max iterations, 0=unlimited (max 100)
+	BreakField    string `json:"break_field"`    // Break condition check field, e.g. "child.output"
 	BreakOperator string `json:"break_operator"` // contains/equals/not_empty
-	BreakValue    string `json:"break_value"`    // 中断比较值
+	BreakValue    string `json:"break_value"`    // Break compare value
 }
 
-// LoopNode 循环执行子节点直到满足中断条件或达到最大次数
+// LoopNode Loop over child nodes until break condition is met or max iterations reached
 type LoopNode struct{}
 
 func NewLoopNode() *LoopNode { return &LoopNode{} }
@@ -28,15 +28,15 @@ func (n *LoopNode) Execute(ctx *engine.ExecutionContext, config string) (*engine
 		return nil, err
 	}
 	if cfg.MaxIterations <= 0 {
-		cfg.MaxIterations = 10 // 默认最多10次
+		cfg.MaxIterations = 10 // Default max 10 iterations
 	}
 	if cfg.MaxIterations > 100 {
 		cfg.MaxIterations = 100
 	}
 
-	// 需要 Engine 引用才能运行子流程
-	// Loop 节点依赖 engine.runSubFlow —— 由 Engine.Run 在检测到 children 时调用
-	// 这里只返回占位输出，实际循环由 Engine 处理
+	// Requires Engine reference to run sub-flow
+	// Loop node depends on engine.runSubFlow -- called by Engine.Run when children are detected
+	// Returns placeholder output, actual loop handled by Engine
 	return &engine.NodeOutput{
 		Data: map[string]any{
 			KeyOutput:       "",
@@ -46,7 +46,7 @@ func (n *LoopNode) Execute(ctx *engine.ExecutionContext, config string) (*engine
 	}, nil
 }
 
-// LoopContext 循环执行上下文（由 Engine 使用）
+// LoopContext Loop execution context (used by Engine)
 type LoopContext struct {
 	MaxIterations int
 	BreakField    string
@@ -55,7 +55,7 @@ type LoopContext struct {
 	CurrentIter   int
 }
 
-// ShouldBreak 检查是否应该中断循环
+// ShouldBreak Check whether loop should break
 func (lc *LoopContext) ShouldBreak(ctx *engine.ExecutionContext) bool {
 	lc.CurrentIter++
 	if lc.CurrentIter >= lc.MaxIterations {
@@ -84,5 +84,5 @@ func (lc *LoopContext) ShouldBreak(ctx *engine.ExecutionContext) bool {
 	}
 
 	fieldVal := fmt.Sprintf("%v", raw)
-	return evaluate(lc.BreakOperator, fieldVal, lc.BreakValue)
+	return Evaluate(lc.BreakOperator, fieldVal, lc.BreakValue)
 }

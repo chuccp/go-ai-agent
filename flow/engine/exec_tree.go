@@ -6,17 +6,17 @@ import (
 	"github.com/chuccp/go-ai-agent/entity"
 )
 
-// ExecLayer 执行层（同层节点可并行）
+// ExecLayer Execution layer (nodes in same layer can run in parallel)
 type ExecLayer struct {
 	NodeIDs []uint
 }
 
-// BuildExecutionLayers 从节点和边构建分层执行计划
-// 使用正向 BFS：从 start 节点出发，按依赖关系分层
+// BuildExecutionLayers Build layered execution plan from nodes and edges
+// Use forward BFS from start node, layered by dependencies
 func BuildExecutionLayers(nodes []*entity.FlowNode, edges []*entity.FlowEdge) ([]ExecLayer, error) {
-	// 入度表：nodeID -> 入边来源节点 ID 集合
+	// In-degree table: nodeID -> set of source node IDs
 	inDegree := make(map[uint]map[uint]bool)
-	// 出边表：nodeID -> 目标节点 ID 列表
+	// Out-edge table: nodeID -> list of target node IDs
 	outEdges := make(map[uint][]uint)
 
 	for _, n := range nodes {
@@ -28,7 +28,7 @@ func BuildExecutionLayers(nodes []*entity.FlowNode, edges []*entity.FlowEdge) ([
 		inDegree[e.TargetNodeId][e.SourceNodeId] = true
 	}
 
-	// 找到 start 节点
+	// Find start node
 	var startID uint
 	for _, n := range nodes {
 		if n.Type == "start" {
@@ -56,7 +56,7 @@ func BuildExecutionLayers(nodes []*entity.FlowNode, edges []*entity.FlowEdge) ([
 				if visited[targetID] {
 					continue
 				}
-				// 检查 target 的所有入边来源是否都已访问
+				// Check if all in-edge sources of target have been visited
 				allVisited := true
 				for srcID := range inDegree[targetID] {
 					if !visited[srcID] {
@@ -70,7 +70,7 @@ func BuildExecutionLayers(nodes []*entity.FlowNode, edges []*entity.FlowEdge) ([
 			}
 		}
 
-		// 去重
+		// Deduplicate
 		seen := make(map[uint]bool)
 		deduped := make([]uint, 0, len(nextLayer))
 		for _, id := range nextLayer {
@@ -81,7 +81,7 @@ func BuildExecutionLayers(nodes []*entity.FlowNode, edges []*entity.FlowEdge) ([
 		}
 		currentLayer = deduped
 
-		// 检测循环：如果还有未访问节点但 nextLayer 为空
+		// Detect cycles: if nodes remain unvisited but nextLayer is empty
 		if len(currentLayer) == 0 {
 			unvisited := 0
 			for _, n := range nodes {

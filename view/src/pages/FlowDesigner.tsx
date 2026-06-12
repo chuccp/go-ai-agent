@@ -1093,24 +1093,13 @@ function FlowListView() {
 
   const handleExportCard = async (id: number, name: string) => {
     try {
-      const res = await fetch(`${API_BASE}/api/flows/${id}`)
-      const body = await res.json()
-      const detail = body.data
-      if (!detail) return
-      const data = {
-        type: 'go-ai-agent-flow',
-        version: 1,
-        name: detail.name,
-        description: detail.description,
-        category: detail.category,
-        nodes: detail.nodes || [],
-        edges: detail.edges || [],
-      }
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      const res = await fetch(`${API_BASE}/api/flows/${id}/export`)
+      if (!res.ok) { alert('Export failed'); return }
+      const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `${detail.name || 'flow'}.json`
+      a.download = `${name || 'flow'}.zip`
       a.click()
       URL.revokeObjectURL(url)
     } catch (e) { console.error(e) }
@@ -1124,34 +1113,18 @@ function FlowListView() {
   const handleImport = async () => {
     const input = document.createElement('input')
     input.type = 'file'
-    input.accept = '.json'
+    input.accept = '.zip'
     input.onchange = async (e) => {
       const file = (e.target as HTMLInputElement).files?.[0]
       if (!file) return
       setImporting(true)
       try {
-        const text = await file.text()
-        const data = JSON.parse(text)
-        // Support both versioned format and raw flow JSON
-        if (data.type === 'go-ai-agent-flow') {
-          // version 1: extract name/description/category/nodes/edges
-          if (!data.name) { alert(t('flow.jsonError')); return }
-          const saved = await saveFlow({
-            name: data.name,
-            description: data.description || '',
-            category: data.category || 'uncategorized',
-            nodes: data.nodes || [],
-            edges: data.edges || [],
-          })
-          if (saved?.id) fetchFlows()
-        } else if (data.nodes || data.name) {
-          // Raw flow JSON (no type marker) — still supported
-          const saved = await saveFlow(data)
-          if (saved?.id) fetchFlows()
-        } else {
-          alert(t('flow.jsonError'))
-        }
-      } catch { alert(t('flow.jsonError')) }
+        const form = new FormData()
+        form.append('file', file)
+        const res = await fetch(`${API_BASE}/api/flows/import`, { method: 'POST', body: form })
+        if (!res.ok) { const err = await res.json(); alert(err?.msg || 'Import failed'); return }
+        fetchFlows()
+      } catch { alert('Import failed') }
       finally { setImporting(false) }
     }
     input.click()
@@ -1699,48 +1672,58 @@ function FlowEditor({ flowId }: { flowId: string }) {
   }, [nodes, edges, flowName, flowCategory, dbFlowId, saveFlow, t])
 
   /* ---- Export ---- */
-  const handleExport = useCallback(() => {
-    const data = {
-      type: 'go-ai-agent-flow',
-      version: 1,
-      name: flowName,
-      category: flowCategory,
+  const handleExport = useCallback(async () => {
+    if (!dbFlowId) { alert('Please save the flow first'); return }
+    // Save first, then download via backend ZIP endpoint
+    const saved = await saveFlow({
+      name: flowName, description: '', category: flowCategory,
       nodes: nodes.map(n => rfNodeToFlowNode(n, 0)),
       edges: edges.map(e => rfEdgeToFlowEdge(e, 0)),
-    }
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${flowName || 'flow'}.json`
-    a.click()
-    URL.revokeObjectURL(url)
-  }, [flowName, flowCategory, nodes, edges])
+    })
+    if (!saved?.id) return
+    try {
+      const res = await fetch(`${API_BASE}/api/flows/${saved.id}/export`)
+      if (!res.ok) { alert('Export failed'); return }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${flowName || 'flow'}.zip`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (e) { console.error(e) }
+  }, [dbFlowId, flowName, flowCategory, nodes, edges, saveFlow])
 
   /* ---- Import ---- */
   const handleImport = useCallback(() => {
     const input = document.createElement('input')
     input.type = 'file'
-    input.accept = '.json'
+    input.accept = '.zip'
     input.onchange = async (e) => {
       const file = (e.target as HTMLInputElement).files?.[0]
       if (!file) return
       try {
-        const text = await file.text()
-        const data = JSON.parse(text)
-        // Support both versioned ("go-ai-agent-flow") and raw flow JSON
-        if (data.nodes && Array.isArray(data.nodes)) {
-          const rfn = data.nodes.map((n: FlowNode) => flowNodeToRF(n))
-          const rfe = (data.edges || []).map((e: FlowEdge) => flowEdgeToRF(e, data.nodes))
+        const form = new FormData()
+        form.append('file', file)
+        const res = await fetch(`${API_BASE}/api/flows/import`, { method: 'POST', body: form })
+        if (!res.ok) { const err = await res.json(); alert(err?.msg || t('flow.jsonError')); return }
+        const body = await res.json()
+        const detail = body.data
+        if (!detail) { alert(t('flow.jsonError')); return }
+        // Fetch full flow detail to get nodes/edges
+        const detailRes = await fetch(`${API_BASE}/api/flows/${detail.id}`)
+        const detailBody = await detailRes.json()
+        const flow = detailBody.data
+        if (flow) {
+          const rfn = (flow.nodes || []).map((n: FlowNode) => flowNodeToRF(n))
+          const rfe = (flow.edges || []).map((e: FlowEdge) => flowEdgeToRF(e, flow.nodes))
           setNodes(rfn)
           setEdges(rfe)
-          if (data.name) setFlowName(data.name)
-          if (data.category) setFlowCategory(data.category)
+          if (flow.name) setFlowName(flow.name)
+          if (flow.category) setFlowCategory(flow.category)
           const maxId = Math.max(0, ...rfn.map((n: Node) => parseInt(n.id, 10)).filter((n: number) => !isNaN(n)))
           setNextNodeId(maxId + 1)
           markDirty()
-        } else {
-          alert(t('flow.jsonError'))
         }
       } catch { alert(t('flow.jsonError')) }
     }

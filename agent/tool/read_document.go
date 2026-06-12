@@ -94,7 +94,7 @@ func detectTypeByExt(path string) string {
 func readTXT(path string) (string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return "", fmt.Errorf("读取文件失败: %w", err)
+		return "", fmt.Errorf("failed to read file: %w", err)
 	}
 	return string(data), nil
 }
@@ -102,7 +102,7 @@ func readTXT(path string) (string, error) {
 func readDOCX(path string) (string, error) {
 	r, err := zip.OpenReader(path)
 	if err != nil {
-		return "", fmt.Errorf("打开 docx 文件失败: %w", err)
+		return "", fmt.Errorf("failed to open docx file: %w", err)
 	}
 	defer r.Close()
 
@@ -114,18 +114,18 @@ func readDOCX(path string) (string, error) {
 		}
 	}
 	if documentXML == nil {
-		return "", fmt.Errorf("docx 文件中未找到 word/document.xml")
+		return "", fmt.Errorf("word/document.xml not found in docx file")
 	}
 
 	rc, err := documentXML.Open()
 	if err != nil {
-		return "", fmt.Errorf("读取 document.xml 失败: %w", err)
+		return "", fmt.Errorf("failed to read document.xml: %w", err)
 	}
 	defer rc.Close()
 
 	data, err := io.ReadAll(rc)
 	if err != nil {
-		return "", fmt.Errorf("读取 document.xml 失败: %w", err)
+		return "", fmt.Errorf("failed to read document.xml: %w", err)
 	}
 
 	return extractTextFromDocxXML(data), nil
@@ -187,7 +187,7 @@ func extractTextFromDocxXML(data []byte) string {
 	}
 
 	for _, tbl := range doc.Body.Tables {
-		result.WriteString("\n[表格]\n")
+		result.WriteString("\n[Table]\n")
 		for _, row := range tbl.Rows {
 			var cells []string
 			for _, cell := range row.Cells {
@@ -212,7 +212,7 @@ func extractTextFromDocxXML(data []byte) string {
 func readXLSX(path string) (string, error) {
 	f, err := excelize.OpenFile(path)
 	if err != nil {
-		return "", fmt.Errorf("打开 xlsx 文件失败: %w", err)
+		return "", fmt.Errorf("failed to open xlsx file: %w", err)
 	}
 	defer f.Close()
 
@@ -224,12 +224,12 @@ func readXLSX(path string) (string, error) {
 
 		rows, err := f.GetRows(sheet)
 		if err != nil {
-			result.WriteString(fmt.Sprintf("(读取工作表失败: %v)\n", err))
+			result.WriteString(fmt.Sprintf("(failed to read sheet: %v)\n", err))
 			continue
 		}
 
 		if len(rows) == 0 {
-			result.WriteString("(空工作表)\n")
+			result.WriteString("(empty sheet)\n")
 			continue
 		}
 
@@ -281,23 +281,23 @@ func readXLSX(path string) (string, error) {
 func readPDF(path string) (string, error) {
 	f, reader, err := pdf.Open(path)
 	if err != nil {
-		return "", fmt.Errorf("打开 PDF 文件失败: %w", err)
+		return "", fmt.Errorf("failed to open PDF file: %w", err)
 	}
 	defer f.Close()
 
 	plainText, err := reader.GetPlainText()
 	if err != nil {
-		return "", fmt.Errorf("读取 PDF 文本失败: %w", err)
+		return "", fmt.Errorf("failed to read PDF text: %w", err)
 	}
 
 	text, err := io.ReadAll(plainText)
 	if err != nil {
-		return "", fmt.Errorf("读取 PDF 内容失败: %w", err)
+		return "", fmt.Errorf("failed to read PDF content: %w", err)
 	}
 
 	result := strings.TrimSpace(string(text))
 	if result == "" {
-		return "", fmt.Errorf("无法从此 PDF 中提取文本。PDF 可能为扫描图片格式，建议使用 OCR 工具处理。")
+		return "", fmt.Errorf("unable to extract text from this PDF. The PDF may be a scanned image — try using OCR tools instead.")
 	}
 	return result, nil
 }

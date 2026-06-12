@@ -14,7 +14,7 @@ import (
 func main() {
 	server := flag.String("server", "ws://localhost:19009/ws/chat", "WebSocket server URL")
 	model := flag.String("model", "1.default", "Model to use")
-	prompt := flag.String("prompt", "列举当前系统有多少个已配置的模型", "User prompt")
+	prompt := flag.String("prompt", "List how many models are currently configured in the system", "User prompt")
 	flag.Parse()
 
 	conn, _, err := websocket.DefaultDialer.Dial(*server, nil)

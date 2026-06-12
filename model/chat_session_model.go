@@ -9,7 +9,7 @@ import (
 	fwModel "github.com/chuccp/go-web-frame/model"
 )
 
-// ChatSessionModel 聊天会话 Model
+// ChatSessionModel chat session model
 type ChatSessionModel struct {
 	core.IModel
 	*fwModel.EntryModel[*entity.ChatSession, uint]
@@ -117,7 +117,7 @@ func (m *ChatSessionModel) ReNew(d *db.DB, c *core.Context) core.IModel {
 	}
 }
 
-// ChatMessageModel 聊天消息 Model
+// ChatMessageModel chat message model
 type ChatMessageModel struct {
 	core.IModel
 	*fwModel.EntryModel[*entity.ChatMessage, uint]

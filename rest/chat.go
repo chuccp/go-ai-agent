@@ -63,7 +63,7 @@ func (c *ChatRest) Init(context *core.Context) error {
 		log.Warn("Failed to create upload directory")
 	}
 
-	log.Info("WebSocket 路由已注册: /ws/chat")
+	log.Info("WebSocket route registered: /ws/chat")
 	return nil
 }
 
@@ -143,25 +143,25 @@ func (c *ChatRest) listModels(request *web.Request) (any, error) {
 func (c *ChatRest) uploadFile(req *web.Request) (any, error) {
 	form, err := req.MultipartForm()
 	if err != nil {
-		return nil, fmt.Errorf("解析上传表单失败: %w", err)
+		return nil, fmt.Errorf("failed to parse upload form: %w", err)
 	}
 
 	files := form.File["file"]
 	if len(files) == 0 {
-		return nil, fmt.Errorf("未找到上传文件（字段名: file）")
+		return nil, fmt.Errorf("upload file not found (field name: file)")
 	}
 
 	header := files[0]
 	file, err := header.Open()
 	if err != nil {
-		return nil, fmt.Errorf("打开上传文件失败: %w", err)
+		return nil, fmt.Errorf("failed to open uploaded file: %w", err)
 	}
 	defer func() { _ = file.Close() }()
 
 	// Generate unique filename
 	id := make([]byte, 8)
 	if _, err := rand.Read(id); err != nil {
-		return nil, fmt.Errorf("生成随机文件名失败: %w", err)
+		return nil, fmt.Errorf("failed to generate random filename: %w", err)
 	}
 	ext := filepath.Ext(header.Filename)
 	safeName := hex.EncodeToString(id) + "_" + strings.ReplaceAll(header.Filename, " ", "_")
@@ -170,12 +170,12 @@ func (c *ChatRest) uploadFile(req *web.Request) (any, error) {
 
 	dst, err := os.Create(savePath)
 	if err != nil {
-		return nil, fmt.Errorf("创建文件失败: %w", err)
+		return nil, fmt.Errorf("failed to create file: %w", err)
 	}
 	defer func() { _ = dst.Close() }()
 
 	if _, err := io.Copy(dst, file); err != nil {
-		return nil, fmt.Errorf("保存文件失败: %w", err)
+		return nil, fmt.Errorf("failed to save file: %w", err)
 	}
 
 	// Detect MIME type from extension if not provided

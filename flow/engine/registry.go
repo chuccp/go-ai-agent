@@ -2,24 +2,24 @@ package engine
 
 import "fmt"
 
-// Registry 节点类型注册表
+// Registry Node type registry
 type Registry struct {
 	executors map[string]NodeExecutor
 }
 
-// NewRegistry 创建注册表
+// NewRegistry Create registry
 func NewRegistry() *Registry {
 	return &Registry{
 		executors: make(map[string]NodeExecutor),
 	}
 }
 
-// Register 注册节点执行器
+// Register Register node executor
 func (r *Registry) Register(executor NodeExecutor) {
 	r.executors[executor.Type()] = executor
 }
 
-// Get 获取节点执行器
+// Get Get node executor
 func (r *Registry) Get(nodeType string) (NodeExecutor, error) {
 	e, ok := r.executors[nodeType]
 	if !ok {
@@ -28,7 +28,7 @@ func (r *Registry) Get(nodeType string) (NodeExecutor, error) {
 	return e, nil
 }
 
-// Types 列出所有已注册的节点类型
+// Types List all registered node types
 func (r *Registry) Types() []string {
 	types := make([]string, 0, len(r.executors))
 	for t := range r.executors {

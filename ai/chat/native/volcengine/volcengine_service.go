@@ -24,7 +24,7 @@ const (
 	DefaultTopP        = 0.95
 	DefaultMaxTokens   = 32768
 
-	// BaseURL Responses API 基础地址
+	// BaseURL Responses API base URL
 	BaseURL = "https://ark.cn-beijing.volces.com/api/v3"
 )
 
@@ -33,9 +33,9 @@ var ProviderDefaults = map[string][2]string{
 	ServiceName: {BaseURL, "doubao-seed-2.0-pro"},
 }
 
-// ==================== Responses API JSON 结构体 ====================
+// ==================== Responses API JSON structs ====================
 
-// responsesRequest Responses API 请求体
+// responsesRequest Responses API request body
 type responsesRequest struct {
 	Model              string             `json:"model"`
 	Input              any                `json:"input"`
@@ -72,7 +72,7 @@ type responsesCaching struct {
 	Type string `json:"type"`
 }
 
-// responsesObject Responses API 响应体
+// responsesObject Responses API response body
 type responsesObject struct {
 	ID                string             `json:"id"`
 	Model             string             `json:"model"`
@@ -103,7 +103,7 @@ type incompleteDetails struct {
 	Reason string `json:"reason"`
 }
 
-// outputItem 输出项
+// outputItem output item
 type outputItem struct {
 	Type      string          `json:"type"`
 	Role      string          `json:"role"`
@@ -115,20 +115,20 @@ type outputItem struct {
 	Arguments string          `json:"arguments"`
 }
 
-// contentItem 内容块（output 数组中的 content）
+// contentItem content block (content in output array)
 type contentItem struct {
 	Type string `json:"type"`
 	Text string `json:"text"`
 }
 
-// inputMessage 用于构建 Input 数组中的消息
+// inputMessage used to build messages in the Input array
 type inputMessage struct {
 	Type    string `json:"type"`
 	Role    string `json:"role"`
 	Content string `json:"content"`
 }
 
-// ==================== SSE 流式事件结构体 ====================
+// ==================== SSE streaming event structs ====================
 
 type sseEvent struct {
 	Type           string           `json:"type"`
@@ -145,7 +145,7 @@ type sseEvent struct {
 
 // ==================== VolcengineProvider ====================
 
-// VolcengineProvider 火山引擎聊天提供商
+// VolcengineProvider Volcengine chat provider
 type VolcengineProvider struct {
 	configPrefix string
 	config       VolcengineConfig
@@ -181,17 +181,17 @@ func (s *VolcengineProvider) Init(ctx context.Context, cfg config.IConfig) error
 	}
 	var vc VolcengineConfig
 	if err := cfg.UnmarshalKey(key, &vc); err != nil {
-		return fmt.Errorf("加载火山引擎配置失败: %w", err)
+		return fmt.Errorf("failed to load Volcengine config: %w", err)
 	}
 
 	if vc.APIKey == "" {
-		return fmt.Errorf("火山引擎 API Key 不能为空")
+		return fmt.Errorf("Volcengine API Key cannot be empty")
 	}
 
 	s.config = vc
 	s.initialized = true
 
-	log.Info("火山引擎 Responses API 初始化成功",
+	log.Info("Volcengine Responses API initialized successfully",
 		zap.String("baseUrl", BaseURL),
 		zap.String("model", vc.GetModel()))
 	return nil
@@ -226,14 +226,14 @@ func (s *VolcengineProvider) GetProviderInfo() common.ProviderInfo {
 
 func (s *VolcengineProvider) checkInitialized() error {
 	if !s.initialized {
-		return fmt.Errorf("火山引擎服务未初始化")
+		return fmt.Errorf("Volcengine service not initialized")
 	}
 	return nil
 }
 
 // ==================== VolcengineChat ====================
 
-// VolcengineChat 火山引擎 Responses API 聊天实现
+// VolcengineChat Volcengine Responses API chat implementation
 type VolcengineChat struct {
 	restyClient *resty.Client
 	apiKey      string
@@ -286,7 +286,7 @@ func (c *VolcengineChat) ChatStreamWithContext(ctx context.Context, history []co
 	req := c.buildRequest(input, options, true)
 
 	reqBody, _ := json.Marshal(req)
-	log.Debug("Responses API 流式请求", zap.String("body", string(reqBody)))
+	log.Debug("Responses API streaming request", zap.String("body", string(reqBody)))
 
 	resp, err := c.restyClient.R().
 		SetContext(ctx).
@@ -296,7 +296,7 @@ func (c *VolcengineChat) ChatStreamWithContext(ctx context.Context, history []co
 		SetResponseDoNotParse(true).
 		Post("/responses")
 	if err != nil {
-		return fmt.Errorf("HTTP 请求失败: %w", err)
+		return fmt.Errorf("HTTP request failed: %w", err)
 	}
 	defer resp.RawResponse.Body.Close()
 
@@ -337,7 +337,7 @@ func (c *VolcengineChat) ChatStreamWithContext(ctx context.Context, history []co
 			}
 		case "response.completed", "response.failed", "response.incomplete":
 			if event.Type == "response.failed" && handler.OnErrorFunc != nil {
-				errMsg := "请求失败"
+				errMsg := "Request failed"
 				if event.Response != nil && event.Response.Error != nil {
 					errMsg = event.Response.Error.Message
 				}
@@ -354,7 +354,7 @@ func (c *VolcengineChat) ChatStreamWithContext(ctx context.Context, history []co
 	return nil
 }
 
-// ChatWithTools 带工具调用的聊天，解析 function_call
+// ChatWithTools Chat with tool calls, parsing function_call
 func (c *VolcengineChat) ChatWithTools(ctx context.Context, history []common.ChatMessage, text string, opts *common.LLMOptions) (*common.ChatResponse, error) {
 	var input any
 	if len(history) > 0 {
@@ -362,19 +362,19 @@ func (c *VolcengineChat) ChatWithTools(ctx context.Context, history []common.Cha
 	} else if text != "" {
 		input = text
 	} else {
-		return nil, fmt.Errorf("input 和 history 不能同时为空")
+		return nil, fmt.Errorf("input and history cannot both be empty")
 	}
 
 	req := c.buildRequest(input, opts, false)
 
-	// 添加工具定义
+	// Adding tool definitions
 	if tools := opts.GetTools(); tools != nil {
 		req.Tools = convertToolsForVolcengine(tools)
 		req.ToolChoice = &responsesToolChoice{Type: "required"}
 	}
 
 	reqBody, _ := json.Marshal(req)
-	log.Info("ChatWithTools 请求", zap.String("body", string(reqBody)))
+	log.Info("ChatWithTools request", zap.String("body", string(reqBody)))
 
 	resp, err := c.doRequest(ctx, req)
 	if err != nil {
@@ -383,7 +383,7 @@ func (c *VolcengineChat) ChatWithTools(ctx context.Context, history []common.Cha
 
 	cr := &common.ChatResponse{}
 
-	// 解析 output，区分 text 和 function_call
+	// Parsing output, distinguishing text and function_call
 	for _, item := range resp.Output {
 		switch item.Type {
 		case "message":
@@ -400,7 +400,7 @@ func (c *VolcengineChat) ChatWithTools(ctx context.Context, history []common.Cha
 				ID:   item.ID,
 				Name: item.Name,
 			}
-			// arguments 在 item 中是 string
+			// arguments in item is a string
 			if item.Arguments != "" {
 				tc.Arguments = item.Arguments
 			}
@@ -419,7 +419,7 @@ func (c *VolcengineChat) SetModel(model string) {
 	c.model = model
 }
 
-// ==================== 请求构建 ====================
+// ==================== Request building ====================
 
 func (c *VolcengineChat) buildRequest(input any, opts *common.LLMOptions, stream bool) responsesRequest {
 	req := responsesRequest{
@@ -460,13 +460,13 @@ func (c *VolcengineChat) buildRequest(input any, opts *common.LLMOptions, stream
 	return req
 }
 
-// ==================== HTTP 请求 ====================
+// ==================== HTTP request ====================
 
 func (c *VolcengineChat) doRequest(ctx context.Context, req responsesRequest) (*responsesObject, error) {
 	var obj responsesObject
 
 	reqBody, _ := json.Marshal(req)
-	log.Debug("Responses API 请求", zap.String("body", string(reqBody)))
+	log.Debug("Responses API request", zap.String("body", string(reqBody)))
 
 	resp, err := c.restyClient.R().
 		SetContext(ctx).
@@ -476,21 +476,21 @@ func (c *VolcengineChat) doRequest(ctx context.Context, req responsesRequest) (*
 		SetResult(&obj).
 		Post("/responses")
 	if err != nil {
-		return nil, fmt.Errorf("HTTP 请求失败: %w", err)
+		return nil, fmt.Errorf("HTTP request failed: %w", err)
 	}
 
 	if resp.StatusCode() != 200 {
-		return nil, fmt.Errorf("API 返回错误 (%d): %s", resp.StatusCode(), resp.String())
+		return nil, fmt.Errorf("API returned error (%d): %s", resp.StatusCode(), resp.String())
 	}
 
 	if obj.Error != nil {
-		return nil, fmt.Errorf("API 错误 (%s): %s", obj.Error.Code, obj.Error.Message)
+		return nil, fmt.Errorf("API error (%s): %s", obj.Error.Code, obj.Error.Message)
 	}
 
 	return &obj, nil
 }
 
-// ==================== 响应解析 ====================
+// ==================== Response parsing ====================
 
 func getOutputText(resp *responsesObject) string {
 	if resp == nil || len(resp.Output) == 0 {
@@ -517,7 +517,7 @@ func getOutputText(resp *responsesObject) string {
 	return builder.String()
 }
 
-// ==================== Input 构建 ====================
+// ==================== Input building ====================
 
 func buildInputWithHistory(history []common.ChatMessage, text string) []inputMessage {
 	messages := make([]inputMessage, 0, len(history)+1)

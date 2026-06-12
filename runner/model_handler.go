@@ -37,15 +37,15 @@ func (r *ChatRunner) modelList() (string, error) {
 	}
 	list, err := aiModel.List()
 	if err != nil {
-		return "", fmt.Errorf("查询失败: %w", err)
+		return "", fmt.Errorf("query failed: %w", err)
 	}
 	if len(list) == 0 {
-		return "暂无已配置的模型。", nil
+		return "No models configured yet.", nil
 	}
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("共 %d 个模型:\n\n", len(list)))
-	b.WriteString("| ID | 名称 | 提供商 | 模型 | 分类 | 默认 |\n")
-	b.WriteString("|----|------|--------|------|------|------|\n")
+	b.WriteString(fmt.Sprintf("Total %d models:\n\n", len(list)))
+	b.WriteString("| ID | Name | Provider | Model | Category | Default |\n")
+	b.WriteString("|----|------|----------|-------|----------|--------|\n")
 	for _, m := range list {
 		def := ""
 		if m.IsDefault {
@@ -60,7 +60,7 @@ func (r *ChatRunner) modelList() (string, error) {
 func (r *ChatRunner) modelGet(params map[string]any) (string, error) {
 	id, ok := getParamUint(params, "id")
 	if !ok {
-		return "", fmt.Errorf("请提供模型 ID")
+		return "", fmt.Errorf("model ID is required")
 	}
 	aiModel := r.aiModel()
 	if aiModel == nil {
@@ -68,7 +68,7 @@ func (r *ChatRunner) modelGet(params map[string]any) (string, error) {
 	}
 	m, err := aiModel.FindById(id)
 	if err != nil {
-		return "", fmt.Errorf("查询失败: %w", err)
+		return "", fmt.Errorf("query failed: %w", err)
 	}
 	return formatModelDetail(m), nil
 }
@@ -82,10 +82,10 @@ func (r *ChatRunner) modelCreate(params map[string]any) (string, error) {
 	category, _ := params["category"].(string)
 
 	if provider == "" || model == "" {
-		return "", fmt.Errorf("provider 和 model 不能为空")
+		return "", fmt.Errorf("provider and model cannot be empty")
 	}
 	if apiKey == "" {
-		return "", fmt.Errorf("api_key 不能为空")
+		return "", fmt.Errorf("api_key cannot be empty")
 	}
 	if category == "" {
 		category = aiTypes.CategoryLLM
@@ -115,7 +115,7 @@ func (r *ChatRunner) modelCreate(params map[string]any) (string, error) {
 		return "", fmt.Errorf("AI model not initialized")
 	}
 	if err := aiModel.Create(m); err != nil {
-		return "", fmt.Errorf("创建失败: %w", err)
+		return "", fmt.Errorf("create failed: %w", err)
 	}
 
 	// Activate the provider immediately
@@ -129,13 +129,13 @@ func (r *ChatRunner) modelCreate(params map[string]any) (string, error) {
 		}
 	}
 
-	return fmt.Sprintf("模型创建成功: #%d %s (%s.%s)", m.Id, m.Name, m.Provider, m.Model), nil
+	return fmt.Sprintf("Model created: #%d %s (%s.%s)", m.Id, m.Name, m.Provider, m.Model), nil
 }
 
 func (r *ChatRunner) modelUpdate(params map[string]any) (string, error) {
 	id, ok := getParamUint(params, "id")
 	if !ok {
-		return "", fmt.Errorf("请提供模型 ID")
+		return "", fmt.Errorf("model ID is required")
 	}
 
 	aiModel := r.aiModel()
@@ -144,7 +144,7 @@ func (r *ChatRunner) modelUpdate(params map[string]any) (string, error) {
 	}
 	m, err := aiModel.FindById(id)
 	if err != nil {
-		return "", fmt.Errorf("查询失败: %w", err)
+		return "", fmt.Errorf("query failed: %w", err)
 	}
 
 	changed := false
@@ -177,23 +177,23 @@ func (r *ChatRunner) modelUpdate(params map[string]any) (string, error) {
 		changed = true
 	}
 	if !changed {
-		return "未提供任何需要更新的字段。", nil
+		return "No fields to update.", nil
 	}
 
 	if err := aiModel.Update(m); err != nil {
-		return "", fmt.Errorf("更新失败: %w", err)
+		return "", fmt.Errorf("update failed: %w", err)
 	}
 
 	// Reconfigure provider
 	r.chatService.ConfigureProvider(m.Id, m.Provider, m.APIKey, m.Model, m.BaseURL)
 
-	return fmt.Sprintf("模型 #%d 已更新。", m.Id), nil
+	return fmt.Sprintf("Model #%d updated.", m.Id), nil
 }
 
 func (r *ChatRunner) modelDelete(params map[string]any) (string, error) {
 	id, ok := getParamUint(params, "id")
 	if !ok {
-		return "", fmt.Errorf("请提供模型 ID")
+		return "", fmt.Errorf("model ID is required")
 	}
 
 	aiModel := r.aiModel()
@@ -204,15 +204,15 @@ func (r *ChatRunner) modelDelete(params map[string]any) (string, error) {
 	// Look up before deleting to confirm existence
 	m, err := aiModel.FindById(id)
 	if err != nil {
-		return "", fmt.Errorf("查询失败: %w", err)
+		return "", fmt.Errorf("query failed: %w", err)
 	}
 
 	if err := aiModel.Delete(id); err != nil {
-		return "", fmt.Errorf("删除失败: %w", err)
+		return "", fmt.Errorf("delete failed: %w", err)
 	}
 	r.chatService.UnregisterProvider(id)
 
-	return fmt.Sprintf("模型 #%d (%s) 已删除。", id, m.Name), nil
+	return fmt.Sprintf("Model #%d (%s) deleted.", id, m.Name), nil
 }
 
 func (r *ChatRunner) aiModel() *model.AIModelModel {
@@ -238,18 +238,18 @@ func getParamUint(params map[string]any, key string) (uint, bool) {
 func formatModelDetail(m *entity.AIModel) string {
 	def := ""
 	if m.IsDefault {
-		def = "是"
+		def = "Yes"
 	} else {
-		def = "否"
+		def = "No"
 	}
-	return fmt.Sprintf(`模型详情:
-  ID:      %d
-  名称:    %s
-  提供商:  %s
-  模型:    %s
-  分类:    %s
-  API Key: ****
-  Base URL:%s
-  默认:    %s`,
+	return fmt.Sprintf(`Model Details:
+  ID:       %d
+  Name:     %s
+  Provider: %s
+  Model:    %s
+  Category: %s
+  API Key:  ****
+  Base URL: %s
+  Default:  %s`,
 		m.Id, m.Name, m.Provider, m.Model, m.Category, m.BaseURL, def)
 }

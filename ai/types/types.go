@@ -9,7 +9,7 @@ const (
 	CategoryEmbedding = "embedding"
 	CategoryOCR       = "ocr"
 	CategorySTT       = "stt"   // speech-to-text
-	CategoryOther     = "other" // 水印消除、去背景、超分辨率等小众模型，通过 InputTypes/OutputTypes 定义行为
+	CategoryOther     = "other" // Niche models like watermark removal, background removal, super-resolution; behavior defined by InputTypes/OutputTypes
 )
 
 // Modality constants for input/output type declarations.

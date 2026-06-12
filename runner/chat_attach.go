@@ -45,7 +45,7 @@ func (r *ChatRunner) processAttachments(attachments []Attachment, modelPath stri
 		case isImage && multimodal:
 			data, err := os.ReadFile(filePath)
 			if err != nil {
-				return nil, "", fmt.Errorf("读取图片失败: %w", err)
+				return nil, "", fmt.Errorf("failed to read image: %w", err)
 			}
 			mediaType := att.Type
 			if mediaType == "" {
@@ -60,23 +60,23 @@ func (r *ChatRunner) processAttachments(attachments []Attachment, modelPath stri
 			text, err := r.ocrImage(filePath)
 			if err != nil {
 				log.Warn("OCR failed, using placeholder", zap.Error(err))
-				extraText.WriteString("[图片: " + att.Name + " - OCR 识别失败]\n")
+				extraText.WriteString("[Image: " + att.Name + " - OCR recognition failed]\n")
 			} else {
-				extraText.WriteString("[图片 OCR 识别结果: " + att.Name + "]\n" + text + "\n")
+				extraText.WriteString("[Image OCR result: " + att.Name + "]\n" + text + "\n")
 			}
 
 		case isImage:
-			return nil, "", fmt.Errorf("当前模型不支持图片处理。请配置多模态模型或 OCR 模型。")
+			return nil, "", fmt.Errorf("Current model does not support image processing. Please configure a multimodal model or OCR model.")
 
 		case strings.HasPrefix(att.Type, "text/"):
 			data, err := os.ReadFile(filePath)
 			if err != nil {
-				return nil, "", fmt.Errorf("读取文本文件失败: %w", err)
+				return nil, "", fmt.Errorf("failed to read text file: %w", err)
 			}
-			extraText.WriteString("[文件内容: " + att.Name + "]\n" + string(data) + "\n")
+			extraText.WriteString("[File content: " + att.Name + "]\n" + string(data) + "\n")
 
 		default:
-			extraText.WriteString("[上传文件: " + att.Name + " (" + att.Type + ") - 可以使用 read_document 工具读取]\n")
+			extraText.WriteString("[Uploaded file: " + att.Name + " (" + att.Type + ") - use read_document tool to read]\n")
 		}
 	}
 
@@ -87,7 +87,7 @@ func (r *ChatRunner) processAttachments(attachments []Attachment, modelPath stri
 func (r *ChatRunner) ocrImage(filePath string) (string, error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
-		return "", fmt.Errorf("读取图片失败: %w", err)
+		return "", fmt.Errorf("failed to read image: %w", err)
 	}
 
 	aiModel := r.aiModel()
@@ -106,13 +106,13 @@ func (r *ChatRunner) ocrImage(filePath string) (string, error) {
 		}
 	}
 	if ocrModelPath == "" {
-		return "", fmt.Errorf("未找到支持多模态的模型用于 OCR")
+		return "", fmt.Errorf("No multimodal model found for OCR")
 	}
 
 	imageURL := "data:image/png;base64," + base64.StdEncoding.EncodeToString(data)
 	msg := common.ChatMessage{
 		Role: "user",
-		Content: "请识别并提取图片中的所有文字内容。只返回识别出的文字，不要添加任何解释或额外内容。",
+		Content: "Please recognize and extract all text from the image. Return only the recognized text, no explanations or additional content.",
 		ContentParts: []common.ContentPart{
 			{Type: "image", ImageURL: imageURL},
 		},
@@ -121,7 +121,7 @@ func (r *ChatRunner) ocrImage(filePath string) (string, error) {
 
 	result, err := r.chatService.ChatWithHistoryWithContext(context.Background(), ocrModelPath, messages, "", nil)
 	if err != nil {
-		return "", fmt.Errorf("OCR 识别失败: %w", err)
+		return "", fmt.Errorf("OCR recognition failed: %w", err)
 	}
 	return result, nil
 }

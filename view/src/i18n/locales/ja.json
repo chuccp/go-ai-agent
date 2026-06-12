@@ -85,9 +85,9 @@
   "think": { "off": "オフ", "low": "低", "medium": "中", "high": "高", "max": "最高" },
   "nodes": {
     "start": "開始", "end": "終了", "llm": "LLM呼び出し", "userInput": "ユーザー入入力",
-    "condition": "条件分岐", "transform": "データ変換", "split": "テキスト分割",
+    "condition": "条件分岐", "switch": "分岐選択", "transform": "データ変換", "split": "テキスト分割",
     "forEach": "並列バッチ", "iterator": "順次イテレータ", "loop": "ループ",
-    "script": "スクリプト", "imageGen": "画像生成", "audioGen": "音声生成", "videoGen": "動画生成"
+    "execute": "コマンド実行", "script": "スクリプト", "imageGen": "画像生成", "audioGen": "音声生成", "videoGen": "動画生成"
   },
   "nodeCategories": { "basic": "基本", "ai": "AI", "logic": "ロジック", "process": "処理" },
   "nodeConfig": {
@@ -106,6 +106,7 @@
     "parallelHint": "配列の各項目を並列処理。独立タスクに最適（例：バッチ画像生成）",
     "sequentialHint": "項目を順次下流ノードに渡す。失敗時はスキップして次へ",
     "maxIterations": "最大ループ回数", "breakField": "中断条件フィールド", "breakOperator": "中断演算子", "breakValue": "中断比較値",
+    "command": "コマンド", "runCommand": "コマンド実行",
     "scriptCode": "スクリプトコード", "scriptHint": "ctx[\"ノード名.output\"]で上流データにアクセス",
     "splitMethod": "分割方法", "byParagraph": "段落ごと（空行）", "byLine": "行ごと", "byComma": "カンマ区切り", "byPeriod": "句点区切り",
     "template": "テンプレート", "templateHint": ".ノード名.outputで上流データを参照",

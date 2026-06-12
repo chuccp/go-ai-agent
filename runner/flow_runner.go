@@ -20,7 +20,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// FlowRunner 流程执行器，管理流程的 WebSocket 交互执行
+// FlowRunner manages flow execution via WebSocket interaction
 type FlowRunner struct {
 	ctx            *core.Context
 	chatService    *chat.UnifiedChatService
@@ -28,7 +28,7 @@ type FlowRunner struct {
 	nodeModel      *flowModel.FlowNodeModel
 	edgeModel      *flowModel.FlowEdgeModel
 	executionModel *flowModel.FlowExecutionModel
-	registry       *engine.Registry // 节点类型注册表（初始化一次）
+	registry       *engine.Registry // Node type registry (initialized once)
 	taskMgr        *engine.TaskManager
 	functions      *engine.FunctionRegistry
 	cacheMgr       *cache.CacheManager
@@ -59,7 +59,7 @@ func (r *FlowRunner) Init(ctx *core.Context) error {
 	r.edgeModel = core.GetModel[*flowModel.FlowEdgeModel](ctx)
 	r.executionModel = core.GetModel[*flowModel.FlowExecutionModel](ctx)
 
-	// 节点注册表
+	// Node registry
 	r.registry = engine.NewRegistry()
 	r.registry.Register(&flownodes.StartNode{})
 	r.registry.Register(&flownodes.EndNode{})
@@ -69,6 +69,8 @@ func (r *FlowRunner) Init(ctx *core.Context) error {
 	r.registry.Register(flownodes.NewSplitNode())
 	r.registry.Register(flownodes.NewTransformNode())
 	r.registry.Register(flownodes.NewConditionNode())
+	r.registry.Register(flownodes.NewSwitchNode())
+	r.registry.Register(flownodes.NewExecuteNode())
 	r.registry.Register(flownodes.NewScriptNode())
 	r.registry.Register(flownodes.NewIteratorNode())
 	r.registry.Register(flownodes.NewLoopNode())
@@ -76,22 +78,22 @@ func (r *FlowRunner) Init(ctx *core.Context) error {
 	r.registry.Register(flownodes.NewAudioGenNode())
 	r.registry.Register(flownodes.NewVideoGenNode())
 
-	// 任务管理器
+	// Task manager
 	r.taskMgr = engine.NewTaskManager(4)
 
-	// 函数注册表
+	// Function registry
 	r.functions = engine.NewFunctionRegistry()
 	r.registerFunctions()
 
-	// 缓存管理器
+	// Cache manager
 	r.cacheMgr = cache.NewCacheManager("./data/cache", true)
 
-	log.Info("FlowRunner 已初始化")
+	log.Info("FlowRunner initialized")
 	return nil
 }
 
 func (r *FlowRunner) registerFunctions() {
-	// llm 函数
+	// LLM function
 	r.functions.Register("llm", func(ctx *engine.ExecutionContext, name string, args map[string]any) (map[string]any, error) {
 		model, _ := args["model"].(string)
 		if model == "" {
@@ -144,7 +146,7 @@ func (r *FlowRunner) registerFunctions() {
 			}, nil
 		}
 
-		// 非流式：用于 for_each / iterator 等内部调用
+		// Non-streaming: for internal calls like for_each / iterator
 		result, err := r.chatService.ChatWithHistoryWithContext(context.Background(), model, history, prompt, opts)
 		if err != nil {
 			return nil, err
@@ -156,9 +158,9 @@ func (r *FlowRunner) registerFunctions() {
 		}, nil
 	})
 
-	// image_generation 函数
+	// image_generation function
 	r.functions.Register("image_generation", func(ctx *engine.ExecutionContext, name string, args map[string]any) (map[string]any, error) {
-		// TODO: 接入图片生成 provider
+		// TODO: integrate image generation provider
 		return map[string]any{
 			"output": "",
 			"urls":   []string{},
@@ -166,18 +168,18 @@ func (r *FlowRunner) registerFunctions() {
 		}, fmt.Errorf("image generation not implemented yet")
 	})
 
-	// audio_generation 函数
+	// audio_generation function
 	r.functions.Register("audio_generation", func(ctx *engine.ExecutionContext, name string, args map[string]any) (map[string]any, error) {
-		// TODO: 接入语音生成 provider
+		// TODO: integrate audio generation provider
 		return map[string]any{
 			"output": "",
 			"url":    "",
 		}, fmt.Errorf("audio generation not implemented yet")
 	})
 
-	// video_generation 函数
+	// video_generation function
 	r.functions.Register("video_generation", func(ctx *engine.ExecutionContext, name string, args map[string]any) (map[string]any, error) {
-		// TODO: 接入视频生成 provider
+		// TODO: integrate video generation provider
 		return map[string]any{
 			"output": "",
 			"url":    "",
@@ -185,7 +187,7 @@ func (r *FlowRunner) registerFunctions() {
 	})
 }
 
-// SetSendFunc 设置事件发送函数（由 ChatRunner 调用，注入 WS 能力）
+// SetSendFunc sets the event sender (called by ChatRunner to inject WS capability)
 func (r *FlowRunner) SetSendFunc(fn func(data []byte)) {
 	r.sendFn = fn
 }
@@ -319,14 +321,14 @@ func (r *FlowRunner) HandleFlowStop(executionId uint) error {
 	return nil
 }
 
-// Emit 实现 engine.EventEmitter 接口
+// Emit implements the engine.EventEmitter interface
 func (r *FlowRunner) Emit(event engine.FlowEvent) {
 	if r.sendFn == nil {
 		return
 	}
 	data, err := json.Marshal(event)
 	if err != nil {
-		log.Error("序列化流程事件失败", zap.Error(err))
+		log.Error("Failed to serialize flow event", zap.Error(err))
 		return
 	}
 	r.sendFn(data)

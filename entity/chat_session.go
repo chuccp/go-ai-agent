@@ -2,7 +2,7 @@ package entity
 
 import "time"
 
-// ChatSession 聊天会话
+// ChatSession Chat session
 type ChatSession struct {
 	Id        uint      `gorm:"primaryKey" json:"id"`
 	Title     string    `gorm:"size:256" json:"title"`
@@ -14,7 +14,7 @@ func (ChatSession) TableName() string {
 	return "chat_sessions"
 }
 
-// ChatMessage 聊天消息
+// ChatMessage Chat message
 type ChatMessage struct {
 	Id        uint      `gorm:"primaryKey" json:"id"`
 	SessionId uint      `gorm:"index" json:"session_id"`

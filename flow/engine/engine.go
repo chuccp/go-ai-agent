@@ -16,7 +16,7 @@ type Engine struct {
 	nodes        map[uint]*entity.FlowNode
 	edges        []*entity.FlowEdge
 	adjacencyOut map[uint][]*entity.FlowEdge
-	adjacencyIn  map[uint][]*entity.FlowEdge // 入边表
+	adjacencyIn  map[uint][]*entity.FlowEdge // In-edge table
 	taskMgr      *TaskManager
 }
 
@@ -46,7 +46,7 @@ func (e *Engine) LoadFlow(nodes []*entity.FlowNode, edges []*entity.FlowEdge) {
 	}
 }
 
-// isModelNode 判断节点是否为模型相关类型
+// isModelNode Check if node is model-related type
 func isModelNode(nodeType string) bool {
 	switch nodeType {
 	case "llm", "image_gen", "audio_gen", "video_gen":
@@ -61,9 +61,9 @@ func (e *Engine) Run(ctx *ExecutionContext, startNodeId uint) error {
 		return err
 	}
 
-	// 条件路由结果：conditionNodeID → NextNode value
+	// Conditional routing results：conditionNodeID → NextNode value
 	conditionRoutes := make(map[uint]string)
-	// 被跳过的节点
+	// Skipped nodes
 	skippedNodes := make(map[uint]bool)
 
 	for _, layer := range layers {
@@ -71,7 +71,7 @@ func (e *Engine) Run(ctx *ExecutionContext, startNodeId uint) error {
 			return fmt.Errorf("execution aborted")
 		}
 
-		// 判断当前层每个节点是否应该执行
+		// Determine whether each node in current layer should execute
 		var activeNodes []uint
 		for _, id := range layer.NodeIDs {
 			if e.shouldSkipNode(id, conditionRoutes, skippedNodes) {
@@ -89,10 +89,10 @@ func (e *Engine) Run(ctx *ExecutionContext, startNodeId uint) error {
 			return err
 		}
 
-		// 记录条件节点的路由结果
+		// Record router node (condition/switch) routing results
 		for _, id := range activeNodes {
 			node := e.nodes[id]
-			if node.Type == "condition" {
+			if node.Type == "condition" || node.Type == "switch" {
 				if output, ok := ctx.GetNodeOutput(node.Label); ok && output.NextNode != "" {
 					conditionRoutes[id] = output.NextNode
 				}
@@ -107,43 +107,43 @@ func (e *Engine) Run(ctx *ExecutionContext, startNodeId uint) error {
 	return nil
 }
 
-// shouldSkipNode 判断节点是否应该跳过
-// 跳过条件：至少有一条入边来自活跃路径，则不跳过
-// 活跃路径 = 入边来源节点未被跳过 且（来源不是条件节点 或 来源条件节点的路由匹配该边的 SourceHandle）
+// shouldSkipNode Check if node should be skipped
+// Skip condition: at least one in-edge from an active path, do not skip
+// Active path = source node not skipped AND (source is not a condition node OR source condition route matches this edge's SourceHandle)
 func (e *Engine) shouldSkipNode(nodeID uint, conditionRoutes map[uint]string, skippedNodes map[uint]bool) bool {
 	if skippedNodes[nodeID] {
 		return true
 	}
 
 	inEdges := e.adjacencyIn[nodeID]
-	// 无入边（start 节点）：不跳过
+	// No in-edges (start node): do not skip
 	if len(inEdges) == 0 {
 		return false
 	}
 
-	// 检查是否至少有一条入边来自活跃路径
+	// Check if at least one in-edge comes from active path
 	for _, edge := range inEdges {
 		srcID := edge.SourceNodeId
-		// 来源被跳过 → 这条路径无效
+		// Source was skipped → this path is invalid
 		if skippedNodes[srcID] {
 			continue
 		}
-		// 来源是条件节点 → 检查路由是否匹配
+		// Source is a condition node → check route match
 		if nextNode, isCond := conditionRoutes[srcID]; isCond {
 			if edge.SourceHandle == nextNode {
-				return false // 匹配的分支 → 活跃路径 → 不跳过
+				return false // Matching branch → active path → do not skip
 			}
-			continue // 不匹配的分支 → 这条路径无效
+			continue // Non-matching branch → this path is invalid
 		}
-		// 非条件来源且未被跳过 → 活跃路径
+		// Non-condition source and not skipped → active path
 		return false
 	}
 
-	// 所有入边都来自无效路径 → 跳过
+	// All in-edges from invalid paths → skip
 	return true
 }
 
-// executeLayer 按节点类型分发执行：模型节点走 TaskManager，其余直接执行
+// executeLayer Dispatch by node type: model nodes via TaskManager, others direct
 func (e *Engine) executeLayer(ctx *ExecutionContext, nodeIDs []uint) error {
 	var modelNodes []uint
 	var directNodes []uint
@@ -156,14 +156,14 @@ func (e *Engine) executeLayer(ctx *ExecutionContext, nodeIDs []uint) error {
 		}
 	}
 
-	// 先执行非模型节点（轻量，直接调用）
+	// Execute non-model nodes first (lightweight, direct call)
 	for _, id := range directNodes {
 		if err := e.executeNode(ctx, id); err != nil {
 			return err
 		}
 	}
 
-	// 模型节点：通过 TaskManager 逐个提交执行
+	// Model nodes: submit via TaskManager one by one
 	for _, id := range modelNodes {
 		nodeID := id
 		if e.taskMgr != nil {
@@ -247,10 +247,10 @@ func (e *Engine) nodeList() []*entity.FlowNode {
 	return list
 }
 
-// NodeTypeStart 引擎需要的入口节点类型
+// NodeTypeStart Entry node type needed by engine
 const NodeTypeStart = "start"
 
-// FindStartNode 查找起始节点
+// FindStartNode Find start node
 func (e *Engine) FindStartNode() (uint, error) {
 	for _, n := range e.nodes {
 		if n.Type == NodeTypeStart {

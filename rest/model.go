@@ -32,7 +32,7 @@ func (r *ModelRest) Init(ctx *core.Context) error {
 	r.context.Put("/api/ai-models/:id/default", r.setDefault)
 	r.context.Put("/api/ai-models/:id/base", r.setBase)
 
-	log.Info("AI 模型管理 REST 已初始化")
+	log.Info("AI Model management REST initialized")
 	return nil
 }
 

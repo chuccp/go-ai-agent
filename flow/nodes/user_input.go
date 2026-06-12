@@ -19,7 +19,7 @@ func (n *UserInputNode) Execute(ctx *engine.ExecutionContext, config string) (*e
 		return nil, err
 	}
 	if cfg.Prompt == "" {
-		cfg.Prompt = "请确认继续，或输入你的意见："
+		cfg.Prompt = "Please confirm to continue, or enter your feedback:"
 	}
 
 	prompt := renderPrompt(cfg.Prompt, ctx)

@@ -7,19 +7,19 @@ import (
 	"github.com/chuccp/go-ai-agent/flow/cache"
 )
 
-// ExecutionContext 流程执行上下文，在节点间传递数据
+// ExecutionContext Flow execution context, passes data between nodes
 type ExecutionContext struct {
 	mu              sync.RWMutex
 	FlowId          uint
 	ExecutionId     uint
 	SessionId       uint
-	Data            map[string]any         // 全局数据（含 label.field 扁平键）
+	Data            map[string]any         // Global data (with flat label.field keys)
 	NodeOutputs     map[string]*NodeOutput // key = node label
-	UserInput       chan string            // 用户输入通道
-	Emitter         EventEmitter           // 事件发射器
+	UserInput       chan string            // User input channel
+	Emitter         EventEmitter           // Event emitter
 	Aborted         bool
-	Functions       *FunctionRegistry      // 函数注册表
-	Cache           *cache.CacheManager    // LLM 结果缓存
+	Functions       *FunctionRegistry      // Function registry
+	Cache           *cache.CacheManager    // LLM result cache
 }
 
 func NewExecutionContext(flowId, executionId, sessionId uint, emitter EventEmitter) *ExecutionContext {
@@ -63,7 +63,7 @@ func (c *ExecutionContext) GetNodeOutput(label string) (*NodeOutput, bool) {
 	return o, ok
 }
 
-// AllNodeOutputs 返回所有节点输出的快照（渲染器使用）
+// AllNodeOutputs Returns snapshot of all node outputs (used by renderer)
 func (c *ExecutionContext) AllNodeOutputs() map[string]*NodeOutput {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -107,7 +107,7 @@ func (c *ExecutionContext) IsAborted() bool {
 	return c.Aborted
 }
 
-// InvokeFunction 调用注册的函数
+// InvokeFunction Invoke registered function
 func (c *ExecutionContext) InvokeFunction(name string, args map[string]any) (map[string]any, error) {
 	if c.Functions == nil {
 		return nil, fmt.Errorf("function registry not initialized")

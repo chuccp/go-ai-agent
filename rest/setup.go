@@ -53,7 +53,7 @@ func (s *SetupRest) Init(ctx *core.Context) error {
 	// Complete setup
 	ctx.Post("/api/setup/complete", s.completeSetup)
 
-	log.Info("Setup REST 已初始化")
+	log.Info("Setup REST initialized")
 	return nil
 }
 
@@ -64,7 +64,7 @@ func (s *SetupRest) putDbInit(req *web.Request) (any, error) {
 
 	// Guard: already fully initialized
 	if cfg.GetBoolOrDefault("system.init", false) {
-		return nil, errors.New("系统已初始化，无法重新配置")
+		return nil, errors.New("system is already initialized, cannot reconfigure")
 	}
 
 	j, err := req.Json()
@@ -74,7 +74,7 @@ func (s *SetupRest) putDbInit(req *web.Request) (any, error) {
 
 	dbType := j.GetString("type")
 	if dbType == "" {
-		return nil, errors.New("请选择数据库类型 (sqlite / mysql / postgresql)")
+		return nil, errors.New("please select a database type (sqlite / mysql / postgresql)")
 	}
 
 	// Build web.db config from request
@@ -107,23 +107,23 @@ func (s *SetupRest) putDbInit(req *web.Request) (any, error) {
 			cfg.Put("web.db.sslMode", j.GetString("sslMode"))
 		}
 	default:
-		return nil, errors.New("不支持的数据库类型: " + dbType)
+		return nil, errors.New("unsupported database type: " + dbType)
 	}
 
 	// Create DB connection via framework
 	createdDB, err := db.CreateDB(cfg)
 	if err != nil {
-		return nil, errors.New("数据库连接失败: " + err.Error())
+		return nil, errors.New("database connection failed: " + err.Error())
 	}
 
 	// Switch all models to the new DB (auto-migrates tables)
 	err = s.context.DefaultModelGroup().SwitchDB(createdDB, s.context)
 	if err != nil {
-		return nil, errors.New("数据库初始化失败: " + err.Error())
+		return nil, errors.New("database initialization failed: " + err.Error())
 	}
 
-	log.Info("数据库配置完成", zap.String("type", dbType))
-	return web.Ok("数据库配置成功"), nil
+	log.Info("Database configured", zap.String("type", dbType))
+	return web.Ok("Database configured successfully"), nil
 }
 
 func (s *SetupRest) testConnection(req *web.Request) (any, error) {
@@ -134,7 +134,7 @@ func (s *SetupRest) testConnection(req *web.Request) (any, error) {
 
 	dbType := j.GetString("type")
 	if dbType == "" {
-		return nil, errors.New("请选择数据库类型")
+		return nil, errors.New("please select a database type")
 	}
 
 	// Build a temporary in-memory config for testing
@@ -169,16 +169,16 @@ func (s *SetupRest) testConnection(req *web.Request) (any, error) {
 			tmpCfg.Put("web.db.sslMode", j.GetString("sslMode"))
 		}
 	default:
-		return nil, errors.New("不支持的数据库类型: " + dbType)
+		return nil, errors.New("unsupported database type: " + dbType)
 	}
 
 	// Validate by creating a test connection
 	_, err = db.CreateDB(tmpCfg)
 	if err != nil {
-		return nil, errors.New("连接测试失败: " + err.Error())
+		return nil, errors.New("connection test failed: " + err.Error())
 	}
 
-	return web.Ok("连接测试成功"), nil
+	return web.Ok("Connection test successful"), nil
 }
 
 // ---- Step 2: Admin Account ----
@@ -188,12 +188,12 @@ func (s *SetupRest) putAdminInit(req *web.Request) (any, error) {
 
 	// Guard: already fully initialized
 	if cfg.GetBoolOrDefault("system.init", false) {
-		return nil, errors.New("系统已初始化，无法重新配置")
+		return nil, errors.New("system is already initialized, cannot reconfigure")
 	}
 
 	// Guard: DB must be configured
 	if !cfg.HasKey("web.db") || cfg.GetString("web.db.type") == "" {
-		return nil, errors.New("请先完成数据库配置")
+		return nil, errors.New("please complete database configuration first")
 	}
 
 	j, err := req.Json()
@@ -205,7 +205,7 @@ func (s *SetupRest) putAdminInit(req *web.Request) (any, error) {
 	password := j.GetString("password")
 
 	if username == "" || password == "" {
-		return nil, errors.New("用户名和密码不能为空")
+		return nil, errors.New("username and password cannot be empty")
 	}
 
 	hash, err := util.HashPassword(password)
@@ -215,24 +215,24 @@ func (s *SetupRest) putAdminInit(req *web.Request) (any, error) {
 
 	adminModel := core.GetModel[*model.AdminUserModel](s.context)
 	if adminModel == nil {
-		return nil, errors.New("管理员模型未初始化")
+		return nil, errors.New("admin model not initialized")
 	}
 
 	hasAdmin, err := adminModel.HasAdminUser()
 	if err != nil {
-		return nil, errors.New("查询管理员状态失败: " + err.Error())
+		return nil, errors.New("failed to query admin status: " + err.Error())
 	}
 
 	if hasAdmin {
 		// Reset existing admin password
 		user, err := adminModel.FindByUsername(username)
 		if err != nil {
-			return nil, errors.New("管理员用户不存在，请检查用户名")
+			return nil, errors.New("admin user not found, please check username")
 		}
 		if err := adminModel.UpdatePassword(user.Id, hash); err != nil {
-			return nil, errors.New("重置密码失败: " + err.Error())
+			return nil, errors.New("failed to reset password: " + err.Error())
 		}
-		log.Info("管理员密码已重置", zap.String("username", username))
+		log.Info("Admin password reset", zap.String("username", username))
 	} else {
 		// Create new admin
 		if err := adminModel.Create(&entity.AdminUser{
@@ -240,12 +240,12 @@ func (s *SetupRest) putAdminInit(req *web.Request) (any, error) {
 			PasswordHash: hash,
 			IsAdmin:      true,
 		}); err != nil {
-			return nil, errors.New("创建管理员失败: " + err.Error())
+			return nil, errors.New("failed to create admin: " + err.Error())
 		}
-		log.Info("管理员账号已创建", zap.String("username", username))
+		log.Info("Admin account created", zap.String("username", username))
 	}
 
-	return web.Ok("管理员账号配置成功"), nil
+	return web.Ok("Admin account configured successfully"), nil
 }
 
 func (s *SetupRest) getAdminExists(req *web.Request) (any, error) {
@@ -287,12 +287,12 @@ func (s *SetupRest) putModelInit(req *web.Request) (any, error) {
 
 	// Guard: already fully initialized
 	if cfg.GetBoolOrDefault("system.init", false) {
-		return nil, errors.New("系统已初始化，无法重新配置")
+		return nil, errors.New("system is already initialized, cannot reconfigure")
 	}
 
 	// Guard: DB must be configured
 	if !cfg.HasKey("web.db") || cfg.GetString("web.db.type") == "" {
-		return nil, errors.New("请先完成数据库配置")
+		return nil, errors.New("please complete database configuration first")
 	}
 
 	j, err := req.Json()
@@ -306,7 +306,7 @@ func (s *SetupRest) putModelInit(req *web.Request) (any, error) {
 	category := j.GetString("category")
 
 	if provider == "" || modelName == "" {
-		return nil, errors.New("提供商和模型标识不能为空")
+		return nil, errors.New("provider and model identifier cannot be empty")
 	}
 	if category == "" {
 		category = aiTypes.CategoryLLM
@@ -317,7 +317,7 @@ func (s *SetupRest) putModelInit(req *web.Request) (any, error) {
 
 	aiModel := core.GetModel[*model.AIModelModel](s.context)
 	if aiModel == nil {
-		return nil, errors.New("AI 模型未初始化")
+		return nil, errors.New("AI model not initialized")
 	}
 
 	m := &entity.AIModel{
@@ -333,10 +333,10 @@ func (s *SetupRest) putModelInit(req *web.Request) (any, error) {
 	}
 
 	if err := aiModel.Create(m); err != nil {
-		return nil, errors.New("创建基础模型失败: " + err.Error())
+		return nil, errors.New("failed to create base model: " + err.Error())
 	}
 
-	log.Info("基础模型已配置", zap.String("provider", provider), zap.String("model", modelName))
+	log.Info("Base model configured", zap.String("provider", provider), zap.String("model", modelName))
 	return web.Data(m), nil
 }
 
@@ -383,7 +383,7 @@ func (s *SetupRest) completeSetup(req *web.Request) (any, error) {
 
 	// Guard: already fully initialized
 	if cfg.GetBoolOrDefault("system.init", false) {
-		return nil, errors.New("系统已完成初始化")
+		return nil, errors.New("system has already been initialized")
 	}
 
 	// Mark as initialized
@@ -394,9 +394,9 @@ func (s *SetupRest) completeSetup(req *web.Request) (any, error) {
 
 	// Write to application.yml
 	if err := appconfig.WriteAppConfig(appCfg); err != nil {
-		return nil, errors.New("写入配置文件失败: " + err.Error())
+		return nil, errors.New("failed to write config file: " + err.Error())
 	}
 
-	log.Info("系统初始化完成，配置文件已写入")
-	return web.Ok("系统初始化完成"), nil
+	log.Info("System initialization complete, config file written")
+	return web.Ok("System initialization complete"), nil
 }

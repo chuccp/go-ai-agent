@@ -40,7 +40,7 @@ type ProviderInfo = types.ProviderInfo
 
 // ---- Provider & Service interfaces ----
 
-// ChatProvider 聊天提供商接口
+// ChatProvider Chat provider interface
 type ChatProvider interface {
 	Name() string
 	Init(ctx context.Context, cfg config.IConfig) error
@@ -49,7 +49,7 @@ type ChatProvider interface {
 	GetProviderInfo() ProviderInfo
 }
 
-// ChatService 聊天服务接口
+// ChatService Chat service interface
 type ChatService interface {
 	Chat(text string, options *LLMOptions) (string, error)
 	ChatWithContext(ctx context.Context, text string, options *LLMOptions) (string, error)
@@ -64,26 +64,26 @@ type ChatService interface {
 
 // ---- Shared types ----
 
-// ContentPart 多模态消息的单个部分
+// ContentPart A single part of a multimodal message
 type ContentPart struct {
 	Type     string `json:"type"`                // "text" | "image"
 	Text     string `json:"text,omitempty"`
-	ImageURL string `json:"image_url,omitempty"` // 图片 URL 或 base64 data URL
+	ImageURL string `json:"image_url,omitempty"` // Image URL or base64 data URL
 }
 
-// ChatMessage 聊天消息
+// ChatMessage Chat message
 type ChatMessage struct {
 	Role         string        `json:"role"`
 	Content      string        `json:"content"`
-	ContentParts []ContentPart `json:"content_parts,omitempty"` // 多模态内容；非空时 provider 使用此字段
+	ContentParts []ContentPart `json:"content_parts,omitempty"` // Multimodal content; provider uses this field when non-empty
 }
 
-// HasContentParts 判断消息是否包含多模态内容
+// HasContentParts Check if message contains multimodal content
 func (m *ChatMessage) HasContentParts() bool {
 	return len(m.ContentParts) > 0
 }
 
-// GetText 获取消息的纯文本内容（用于存储/显示）
+// GetText Get plain text content of message (for storage/display)
 func (m *ChatMessage) GetText() string {
 	if m.Content == "" && m.HasContentParts() {
 		var texts []string
@@ -97,20 +97,20 @@ func (m *ChatMessage) GetText() string {
 	return m.Content
 }
 
-// ToolCall 工具调用
+// ToolCall Tool call
 type ToolCall struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
 	Arguments string `json:"arguments"`
 }
 
-// ToolResult 工具执行结果
+// ToolResult Tool execution result
 type ToolResult struct {
 	CallID string
 	Output string
 }
 
-// ChatResponse 聊天响应（含工具调用）
+// ChatResponse Chat response (with tool calls)
 type ChatResponse struct {
 	Text      string
 	Reasoning string // model's thinking/reasoning content (e.g. DeepSeek reasoning_content)

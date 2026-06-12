@@ -16,30 +16,30 @@ import (
 
 const MaxIterations = 10
 
-// ==================== Message (对话消息) ====================
+// ==================== Message ====================
 
-// Message 对话消息，支持工具调用和工具结果
+// Message represents a chat message, supporting tool calls and tool results
 type Message struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
 
-	// Assistant 消息的工具调用
+	// Tool calls on an assistant message
 	ToolCalls []ToolCall `json:"tool_calls,omitempty"`
 
-	// 工具执行结果（附在 assistant 消息上）
+	// Tool execution results (attached to assistant message)
 	ToolResults []ToolResult `json:"tool_results,omitempty"`
 
 	Timestamp time.Time `json:"timestamp"`
 }
 
-// ToolCall 工具调用
+// ToolCall represents a tool call invocation
 type ToolCall struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 	Args string `json:"args"`
 }
 
-// ToolResult 工具执行结果
+// ToolResult represents the result of executing a tool call
 type ToolResult struct {
 	ToolID   string `json:"tool_id"`
 	Name     string `json:"name"`
@@ -48,9 +48,9 @@ type ToolResult struct {
 	Duration int64  `json:"duration_ms"`
 }
 
-// ==================== Event (事件) ====================
+// ==================== Event ====================
 
-// Event Agent 事件
+// Event is an agent event emitted during processing
 type Event struct {
 	Type           string `json:"type"`
 	Content        string `json:"content,omitempty"`
@@ -65,29 +65,29 @@ type Event struct {
 	ToolOutput     string `json:"tool_output,omitempty"`
 }
 
-// Sender 消息发送接口
+// Sender is the interface for sending events
 type Sender interface {
 	Send(event Event)
 }
 
-// ==================== Chat (对话管理) ====================
+// ==================== Chat ====================
 
-// Chat 单次对话的 agent 状态
+// Chat manages the agent state for a single conversation
 type Chat struct {
 	ctx            context.Context
-	id             string   // 对话 ID
+	id             string   // Conversation ID
 	path           string   // provider.model
 	opts           *common.LLMOptions
 	svc            *chat.UnifiedChatService
 	conn           Sender
 
-	messages []Message   // 完整消息历史
+	messages []Message   // Full message history
 	mu       sync.Mutex
 
 	iteration int
 }
 
-// NewChat 创建 agent 对话
+// NewChat creates a new agent conversation
 func NewChat(ctx context.Context, id string, path string, service *chat.UnifiedChatService, opts *common.LLMOptions, conn Sender) *Chat {
 	return &Chat{
 		ctx:      ctx,
@@ -100,7 +100,7 @@ func NewChat(ctx context.Context, id string, path string, service *chat.UnifiedC
 	}
 }
 
-// AddUserMessage 添加用户消息
+// AddUserMessage appends a user message to the history
 func (c *Chat) AddUserMessage(content string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -111,12 +111,12 @@ func (c *Chat) AddUserMessage(content string) {
 	})
 }
 
-// SetIteration 设置起始 iteration（基于会话已有轮次）
+// SetIteration sets the starting iteration (based on existing conversation turns)
 func (c *Chat) SetIteration(n int) {
 	c.iteration = n
 }
 
-// LoadHistory 加载历史消息
+// LoadHistory loads historical messages
 func (c *Chat) LoadHistory(history []common.ChatMessage) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -129,10 +129,10 @@ func (c *Chat) LoadHistory(history []common.ChatMessage) {
 	}
 }
 
-// Process 处理消息（agent 主循环）
+// Process runs the agent main loop
 func (c *Chat) Process() {
 	if c.iteration == 0 {
-		// 首次 Process 才重置为 0，保持 SetIteration 的覆盖
+		// Only reset on first Process call; preserves SetIteration override
 	}
 	c.opts.SetTools(tool.List())
 
@@ -145,7 +145,7 @@ func (c *Chat) Process() {
 			zap.Int("iteration", c.iteration),
 			zap.Int("msgCount", len(c.messages)))
 
-		// 构建 LLM 消息
+		// Build LLM messages
 		llmMsgs := c.buildLLMMessages()
 
 		resp, err := c.svc.ChatWithTools(c.ctx, c.path, llmMsgs, "", c.opts)
@@ -159,14 +159,14 @@ func (c *Chat) Process() {
 			c.emit(Event{Type: "chunk", Content: resp.Reasoning, Reasoning: resp.Reasoning, Iteration: c.iteration})
 		}
 
-		// 有工具调用 → 执行
+		// Has tool calls → execute them
 		if len(resp.ToolCalls) > 0 {
 			c.addToolCalls(resp)
 			c.iteration++
 			continue
 		}
 
-		// 无工具调用 → 输出文本，结束
+		// No tool calls → emit text response, done
 		c.saveAssistantMessage(resp.Text, nil)
 		if resp.Text != "" {
 			c.streamText(resp.Text)
@@ -178,7 +178,7 @@ func (c *Chat) Process() {
 	c.emit(Event{Type: "error", Message: fmt.Sprintf("max iterations (%d) reached", MaxIterations), Done: true, Iteration: c.iteration})
 }
 
-// addToolCalls 添加 assistant 消息并执行工具调用
+// addToolCalls adds the assistant message and executes tool calls
 func (c *Chat) addToolCalls(resp *common.ChatResponse) {
 	c.mu.Lock()
 
@@ -187,7 +187,7 @@ func (c *Chat) addToolCalls(resp *common.ChatResponse) {
 		tcs[i] = ToolCall{ID: tc.ID, Name: tc.Name, Args: tc.Arguments}
 	}
 
-	// 保存 assistant 消息（带工具调用）
+	// Save assistant message (with tool calls)
 	assistantMsg := Message{
 		Role:      "assistant",
 		Content:   resp.Text,
@@ -234,14 +234,14 @@ func (c *Chat) addToolCalls(resp *common.ChatResponse) {
 		})
 	}
 
-	// 将工具结果附加到 assistant 消息
+	// Attach tool results to the assistant message
 	c.mu.Lock()
 	assistantMsg.ToolResults = results
 	c.messages = append(c.messages, assistantMsg)
 	c.mu.Unlock()
 }
 
-// saveAssistantMessage 保存纯文本 assistant 消息
+// saveAssistantMessage saves a plain text assistant message
 func (c *Chat) saveAssistantMessage(text string, tcs []ToolCall) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -253,14 +253,14 @@ func (c *Chat) saveAssistantMessage(text string, tcs []ToolCall) {
 	})
 }
 
-// buildLLMMessages 从内部消息构建发给 LLM 的消息列表
+// buildLLMMessages builds the list of messages to send to the LLM
 func (c *Chat) buildLLMMessages() []common.ChatMessage {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	var result []common.ChatMessage
 	for _, m := range c.messages {
-		// 先处理工具结果（附加在 assistant 消息上）
+		// Process tool results first (attached to assistant message)
 		if len(m.ToolResults) > 0 {
 			for _, tr := range m.ToolResults {
 				result = append(result, common.ChatMessage{
@@ -275,7 +275,7 @@ func (c *Chat) buildLLMMessages() []common.ChatMessage {
 			Content: m.Content,
 		}
 
-		// 工具调用 → 追加到 content
+		// Tool calls → append to content
 		if len(m.ToolCalls) > 0 {
 			var calls []string
 			for _, tc := range m.ToolCalls {
@@ -307,7 +307,7 @@ func (c *Chat) emit(event Event) {
 	c.conn.Send(event)
 }
 
-// streamText 将文本按字符切片流式发送，模拟真实流式输出
+// streamText sends text in character slices to simulate streaming output
 func (c *Chat) streamText(text string) {
 	runes := []rune(text)
 	chunkSize := 8

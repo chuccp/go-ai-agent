@@ -30,7 +30,7 @@ func main() {
 	}
 	defer conn.Close()
 
-	prompt := fmt.Sprintf("请使用 read_document 工具读取文件 %s，总结文档内容", *filePath)
+	prompt := fmt.Sprintf("Please use the read_document tool to read file %s and summarize its content", *filePath)
 	req := map[string]any{
 		"type":       "agent",
 		"session_id": 0,

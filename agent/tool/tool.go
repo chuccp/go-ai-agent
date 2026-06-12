@@ -2,28 +2,28 @@ package tool
 
 import "fmt"
 
-// Definition 工具定义（Anthropic 标准格式）
+// Definition is a tool definition in Anthropic standard format
 type Definition struct {
-	Type        string `json:"type,omitempty"`        // 仅内置工具需要，如 "web_search_20250305"
-	Name        string `json:"name"`                  // 函数名
-	Description string `json:"description,omitempty"` // 描述
-	InputSchema any    `json:"input_schema,omitempty"` // JSON Schema（自定义工具）
+	Type        string `json:"type,omitempty"`        // Only needed for built-in tools, e.g. "web_search_20250305"
+	Name        string `json:"name"`                  // Function name
+	Description string `json:"description,omitempty"` // Description
+	InputSchema any    `json:"input_schema,omitempty"` // JSON Schema (custom tools)
 }
 
-// Call 工具调用请求
+// Call is a tool call request
 type Call struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
 	Arguments string `json:"arguments"` // JSON string of input
 }
 
-// Result 工具执行结果
+// Result is the result of executing a tool
 type Result struct {
 	CallID string `json:"call_id"`
 	Output string `json:"output"`
 }
 
-// Executor 工具执行器接口
+// Executor is the interface for tool executors
 type Executor interface {
 	Execute(call Call) (string, error)
 	Definition() Definition
@@ -44,7 +44,7 @@ func Get(name string) (Executor, error) {
 	return e, nil
 }
 
-// List 列出所有工具定义（Anthropic 格式）
+// List returns all tool definitions (Anthropic format)
 func List() []Definition {
 	defs := make([]Definition, 0, len(registry))
 	for _, e := range registry {

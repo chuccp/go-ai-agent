@@ -8,15 +8,17 @@ import (
 	"github.com/chuccp/go-ai-agent/flow/engine"
 )
 
-// IteratorNodeConfig 按序迭代节点配置
+// IteratorNodeConfig is the configuration for an iterator node.
+// Iterates over an array from ctx[items_key] and invokes function with args for each item sequentially.
+// Args support {{item.field}} and {{item.output}} placeholders.
 type IteratorNodeConfig struct {
-	ItemsKey string `json:"items_key"` // 上游数组键
-	Model    string `json:"model"`
-	Prompt   string `json:"prompt"` // 每项 prompt，{{item.output}} 引用当前项
-	System   string `json:"system"`
+	ItemsKey string         `json:"items_key"` // upstream array key
+	Function string         `json:"function"`  // function name to invoke per item, e.g. "llm"
+	Args     map[string]any `json:"args"`      // args passed to the function
 }
 
-// IteratorNode 按序迭代——逐项处理，每项等上一项完成再处理下一项
+// IteratorNode processes items sequentially — each item waits for the previous one to complete.
+// Failures are skipped, processing continues with the next item.
 type IteratorNode struct{}
 
 func NewIteratorNode() *IteratorNode { return &IteratorNode{} }
@@ -28,38 +30,19 @@ func (n *IteratorNode) Execute(ctx *engine.ExecutionContext, config string) (*en
 	if err != nil {
 		return nil, err
 	}
-	if cfg.Model == "" {
-		cfg.Model = DefaultModel
+	if cfg.ItemsKey == "" {
+		return nil, fmt.Errorf("iterator: items_key is required")
 	}
-	if cfg.Prompt == "" {
-		cfg.Prompt = "处理以下内容：\n{{item.output}}"
-	}
-
-	key := cfg.ItemsKey
-	if !strings.Contains(key, ".") {
-		key = key + "." + KeyOutput
+	if cfg.Function == "" {
+		cfg.Function = "llm"
 	}
 
-	raw, ok := ctx.Get(key)
-	if !ok {
-		for label, output := range ctx.AllNodeOutputs() {
-			if label+"."+KeyOutput == key {
-				raw = output.Data[KeyOutput]
-				ok = true
-				break
-			}
-		}
-	}
-	if !ok {
-		return nil, fmt.Errorf("iterator: key '%s' not found", cfg.ItemsKey)
-	}
-
-	items, err := parseJSONArray(raw)
+	items, err := resolveItems(ctx, cfg.ItemsKey)
 	if err != nil {
-		return nil, fmt.Errorf("iterator: parse items failed: %w", err)
+		return nil, err
 	}
 
-	results := make([]map[string]any, 0, len(items))
+	var results []map[string]any
 	var fullOutput strings.Builder
 
 	for i, item := range items {
@@ -68,40 +51,30 @@ func (n *IteratorNode) Execute(ctx *engine.ExecutionContext, config string) (*en
 		}
 
 		itemCtx := cloneForItem(ctx, item)
-		prompt := renderPrompt(cfg.Prompt, itemCtx)
-		system := renderPrompt(cfg.System, itemCtx)
-
-		args := map[string]any{
-			"model":      cfg.Model,
-			"prompt":     prompt,
-			"system":     system,
-			"max_tokens": 4096,
-			"json_mode":  false,
-			"stream":     false,
-		}
+		renderedArgs := renderArgs(cfg.Args, itemCtx)
 
 		if ctx.Emitter != nil {
 			ctx.Emitter.Emit(engine.FlowEvent{
 				Type:        engine.EventNodeChunk,
 				ExecutionId: ctx.ExecutionId,
-				Content:     fmt.Sprintf("【%d/%d】处理中...\n", i+1, len(items)),
+				Content:     fmt.Sprintf("[%d/%d] Processing...\n", i+1, len(items)),
 			})
 		}
 
-		result, err := ctx.InvokeFunction("llm", args)
+		result, err := ctx.InvokeFunction(cfg.Function, renderedArgs)
 		if err != nil {
 			if ctx.Emitter != nil {
 				ctx.Emitter.Emit(engine.FlowEvent{
 					Type:        engine.EventNodeChunk,
 					ExecutionId: ctx.ExecutionId,
-					Content:     fmt.Sprintf("【%d/%d】失败: %v\n", i+1, len(items), err),
+					Content:     fmt.Sprintf("[%d/%d] Failed: %v\n", i+1, len(items), err),
 				})
 			}
 			continue
 		}
 
 		output, _ := result[KeyOutput].(string)
-		fullOutput.WriteString(fmt.Sprintf("--- 第 %d 项 ---\n%s\n\n", i+1, output))
+		fullOutput.WriteString(fmt.Sprintf("--- Item %d ---\n%s\n\n", i+1, output))
 
 		results = append(results, map[string]any{
 			"index":  i,
@@ -113,7 +86,7 @@ func (n *IteratorNode) Execute(ctx *engine.ExecutionContext, config string) (*en
 			ctx.Emitter.Emit(engine.FlowEvent{
 				Type:        engine.EventNodeChunk,
 				ExecutionId: ctx.ExecutionId,
-				Content:     fmt.Sprintf("【%d/%d】完成 ✓\n", i+1, len(items)),
+				Content:     fmt.Sprintf("[%d/%d] Done\n", i+1, len(items)),
 			})
 		}
 	}

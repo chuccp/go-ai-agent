@@ -15,13 +15,13 @@ type ScriptNodeConfig struct {
 	Script string `json:"script"`
 }
 
-// ScriptNode Starlark (Python方言) 动态脚本节点
-// 预定义:
-//   ctx["节点名"]["output"] — 上游节点输出
-//   json_parse(s)           — JSON 字符串 → dict/list
-//   json_string(v)          — dict/list → JSON 字符串
-//   split(s, sep)           — 按分隔符拆分
-// 将结果赋给 result 变量
+// ScriptNode Starlark (Python dialect) dynamic script node
+// Predefined:
+//   ctx["node_name"]["output"] — upstream node output
+//   json_parse(s)               — JSON string → dict/list
+//   json_string(v)              — dict/list → JSON string
+//   split(s, sep)               — split by delimiter
+// Assign result to the result variable
 type ScriptNode struct{}
 
 func NewScriptNode() *ScriptNode { return &ScriptNode{} }

@@ -34,7 +34,7 @@ func main() {
 		"session_id": 0,
 		"model":      *model,
 		"messages": []map[string]any{
-			{"role": "user", "content": "请总结一下我上传的文件内容"},
+			{"role": "user", "content": "Please summarize the content of my uploaded file"},
 		},
 		"stream": true,
 		"attachments": []map[string]any{

@@ -1,6 +1,6 @@
 package engine
 
-// 流程事件类型
+// Flow event types
 const (
 	EventNodeStart    = "flow_node_start"
 	EventNodeChunk    = "flow_node_chunk"

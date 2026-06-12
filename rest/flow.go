@@ -2,9 +2,13 @@ package rest
 
 import (
 	"encoding/json"
+	"fmt"
+	"io"
 	"strconv"
+	"strings"
 
 	"github.com/chuccp/go-ai-agent/entity"
+	"github.com/chuccp/go-ai-agent/flow/export"
 	flowModel "github.com/chuccp/go-ai-agent/model"
 	"github.com/chuccp/go-ai-agent/runner"
 	"github.com/chuccp/go-web-frame/core"
@@ -45,6 +49,8 @@ func (r *FlowRest) Init(ctx *core.Context) error {
 	r.context.Delete("/api/flows/:id", r.deleteFlow)
 	r.context.Post("/api/flows/:id/duplicate", r.duplicateFlow)
 	r.context.Post("/api/flows/:id/execute", r.executeFlow)
+	r.context.Get("/api/flows/:id/export", r.exportFlow)
+	r.context.Post("/api/flows/import", r.importFlow)
 
 	return nil
 }
@@ -136,7 +142,7 @@ func (r *FlowRest) saveNodesAndEdges(flowId uint, jsonMap map[string]any) {
 			n.FlowId = flowId
 			r.nodeModel.Create(n)
 		}
-		// 重新加载获取 DB 真实 ID，建立 oldId→newId 映射
+		// Reload to get real DB IDs, build oldId->newId mapping
 		savedNodes, _ := r.nodeModel.FindByFlowId(flowId)
 		for i, sn := range savedNodes {
 			if i < len(oldIds) {
@@ -184,22 +190,114 @@ func (r *FlowRest) listExecutions(req *web.Request) (any, error) {
 	return web.Data(es), nil
 }
 
+// exportFlow downloads a flow as a ZIP package.
+func (r *FlowRest) exportFlow(req *web.Request) (any, error) {
+	id := req.ParamUint("id")
+	f, err := r.flowModel.FindById(id)
+	if err != nil {
+		return nil, err
+	}
+	ns, _ := r.nodeModel.FindByFlowId(id)
+	es, _ := r.edgeModel.FindByFlowId(id)
+
+	data, err := export.BuildFlowPackage(f.Name, ns, es, f.Description, f.Category)
+	if err != nil {
+		return nil, fmt.Errorf("export failed: %w", err)
+	}
+
+	fileName := strings.ReplaceAll(f.Name, " ", "_") + ".zip"
+	resp := req.Response()
+	resp.Header().Set("Content-Type", "application/zip")
+	resp.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, fileName))
+	resp.Header().Set("Content-Transfer-Encoding", "binary")
+	_, _ = resp.Write(data)
+	return nil, nil
+}
+
+// importFlow imports a flow from an uploaded ZIP package.
+func (r *FlowRest) importFlow(req *web.Request) (any, error) {
+	form, err := req.MultipartForm()
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse upload form: %w", err)
+	}
+
+	files := form.File["file"]
+	if len(files) == 0 {
+		return nil, fmt.Errorf("no file uploaded (field name: file)")
+	}
+
+	file, err := files[0].Open()
+	if err != nil {
+		return nil, fmt.Errorf("failed to open uploaded file: %w", err)
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(file)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file data: %w", err)
+	}
+
+	fd, err := export.ParseFlowPackage(data)
+	if err != nil {
+		return nil, err
+	}
+
+	flow := &entity.FlowDefinition{
+		Name:        fd.Name,
+		Description: fd.Description,
+		Category:    fd.Category,
+	}
+	if err := r.flowModel.Create(flow); err != nil {
+		return nil, fmt.Errorf("failed to create flow: %w", err)
+	}
+
+	// Build old ID → new ID mapping while inserting nodes
+	idMap := make(map[uint]uint)
+	for _, n := range fd.Nodes {
+		oldID := n.Id
+		n.Id = 0
+		n.FlowId = flow.Id
+		if err := r.nodeModel.Create(n); err != nil {
+			return nil, fmt.Errorf("failed to create node: %w", err)
+		}
+		idMap[oldID] = n.Id
+	}
+
+	for _, e := range fd.Edges {
+		e.Id = 0
+		e.FlowId = flow.Id
+		if nid, ok := idMap[e.SourceNodeId]; ok {
+			e.SourceNodeId = nid
+		}
+		if nid, ok := idMap[e.TargetNodeId]; ok {
+			e.TargetNodeId = nid
+		}
+		if err := r.edgeModel.Create(e); err != nil {
+			return nil, fmt.Errorf("failed to create edge: %w", err)
+		}
+	}
+
+	return web.Data(flow), nil
+}
+
 func (r *FlowRest) listNodeTypes(req *web.Request) (any, error) {
 	types := []map[string]any{
-		{"type": "start", "label": "开始", "description": "流程入口"},
-		{"type": "end", "label": "结束", "description": "流程出口"},
-		{"type": "llm", "label": "LLM 调用", "description": "调用大语言模型生成内容"},
-		{"type": "user_input", "label": "用户输入", "description": "等待用户确认或输入"},
-		{"type": "split", "label": "文本拆分", "description": "按分隔符拆分文本为JSON数组"},
-		{"type": "condition", "label": "条件分支", "description": "if/else 条件判断"},
-		{"type": "transform", "label": "数据变换", "description": "Go模板自定义数据变换"},
-		{"type": "for_each", "label": "ForEach 遍历", "description": "遍历JSON数组逐项处理"},
-		{"type": "iterator", "label": "按序迭代", "description": "逐项顺序处理，失败跳过"},
-		{"type": "loop", "label": "循环执行", "description": "重复执行直到条件满足"},
-		{"type": "script", "label": "Script 脚本", "description": "Starlark Python 自定义代码"},
-		{"type": "image_gen", "label": "图片生成", "description": "调用图片生成模型"},
-		{"type": "audio_gen", "label": "音频生成", "description": "调用语音合成模型"},
-		{"type": "video_gen", "label": "视频生成", "description": "调用视频生成模型"},
+		{"type": "start", "label": "Start", "description": "Flow entry point"},
+		{"type": "end", "label": "End", "description": "Flow exit point"},
+		{"type": "llm", "label": "LLM Call", "description": "Call a large language model to generate content"},
+		{"type": "user_input", "label": "User Input", "description": "Wait for user confirmation or input"},
+		{"type": "split", "label": "Text Split", "description": "Split text by delimiter into a JSON array"},
+		{"type": "condition", "label": "Condition", "description": "if/else conditional branch (Starlark boolean expression)"},
+		{"type": "switch", "label": "Switch", "description": "Multi-branch switch (Starlark string expression)"},
+		{"type": "transform", "label": "Transform", "description": "Go template custom data transformation"},
+		{"type": "for_each", "label": "ForEach", "description": "Split array and invoke a function for each item in parallel"},
+		{"type": "iterator", "label": "Iterator", "description": "Split array and invoke a function for each item sequentially"},
+		{"type": "loop", "label": "Loop", "description": "Repeat execution until condition is met"},
+		{"type": "execute", "label": "Execute", "description": "Run a local shell command"},
+		{"type": "script", "label": "Script", "description": "Starlark Python custom code"},
+		{"type": "image_gen", "label": "Image Gen", "description": "Call image generation model"},
+		{"type": "audio_gen", "label": "Audio Gen", "description": "Call speech synthesis model"},
+		{"type": "video_gen", "label": "Video Gen", "description": "Call video generation model"},
 	}
 	return web.Data(types), nil
 }

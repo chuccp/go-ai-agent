@@ -8,10 +8,10 @@ import (
 	"github.com/chuccp/go-ai-agent/flow/engine"
 )
 
-// 匹配 {{任意内容}} 占位符
+// Match {{anything}} placeholders
 var placeholderRe = regexp.MustCompile(`\{\{([^}]+)\}\}`)
 
-// renderPrompt 替换 prompt 中的 {{label.field}} 和 {{label}} 占位符
+// renderPrompt Replace {{label.field}} and {{label}} placeholders in prompt
 func renderPrompt(tmpl string, ctx *engine.ExecutionContext) string {
 	if tmpl == "" {
 		return ""
@@ -19,12 +19,12 @@ func renderPrompt(tmpl string, ctx *engine.ExecutionContext) string {
 	return placeholderRe.ReplaceAllStringFunc(tmpl, func(match string) string {
 		key := match[2 : len(match)-2]
 
-		// 精确匹配 label.field
+		// Exact match label.field
 		if v, ok := ctx.Get(key); ok {
 			return fmt.Sprintf("%v", v)
 		}
 
-		// 匹配整个 label，返回 JSON
+		// Match entire label, return JSON
 		if output, ok := ctx.GetNodeOutput(key); ok {
 			b, err := json.MarshalIndent(output.Data, "", "  ")
 			if err != nil {
@@ -33,7 +33,7 @@ func renderPrompt(tmpl string, ctx *engine.ExecutionContext) string {
 			return string(b)
 		}
 
-		// label.field 的后缀匹配
+		// Suffix match for label.field
 		for label, output := range ctx.AllNodeOutputs() {
 			if prefix := label + "."; len(key) > len(prefix) && key[:len(prefix)] == prefix {
 				field := key[len(prefix):]

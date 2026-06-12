@@ -55,7 +55,7 @@ func (r *ChatRunner) Init(ctx *core.Context) error {
 		r.loadProvidersFromDB()
 	}
 
-	log.Info("WebSocket 聊天服务已初始化")
+	log.Info("WebSocket chat service initialized")
 	return nil
 }
 
@@ -134,7 +134,7 @@ type Attachment struct {
 	Name string `json:"name"`
 	Type string `json:"type"` // "image/png", "application/pdf", ...
 	Size int64  `json:"size"`
-	Path string `json:"path"` // 服务端文件路径
+	Path string `json:"path"` // Server-side file path
 }
 
 type WSRequest struct {
@@ -158,7 +158,7 @@ type WSResponse struct {
 	ConversationID string `json:"conversation_id,omitempty"`
 }
 
-// ==================== WebSocket 入口 ====================
+// ==================== WebSocket entry point ====================
 
 func (r *ChatRunner) HandleWebSocket(conn *websocket.Conn) error {
 	r.mu.Lock()
@@ -178,14 +178,14 @@ func (r *ChatRunner) HandleWebSocket(conn *websocket.Conn) error {
 		_, message, err := conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
-				log.Error("WebSocket 读取错误", zap.Error(err))
+				log.Error("WebSocket read error", zap.Error(err))
 			}
 			break
 		}
 
 		var req WSRequest
 		if err := json.Unmarshal(message, &req); err != nil {
-			r.sendJSON(conn, WSResponse{Type: "error", Message: "无效的请求格式: " + err.Error()})
+			r.sendJSON(conn, WSResponse{Type: "error", Message: "Invalid request format: " + err.Error()})
 			continue
 		}
 
@@ -203,7 +203,7 @@ func (r *ChatRunner) HandleWebSocket(conn *websocket.Conn) error {
 		case "flow_stop":
 			r.handleFlowStop(conn, req)
 		default:
-			r.sendJSON(conn, WSResponse{Type: "error", Message: "未知的请求类型: " + req.Type})
+			r.sendJSON(conn, WSResponse{Type: "error", Message: "Unknown request type: " + req.Type})
 		}
 	}
 	return nil

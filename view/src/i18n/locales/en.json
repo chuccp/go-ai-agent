@@ -46,8 +46,8 @@
     "enterName": "Please enter a flow name", "needStartEnd": "Flow must contain start and end nodes",
     "saved": "Saved successfully", "saveFailed": "Save failed", "confirmDelete": "Confirm delete?",
     "jsonError": "Invalid JSON format",
-    "exportHint": "Export this flow as a shareable JSON file",
-    "importHint": "Import a flow from a JSON file",
+    "exportHint": "Export this flow as a shareable ZIP package",
+    "importHint": "Import a flow from a ZIP package",
     "addNode": "Add Node", "pointerMode": "Pointer Mode", "handMode": "Hand Mode",
     "autoLayout": "Auto Layout", "fullscreen": "Fullscreen", "exitFullscreen": "Exit Fullscreen",
     "nodeProperties": "Node Properties", "selectNode": "Select a node to edit", "selectNodeHint": "Click a node on the canvas to view and edit its config",
@@ -85,9 +85,9 @@
   "think": { "off": "Off", "low": "Low", "medium": "Medium", "high": "High", "max": "Max" },
   "nodes": {
     "start": "Start", "end": "End", "llm": "LLM", "userInput": "User Input",
-    "condition": "Condition", "transform": "Transform", "split": "Text Split",
+    "condition": "Condition", "switch": "Switch", "transform": "Transform", "split": "Text Split",
     "forEach": "Parallel Batch", "iterator": "Sequential Iterator", "loop": "Loop",
-    "script": "Script", "imageGen": "Image Generation", "audioGen": "Audio Generation", "videoGen": "Video Generation"
+    "execute": "Execute", "script": "Script", "imageGen": "Image Generation", "audioGen": "Audio Generation", "videoGen": "Video Generation"
   },
   "nodeCategories": { "basic": "Basic", "ai": "AI", "logic": "Logic", "process": "Process" },
   "nodeConfig": {
@@ -103,13 +103,16 @@
     "text": "Text", "voice": "Voice", "duration": "Duration (seconds)",
     "checkField": "Check Field", "operator": "Operator", "contains": "Contains", "equals": "Equals", "notEmpty": "Not Empty",
     "compareValue": "Compare Value", "dataSource": "Data Source",
-    "parallelHint": "Process each array item in parallel, suitable for independent tasks (e.g. batch image generation)",
-    "sequentialHint": "Pass items to downstream nodes sequentially, skip on failure and continue",
+    "function": "Function", "functionArgs": "Function Args", "itemsKey": "Items Key",
+    "parallelHint": "For each item, invoke the selected function with args. Items process in parallel. Supports {{item.field}} placeholders.",
+    "sequentialHint": "For each item, invoke the selected function with args. Items process one at a time, skipping failures. Supports {{item.field}} placeholders.",
     "maxIterations": "Max Iterations", "breakField": "Break Condition Field", "breakOperator": "Break Operator", "breakValue": "Break Value",
+    "command": "Command", "runCommand": "Run Command",
     "scriptCode": "Script Code", "scriptHint": "Access upstream data via ctx[\"nodeName.output\"]",
     "splitMethod": "Split Method", "byParagraph": "By Paragraph (empty line)", "byLine": "By Line", "byComma": "By Comma", "byPeriod": "By Period",
     "template": "Template", "templateHint": "Reference upstream data via .nodeName.output",
     "promptText": "Prompt Text", "confirmOnly": "Confirm Only (no text input needed)",
-    "waitingInput": "Waiting for user input", "conditionJudge": "Condition", "loopBody": "Loop Body"
+    "waitingInput": "Waiting for user input", "conditionJudge": "Condition", "switchExpr": "Switch Expression", "loopBody": "Loop Body",
+    "switchHint": "Assign a string to 'result'. Routes to matching source_handle on outgoing edges. Falls back to 'default'."
   }
 }

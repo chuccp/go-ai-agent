@@ -1,26 +1,26 @@
 package out
 
-// OutFormat 结构化输出格式定义
+// OutFormat defines a structured output format
 type OutFormat struct {
 	Type       string       `json:"type"`                  // "text", "json"
-	JSONSchema *JSONSchema  `json:"json_schema,omitempty"` // JSON schema 定义
-	Example    string       `json:"example,omitempty"`     // 示例 JSON
+	JSONSchema *JSONSchema  `json:"json_schema,omitempty"` // JSON schema definition
+	Example    string       `json:"example,omitempty"`     // Example JSON
 }
 
-// JSONSchema JSON 结构定义
+// JSONSchema defines a JSON structure
 type JSONSchema struct {
 	Type       string                 `json:"type"`                  // "object", "array"
-	Properties map[string]SchemaField `json:"properties,omitempty"`  // 对象字段
-	Items      *SchemaField           `json:"items,omitempty"`       // 数组元素类型
+	Properties map[string]SchemaField `json:"properties,omitempty"`  // Object fields
+	Items      *SchemaField           `json:"items,omitempty"`       // Array element type
 }
 
-// SchemaField 字段定义
+// SchemaField defines a single field
 type SchemaField struct {
 	Type        string `json:"type"`                  // "string", "number", "integer", "boolean", "array", "object"
-	Description string `json:"description,omitempty"` // 字段描述
+	Description string `json:"description,omitempty"` // Field description
 }
 
-// BuildPromptInstruction 根据 OutFormat 生成 system prompt 指令
+// BuildPromptInstruction generates a system prompt instruction from the OutFormat
 func (f *OutFormat) BuildPromptInstruction() string {
 	if f == nil || f.Type == "text" {
 		return ""
@@ -30,46 +30,46 @@ func (f *OutFormat) BuildPromptInstruction() string {
 	}
 
 	if f.Example != "" {
-		return "请输出合法JSON，参考以下示例：\n" + f.Example + "\n不要包含其他内容。"
+		return "Output valid JSON based on this example:\n" + f.Example + "\nDo not include any other content."
 	}
 
 	if f.JSONSchema == nil {
-		return "请输出合法JSON。"
+		return "Output valid JSON."
 	}
 
 	schema := f.JSONSchema
 	var inst string
 	switch schema.Type {
 	case "array":
-		inst = "请输出纯JSON数组"
+		inst = "Output a pure JSON array"
 		if schema.Items != nil {
-			inst += "，每个元素为" + schema.Items.Description
+			inst += ", each element: " + schema.Items.Description
 		}
 	case "object":
-		inst = "请输出纯JSON对象"
+		inst = "Output a pure JSON object"
 		if len(schema.Properties) > 0 {
-			inst += "，包含以下字段：\n"
+			inst += " with the following fields:\n"
 			for name, field := range schema.Properties {
 				inst += "- " + name + " (" + field.Type + "): " + field.Description + "\n"
 			}
 		}
 	default:
-		inst = "请输出合法JSON"
+		inst = "Output valid JSON"
 	}
-	return inst + "\n不要包含其他内容。"
+	return inst + "\nDo not include any other content."
 }
 
-// NewTextOutFormat 创建文本输出格式
+// NewTextOutFormat creates a text output format
 func NewTextOutFormat() *OutFormat {
 	return &OutFormat{Type: "text"}
 }
 
-// NewJSONOutFormat 创建 JSON 输出格式
+// NewJSONOutFormat creates a JSON output format
 func NewJSONOutFormat() *OutFormat {
 	return &OutFormat{Type: "json"}
 }
 
-// NewExampleJSONOutFormat 从示例 JSON 创建输出格式
+// NewExampleJSONOutFormat creates an output format from an example JSON
 func NewExampleJSONOutFormat(example string) *OutFormat {
 	return &OutFormat{Type: "json", Example: example}
 }

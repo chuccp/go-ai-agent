@@ -12,7 +12,7 @@ func init() {
 	Register(&ExecuteCommand{})
 }
 
-// ExecuteCommand 本地命令执行工具
+// ExecuteCommand executes local commands
 type ExecuteCommand struct{}
 
 func (t *ExecuteCommand) Definition() Definition {
@@ -41,7 +41,7 @@ func (t *ExecuteCommand) Execute(call Call) (string, error) {
 	}
 
 	if params.Command == "" {
-		return "错误: 命令不能为空", nil
+		return "Error: command cannot be empty", nil
 	}
 
 	var cmd *exec.Cmd
@@ -51,7 +51,7 @@ func (t *ExecuteCommand) Execute(call Call) (string, error) {
 		cmd = exec.Command("sh", "-c", params.Command)
 	}
 
-	// 带超时的执行
+	// Execute with timeout
 	done := make(chan struct {
 		output []byte
 		err    error
@@ -75,11 +75,11 @@ func (t *ExecuteCommand) Execute(call Call) (string, error) {
 			return output, nil
 		}
 		if output == "" {
-			return "命令执行成功（无输出）", nil
+			return "Command executed successfully (no output)", nil
 		}
 		return output, nil
 	case <-time.After(30 * time.Second):
 		cmd.Process.Kill()
-		return "命令执行超时（30秒）", nil
+		return "Command execution timed out (30s)", nil
 	}
 }

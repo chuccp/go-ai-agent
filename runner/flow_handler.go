@@ -8,7 +8,7 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// ==================== Flow 消息处理 ====================
+// ==================== Flow message handling ====================
 
 func (r *ChatRunner) handleFlowStart(conn *websocket.Conn, req WSRequest) {
 	if r.flowRunner == nil {
@@ -84,7 +84,7 @@ func (r *ChatRunner) handleFlowStop(conn *websocket.Conn, req WSRequest) {
 	}
 }
 
-// ==================== Flow 管理工具处理 ====================
+// ==================== Flow management tool handling ====================
 
 func (r *ChatRunner) handleFlowAction(action string, args map[string]any) (string, error) {
 	switch action {
@@ -105,15 +105,15 @@ func (r *ChatRunner) handleFlowAction(action string, args map[string]any) (strin
 	}
 }
 
-// flowNodesEdgesResult 保存节点和连线的结果
+// flowNodesEdgesResult stores node and edge results
 type flowNodesEdgesResult struct {
-	nodeIDs  []uint // 按顺序的节点 ID 列表
+	nodeIDs  []uint // Ordered list of node IDs
 	nodeCnt  int
 	edgeCnt  int
-	hasNodes bool // 是否有节点输入
+	hasNodes bool // Whether nodes were provided
 }
 
-// saveFlowNodesEdges 解析并保存 nodes + edges（create/update 共用）
+// saveFlowNodesEdges parses and saves nodes + edges (shared by create/update)
 func (r *ChatRunner) saveFlowNodesEdges(flowId uint, args map[string]any) flowNodesEdgesResult {
 	var res flowNodesEdgesResult
 	nodesRaw, ok := args["nodes"]

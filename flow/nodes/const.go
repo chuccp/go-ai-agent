@@ -1,6 +1,6 @@
 package nodes
 
-// 节点类型
+// Node types
 const (
 	TypeStart     = "start"
 	TypeEnd       = "end"
@@ -13,16 +13,18 @@ const (
 	TypeScript    = "script"
 	TypeIterator  = "iterator"
 	TypeLoop      = "loop"
+	TypeSwitch    = "switch"
+	TypeExecute   = "execute"
 	TypeImageGen  = "image_gen"
 	TypeAudioGen  = "audio_gen"
 	TypeVideoGen  = "video_gen"
 )
 
-// 节点输出数据键
+// Node output data keys
 const (
 	KeyOutput = "output"
 	KeyPrompt = "prompt"
 )
 
-// 默认模型 — empty means resolve from system default at runtime
+// DefaultModel -- empty means resolve from system default at runtime
 const DefaultModel = ""

@@ -42,7 +42,7 @@ func (n *LLMNode) Execute(ctx *engine.ExecutionContext, config string) (*engine.
 	prompt := renderPrompt(cfg.Prompt, ctx)
 	system := renderPrompt(cfg.System, ctx)
 
-	// 结构化输出
+	// Structured output
 	if cfg.OutputFormat != "" {
 		var of out.OutFormat
 		if json.Unmarshal([]byte(cfg.OutputFormat), &of) == nil {
@@ -55,7 +55,7 @@ func (n *LLMNode) Execute(ctx *engine.ExecutionContext, config string) (*engine.
 		}
 	}
 
-	// 缓存检查
+	// Cache check
 	cacheEnabled := isCacheEnabled(ctx, cfg.CacheEnabled)
 	if cacheEnabled && ctx.Cache != nil {
 		cacheKey := cache.GenerateKey(cfg.Model, system, prompt, strconv.Itoa(cfg.MaxTokens))
@@ -74,7 +74,7 @@ func (n *LLMNode) Execute(ctx *engine.ExecutionContext, config string) (*engine.
 		}
 	}
 
-	// 通过函数注册表调用 LLM
+	// Call LLM via function registry
 	args := map[string]any{
 		"model":          cfg.Model,
 		"prompt":         prompt,
@@ -94,7 +94,7 @@ func (n *LLMNode) Execute(ctx *engine.ExecutionContext, config string) (*engine.
 
 	output, _ := result[KeyOutput].(string)
 
-	// 写入缓存
+	// Write cache
 	if cacheEnabled && ctx.Cache != nil {
 		cacheKey := cache.GenerateKey(cfg.Model, system, prompt, strconv.Itoa(cfg.MaxTokens))
 		_ = ctx.Cache.Set(cacheKey, output)

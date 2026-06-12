@@ -23,7 +23,7 @@ func main() {
 	// 2. create flow WITHOUT edges first
 	fid := apiID(post(base+"/api/flows", `{"name":"e2e","nodes":[
 		{"id":1,"type":"start","label":"S","config":"{}","position_x":100,"position_y":50},
-		{"id":2,"type":"llm","label":"G","config":"{\"model\":\"deepseek.default\",\"prompt\":\"一句话:\\n{{user_input.output}}\",\"max_tokens\":200}","position_x":100,"position_y":130},
+		{"id":2,"type":"llm","label":"G","config":"{\"model\":\"deepseek.default\",\"prompt\":\"One sentence:\\n{{user_input.output}}\",\"max_tokens\":200}","position_x":100,"position_y":130},
 		{"id":3,"type":"end","label":"E","config":"{}","position_x":100,"position_y":210}
 	]}`), "id")
 	fmt.Println("2. Flow:", fid)
