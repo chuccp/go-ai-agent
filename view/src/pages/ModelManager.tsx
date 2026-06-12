@@ -1,40 +1,10 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useModelStore, AIModel } from '@/stores/modelStore'
-import { THINK_LEVELS } from '@/constants'
+import ModelForm, { emptyModelForm, ModelFormData } from '@/components/ModelForm'
 
 const CATEGORIES = ['all', 'llm', 'image', 'voice', 'video'] as const
 type Category = typeof CATEGORIES[number]
-
-const API_TYPES = ['openai', 'claude', 'native'] as const
-
-interface ModelForm {
-  name: string
-  provider: string
-  model_id: string
-  category: string
-  api_key: string
-  base_url: string
-  description: string
-  think_level: string
-  multimodal: boolean
-  is_default: boolean
-  is_base: boolean
-}
-
-const emptyForm: ModelForm = {
-  name: '',
-  provider: '',
-  model_id: '',
-  category: 'llm',
-  api_key: '',
-  base_url: '',
-  description: '',
-  think_level: 'off',
-  multimodal: false,
-  is_default: false,
-  is_base: false,
-}
 
 export default function ModelManager() {
   const { t } = useTranslation()
@@ -42,14 +12,11 @@ export default function ModelManager() {
   const [category, setCategory] = useState<Category>('all')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editId, setEditId] = useState<number | null>(null)
-  const [form, setForm] = useState<ModelForm>({ ...emptyForm })
-  const [apiType, setApiType] = useState<string>('openai')
-  const [step, setStep] = useState(1)
+  const [form, setForm] = useState<ModelFormData>(emptyModelForm())
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     store.fetchModels()
-    store.fetchProviderDefaults()
   }, [])
 
   const filteredModels = useMemo(() => {
@@ -70,48 +37,19 @@ export default function ModelManager() {
 
   const openAdd = () => {
     setEditId(null)
-    setForm({ ...emptyForm })
-    setApiType('openai')
-    setStep(1)
+    setForm(emptyModelForm())
     setDialogOpen(true)
   }
 
   const openEdit = (m: AIModel) => {
     setEditId(m.id)
     setForm({
-      name: m.name,
-      provider: m.provider,
-      model_id: m.model_id,
-      category: m.category,
-      api_key: m.api_key,
-      base_url: m.base_url,
-      description: m.description,
-      think_level: m.think_level || 'off',
-      multimodal: m.multimodal,
-      is_default: m.is_default,
-      is_base: m.is_base,
+      name: m.name, provider: m.provider, model_id: m.model_id, category: m.category,
+      api_key: m.api_key, base_url: m.base_url, description: m.description,
+      think_level: m.think_level || 'off', multimodal: m.multimodal,
+      is_default: m.is_default, is_base: m.is_base,
     })
-    // Determine apiType from provider
-    if (m.provider.startsWith('openai.')) setApiType('openai')
-    else if (m.provider.startsWith('claude.')) setApiType('claude')
-    else setApiType('native')
-    setStep(1)
     setDialogOpen(true)
-  }
-
-  const fillProvider = (p: string) => {
-    const d = store.providerDefaults[apiType]?.[p]
-    if (d) {
-      setForm(f => ({
-        ...f,
-        provider: p,
-        name: f.name || d.model || '',
-        model_id: f.model_id || d.model || '',
-        base_url: f.base_url || d.baseUrl || '',
-      }))
-    } else {
-      setForm(f => ({ ...f, provider: p }))
-    }
   }
 
   const handleSave = async () => {
@@ -139,12 +77,6 @@ export default function ModelManager() {
 
   const handleSetBase = async (id: number) => {
     await store.setBase(id)
-  }
-
-  const apiTypeLabel = (key: string) => {
-    if (key === 'openai') return t('model.openaiCompat')
-    if (key === 'claude') return t('model.claudeCompat')
-    return t('model.native')
   }
 
   // Styles
@@ -224,8 +156,6 @@ export default function ModelManager() {
   const labelStyle: React.CSSProperties = {
     fontSize: 12, color: '#354052', fontWeight: 500, marginBottom: 4, display: 'block',
   }
-  const fieldGap: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: 2 }
-  const formGrid: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: 14 }
   const emptyState: React.CSSProperties = {
     display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
     padding: '64px 24px', color: '#676f83', fontSize: 14,
@@ -332,156 +262,18 @@ export default function ModelManager() {
             </div>
 
             <div style={dialogBody}>
-              {step === 1 ? (
-                <div style={formGrid}>
-                  <div style={fieldGap}>
-                    <label style={labelStyle}>{t('model.apiType')}</label>
-                    <select
-                      value={apiType}
-                      onChange={e => { setApiType(e.target.value); setForm(f => ({ ...f, provider: '' })) }}
-                      style={inputStyle}
-                    >
-                      {API_TYPES.map(at => (
-                        <option key={at} value={at}>{apiTypeLabel(at)}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div style={fieldGap}>
-                    <label style={labelStyle}>{t('model.provider')}</label>
-                    <select
-                      value={form.provider}
-                      onChange={e => fillProvider(e.target.value)}
-                      style={inputStyle}
-                    >
-                      <option value="">{t('common.select')}...</option>
-                      {providerList.map(p => <option key={p} value={p}>{p}</option>)}
-                    </select>
-                  </div>
-                  <div style={fieldGap}>
-                    <label style={labelStyle}>{t('model.selectCategory')}</label>
-                    <select
-                      value={form.category}
-                      onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
-                      style={inputStyle}
-                    >
-                      {CATEGORIES.filter(c => c !== 'all').map(cat => (
-                        <option key={cat} value={cat}>{t(`model.categories.${cat}`)}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              ) : (
-                <div style={formGrid}>
-                  <div style={fieldGap}>
-                    <label style={labelStyle}>{t('model.displayName')}</label>
-                    <input
-                      value={form.name}
-                      onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                      style={inputStyle}
-                      placeholder="e.g. GPT-4o"
-                    />
-                  </div>
-                  <div style={fieldGap}>
-                    <label style={labelStyle}>{t('model.modelId')}</label>
-                    <input
-                      value={form.model_id}
-                      onChange={e => setForm(f => ({ ...f, model_id: e.target.value }))}
-                      style={inputStyle}
-                      placeholder="e.g. gpt-4o"
-                    />
-                  </div>
-                  <div style={fieldGap}>
-                    <label style={labelStyle}>{t('model.apiKey')}</label>
-                    <input
-                      type="password"
-                      value={form.api_key}
-                      onChange={e => setForm(f => ({ ...f, api_key: e.target.value }))}
-                      style={inputStyle}
-                      placeholder="sk-..."
-                    />
-                  </div>
-                  <div style={fieldGap}>
-                    <label style={labelStyle}>{t('model.baseUrl')}</label>
-                    <input
-                      value={form.base_url}
-                      onChange={e => setForm(f => ({ ...f, base_url: e.target.value }))}
-                      style={inputStyle}
-                      placeholder="https://api.openai.com/v1"
-                    />
-                  </div>
-                  <div style={fieldGap}>
-                    <label style={labelStyle}>{t('model.description')}</label>
-                    <input
-                      value={form.description}
-                      onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                      style={inputStyle}
-                    />
-                  </div>
-                  <div style={fieldGap}>
-                    <label style={labelStyle}>{t('model.thinkingLevel')}</label>
-                    <select
-                      value={form.think_level}
-                      onChange={e => setForm(f => ({ ...f, think_level: e.target.value }))}
-                      style={inputStyle}
-                    >
-                      {THINK_LEVELS.map(l => (
-                        <option key={l} value={l}>{t(`think.${l}`)}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <input
-                      type="checkbox"
-                      checked={form.multimodal}
-                      onChange={e => setForm(f => ({ ...f, multimodal: e.target.checked }))}
-                      id="multimodal"
-                    />
-                    <label htmlFor="multimodal" style={{ fontSize: 13, color: '#354052', cursor: 'pointer' }}>
-                      {t('model.multimodal')} - {t('model.multimodalHint')}
-                    </label>
-                  </div>
-                  <div style={{ display: 'flex', gap: 16 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <input
-                        type="checkbox"
-                        checked={form.is_default}
-                        onChange={e => setForm(f => ({ ...f, is_default: e.target.checked }))}
-                        id="is_default"
-                      />
-                      <label htmlFor="is_default" style={{ fontSize: 13, color: '#354052', cursor: 'pointer' }}>
-                        {t('model.defaultModel')}
-                      </label>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <input
-                        type="checkbox"
-                        checked={form.is_base}
-                        onChange={e => setForm(f => ({ ...f, is_base: e.target.checked }))}
-                        id="is_base"
-                      />
-                      <label htmlFor="is_base" style={{ fontSize: 13, color: '#354052', cursor: 'pointer' }}>
-                        {t('model.baseModel')} - {t('model.baseModelHint')}
-                      </label>
-                    </div>
-                  </div>
-                </div>
-              )}
+              <ModelForm form={form} onChange={setForm} />
             </div>
 
             <div style={dialogFooter}>
               <button onClick={() => setDialogOpen(false)} style={secondaryBtn}>{t('common.cancel')}</button>
-              {step === 2 && <button onClick={() => setStep(1)} style={secondaryBtn}>{t('common.prev')}</button>}
-              {step === 1 ? (
-                <button onClick={() => setStep(2)} style={primaryBtn}>{t('common.next')}</button>
-              ) : (
-                <button
-                  onClick={handleSave}
-                  disabled={saving || !form.name.trim() || !form.model_id.trim()}
-                  style={{ ...primaryBtn, opacity: saving || !form.name.trim() || !form.model_id.trim() ? 0.6 : 1 }}
-                >
-                  {saving ? t('common.loading') : t('common.save')}
-                </button>
-              )}
+              <button
+                onClick={handleSave}
+                disabled={saving || !form.name.trim() || !form.model_id.trim()}
+                style={{ ...primaryBtn, opacity: saving || !form.name.trim() || !form.model_id.trim() ? 0.6 : 1 }}
+              >
+                {saving ? t('common.loading') : t('common.save')}
+              </button>
             </div>
           </div>
         </div>

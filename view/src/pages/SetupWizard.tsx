@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { useSetupStore } from '@/stores/setupStore'
-
-const STEPS = ['database', 'admin', 'model'] as const
+import ModelForm, { emptyModelForm, ModelFormData } from '@/components/ModelForm'
 
 export default function SetupWizard() {
   const { t } = useTranslation()
@@ -15,11 +14,9 @@ export default function SetupWizard() {
   const [error, setError] = useState('')
   const [done, setDone] = useState(false)
   const [adminExists, setAdminExists] = useState(false)
-  const [apiType, setApiType] = useState('openai')
-  const [providers, setProviders] = useState<any>({})
+  const [isDesktop, setIsDesktop] = useState(false)
   const [dbConfigured, setDbConfigured] = useState(false)
   const [adminConfigured, setAdminConfigured] = useState(false)
-  const [isDesktop, setIsDesktop] = useState(false)
 
   // DB form
   const [dbType, setDbType] = useState('sqlite')
@@ -29,20 +26,18 @@ export default function SetupWizard() {
   const [adminForm, setAdminForm] = useState({ username: 'admin', password: '', confirm: '' })
 
   // Model form
-  const [modelForm, setModelForm] = useState({ provider: '', name: '', model_id: '', api_key: '', base_url: '', think_level: 'off', multimodal: false })
+  const [modelForm, setModelForm] = useState<ModelFormData>(emptyModelForm())
 
   useEffect(() => {
-    // Check setup status to determine which steps are already done
-    store.getSetupStatus().then((s: { db_configured: boolean; admin_configured: boolean; mode: string }) => {
+    store.getSetupStatus().then((s: any) => {
       setDbConfigured(s.db_configured)
       setAdminConfigured(s.admin_configured)
       setIsDesktop(s.mode === 'desktop')
       if (s.admin_configured) setAdminExists(true)
-      // Skip to the right step
+      // Desktop mode: skip DB and admin steps entirely
       if (s.db_configured && s.admin_configured) setStep(2)
       else if (s.db_configured) setStep(1)
     })
-    store.fetchProviderDefaults().then(setProviders)
   }, [])
 
   const handleTest = async () => {
@@ -71,7 +66,7 @@ export default function SetupWizard() {
     setSaving(false)
   }
 
-  const handleModelNext = async () => {
+  const handleModelComplete = async () => {
     if (!modelForm.model_id) { setError(t('setup.validation.modelIdRequired')); return }
     if (!modelForm.api_key) { setError(t('setup.validation.apiKeyRequired')); return }
     if (!modelForm.base_url) { setError(t('setup.validation.baseUrlRequired')); return }
@@ -84,12 +79,6 @@ export default function SetupWizard() {
     setSaving(false)
   }
 
-  const fillProvider = (p: string) => {
-    const d = providers[apiType]?.[p]
-    if (d) setModelForm(f => ({ ...f, provider: p, name: d.model || '', model_id: d.model || '', base_url: d.baseUrl || '' }))
-    else setModelForm(f => ({ ...f, provider: p }))
-  }
-
   if (done) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', gap: 12 }}>
@@ -100,42 +89,52 @@ export default function SetupWizard() {
     )
   }
 
+  const card: React.CSSProperties = {
+    background: '#fcfcfd', borderRadius: 16, border: '0.5px solid rgba(16,24,40,0.08)',
+    padding: 24, width: '100%', maxWidth: 480, boxShadow: '0 4px 12px rgba(16,24,40,0.06)',
+  }
   const inputStyle: React.CSSProperties = { padding: '8px 10px', border: '1px solid #d0d5dd', borderRadius: 8, fontSize: 13, outline: 'none', width: '100%' }
   const labelStyle: React.CSSProperties = { fontSize: 12, color: '#354052', fontWeight: 500, marginBottom: 4, display: 'block' }
   const btnStyle = (primary = false): React.CSSProperties => ({
     padding: '8px 20px', borderRadius: 8, border: primary ? 'none' : '1px solid #d0d5dd',
-    background: primary ? '#155aef' : '#fff', color: primary ? '#fff' : '#354052',
+    background: primary ? '#155aef' : '#fcfcfd', color: primary ? '#fff' : '#354052',
     fontSize: 13, fontWeight: 500, cursor: 'pointer',
   })
+  const stepDot = (active: boolean): React.CSSProperties => ({
+    width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+    fontSize: 12, fontWeight: 600,
+    background: active ? '#155aef' : '#e2e8f0', color: active ? '#fff' : '#676f83',
+  })
+  const stepLabel: React.CSSProperties = { fontSize: 13, fontWeight: 500, color: '#354052' }
+  const stepDone: React.CSSProperties = { ...stepLabel, color: '#039855', textDecoration: 'line-through' }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: 20 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: 20, background: '#f2f4f7' }}>
       <div style={{ marginBottom: 24, textAlign: 'center' }}>
         <div style={{ fontSize: 24, fontWeight: 700 }}>⚡ {t('setup.title')}</div>
         <div style={{ fontSize: 14, color: '#676f83', marginTop: 4 }}>{t('setup.subtitle')}</div>
       </div>
 
       {/* Steps indicator */}
-      <div style={{ display: 'flex', gap: 24, marginBottom: 24 }}>
-        {STEPS.map((s, i) => (
-          <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <div style={{
-              width: 24, height: 24, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 12, fontWeight: 600,
-              background: i <= step ? '#155aef' : '#e2e8f0', color: i <= step ? '#fff' : '#676f83',
-            }}>{i + 1}</div>
-            <span style={{ fontSize: 13, fontWeight: i === step ? 600 : 400, color: i === step ? '#101828' : '#676f83' }}>
-              {t(`setup.steps.${s}`)}
-            </span>
-          </div>
-        ))}
+      <div style={{ display: 'flex', gap: 32, marginBottom: 24, alignItems: 'center' }}>
+        {['database', 'admin', 'model'].map((s, i) => {
+          const done = (i === 0 && dbConfigured) || (i === 1 && adminConfigured)
+          const active = i === step
+          return (
+            <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={stepDot(active)}>{done ? '✓' : i + 1}</div>
+              <span style={done ? stepDone : stepLabel}>{t(`setup.steps.${s}`)}</span>
+              {i < 2 && <span style={{ color: '#d0d5dd' }}>—</span>}
+            </div>
+          )
+        })}
       </div>
 
-      <div style={{ background: '#fff', borderRadius: 16, border: '0.5px solid rgba(16,24,40,0.08)', padding: 24, width: '100%', maxWidth: 480, boxShadow: '0 4px 12px rgba(16,24,40,0.06)' }}>
+      <div style={card}>
         {error && <div style={{ background: '#fef3f2', color: '#d92d20', padding: '8px 12px', borderRadius: 8, fontSize: 13, marginBottom: 12 }}>{error}</div>}
 
         {/* Step 0: Database */}
-        {step === 0 && (
+        {step === 0 && !isDesktop && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div><label style={labelStyle}>{t('setup.db.dbType')}</label>
               <select value={dbType} onChange={e => setDbType(e.target.value)} style={inputStyle}>
@@ -179,7 +178,7 @@ export default function SetupWizard() {
         )}
 
         {/* Step 1: Admin */}
-        {step === 1 && (
+        {step === 1 && !isDesktop && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div style={{ fontSize: 14, fontWeight: 600 }}>{t('setup.admin.createAdmin')}</div>
             <div style={{ fontSize: 13, color: '#676f83' }}>{adminExists ? t('setup.admin.existsHint') : t('setup.admin.adminHint')}</div>
@@ -199,41 +198,22 @@ export default function SetupWizard() {
           </div>
         )}
 
-        {/* Step 2: Model */}
+        {/* Step 2: Model — shared with ModelManager */}
         {step === 2 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div style={{ fontSize: 14, fontWeight: 600 }}>{t('setup.model.configBase')}</div>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>{t('setup.model.configBase')}</div>
             {isDesktop && (
-              <div style={{ fontSize: 12, color: '#155aef', background: '#e8f0fe', padding: '8px 12px', borderRadius: 8 }}>
-                SQLite + {t('setup.admin.createAdmin')} {t('common.success')}
+              <div style={{ fontSize: 12, color: '#155aef', background: '#e8f0fe', padding: '8px 12px', borderRadius: 8, marginBottom: 14 }}>
+                SQLite + {t('setup.admin.createAdmin')} {t('common.success')} — {t('setup.model.configBase')} {t('setup.subtitle')}
               </div>
             )}
-            <div><label style={labelStyle}>{t('model.apiType')}</label>
-              <select value={apiType} onChange={e => { setApiType(e.target.value); setModelForm(f => ({ ...f, provider: '' })) }} style={inputStyle}>
-                <option value="openai">{t('model.openaiCompat')}</option>
-                <option value="claude">{t('model.claudeCompat')}</option>
-                <option value="native">{t('model.native')}</option>
-              </select>
-            </div>
-            <div><label style={labelStyle}>{t('model.provider')}</label>
-              <select value={modelForm.provider} onChange={e => fillProvider(e.target.value)} style={inputStyle}>
-                <option value="">{t('common.select')}...</option>
-                {Object.keys(providers[apiType] || {}).map(p => <option key={p} value={p}>{p}</option>)}
-              </select>
-            </div>
-            <div><label style={labelStyle}>{t('model.modelId')}</label>
-              <input value={modelForm.model_id} onChange={e => setModelForm(f => ({ ...f, model_id: e.target.value }))} style={inputStyle} />
-            </div>
-            <div><label style={labelStyle}>{t('model.apiKey')}</label>
-              <input type="password" value={modelForm.api_key} onChange={e => setModelForm(f => ({ ...f, api_key: e.target.value }))} style={inputStyle} />
-            </div>
-            <div><label style={labelStyle}>{t('model.baseUrl')}</label>
-              <input value={modelForm.base_url} onChange={e => setModelForm(f => ({ ...f, base_url: e.target.value }))} style={inputStyle} />
-            </div>
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
-              <button onClick={() => { store.completeSetup().then(() => nav('/')) }} style={btnStyle()}>{t('setup.skip')}</button>
+            <ModelForm form={modelForm} onChange={setModelForm} compact />
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
               {!isDesktop && <button onClick={() => setStep(1)} style={btnStyle()}>{t('common.prev')}</button>}
-              <button onClick={handleModelNext} disabled={saving} style={btnStyle(true)}>{saving ? t('setup.initializing') : t('setup.completeSetup')}</button>
+              <button onClick={() => { store.completeSetup().then(() => nav('/')) }} style={btnStyle()}>{t('setup.skip')}</button>
+              <button onClick={handleModelComplete} disabled={saving} style={btnStyle(true)}>
+                {saving ? t('setup.initializing') : t('setup.completeSetup')}
+              </button>
             </div>
           </div>
         )}
