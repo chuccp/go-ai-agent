@@ -39,3 +39,5 @@ go-ai-agent
 /view/wailsjs
 /view/package.json.md5
 /view/tsconfig.tsbuildinfo
+/view/dist
+/view/build
