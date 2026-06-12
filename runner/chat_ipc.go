@@ -32,7 +32,6 @@ func newIpcSender(ctx context.Context, sessionID uint) *ipcSender {
 
 func (s *ipcSender) Send(event agent.Event) {
 	eventName := fmt.Sprintf("chat:%d:%s", s.sessionID, event.Type)
-	log.Info("[IPC] emitting event", zap.String("name", eventName), zap.String("type", event.Type), zap.Bool("done", event.Done))
 	wailsRuntime.EventsEmit(s.ctx, eventName, event)
 
 	switch event.Type {
@@ -80,13 +79,6 @@ func (r *ChatRunner) StartAgentIPC(ctx context.Context, sessionID uint, modelPat
 	if modelPath == "" {
 		modelPath = r.defaultModelPath
 	}
-
-	log.Info("[IPC] StartAgentIPC",
-		zap.Uint("sessionID", sessionID),
-		zap.String("modelPath", modelPath),
-		zap.String("userMessage", truncateText(userMessage, 50)),
-		zap.Bool("providersLoaded", r.providersLoaded),
-	)
 
 	if !r.providersLoaded {
 		r.loadProvidersFromDB()
