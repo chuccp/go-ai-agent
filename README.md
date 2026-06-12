@@ -1,6 +1,6 @@
 # Go AI Agent
 
-> 🚧 **Work in progress** — this project is under active development. We'd love help from anyone using Claude Fable 5 to improve and complete features. Thank you!
+> 🚧 **Work in progress** — this project is under active development.
 
 A cross-platform desktop AI agent platform. **Create AI workflows by chatting** — describe what you want in natural language, and the agent designs, builds, and executes the pipeline for you.
 
@@ -16,32 +16,25 @@ Traditional workflow tools require learning a visual editor — dragging nodes, 
 
 > *"Create a flow that fetches the latest AI news, summarizes them with DeepSeek, translates the summary into Japanese, and asks me to review before saving."*
 
-The agent will **understand your intent → propose a node structure → confirm with you → create the flow**. No manual wiring, no config guesswork. You can refine iteratively through conversation — "change the model to GPT-5", "add a sentiment analysis step before summarization" — and the agent updates the flow immediately.
-
-**Benefits over manual editors:**
-
-- **Zero learning curve** — no need to learn node types, connection rules, or config schemas
-- **Natural iteration** — refine flows through conversation, like talking to a colleague
-- **Design guidance** — the agent suggests best practices (e.g., "this flow should have a user confirmation step before sending")
-- **Fast prototyping** — go from idea to working pipeline in under a minute
-- **Full control** — visual editor still available for manual fine-tuning anytime
+The agent will **understand your intent → propose a node structure → confirm with you → create the flow**. No manual wiring, no config guesswork.
 
 ## Features
 
 - **Chat-Created Workflows** — Build AI pipelines through natural language conversation with the `manage_flows` tool
-- **One-Click Share** — Export any flow as a portable JSON file, share with teammates, import with one click — build a shared library of battle-tested AI workflows
-- **Visual Flow Designer** — Dify-style drag-and-drop DAG editor with 14 node types, for manual editing when needed
-- **Desktop App** — Native macOS/Windows/Linux window via Wails v2, double-click to launch
+- **Visual Flow Designer** — Drag-and-drop DAG editor with 16 node types including condition, switch, execute, script
+- **Script-Based Nodes** — Condition and switch nodes use Starlark (Python dialect) expressions with access to all upstream data
+- **Generic Batch Processing** — ForEach and Iterator nodes invoke any function with args, not hardcoded to LLM
+- **Desktop App** — Native Windows/macOS/Linux window via Wails v2
 - **One-Step Setup** — Desktop mode auto-configures SQLite + admin account, only model API key needed
+- **Shareable Flows** — Export flows as ZIP packages (flow.json + meta.json), import with one click
 - **Multi-Model** — OpenAI, Claude, Gemini, DeepSeek, and 28+ providers via unified interface
-- **Agent Tool Use** — Built-in tool execution loop with extensible tool registry
-- **Streaming Chat** — WebSocket-based real-time streaming with thinking/reasoning display
-- **Web Mode** — `--web` flag runs as a browser-based server (SQLite/MySQL/PostgreSQL)
+- **Agent Tool Use** — Extensible tool registry with manage_flows, manage_models, execute_command, read_document, web_search
+- **Web Mode** — Run as a browser-based server via `cmd/server/main.go`
 - **i18n** — English, 简体中文, 繁體中文, 日本語
 
 ## Quick Start
 
-### Desktop App
+### Desktop App (Windows)
 
 ```bash
 # Prerequisites: Go 1.25+, Node 18+, pnpm
@@ -50,200 +43,116 @@ go install github.com/wailsapp/wails/v2/cmd/wails@latest
 git clone https://github.com/chuccp/go-ai-agent.git
 cd go-ai-agent
 
-# Dev mode (hot reload)
-wails dev
+# One-click dev mode
+dev.bat
 
-# Build macOS .app
-wails build
+# Or manually
+wails dev
 ```
 
-The `.app` bundle is at `build/bin/go-ai-agent.app`. Double-click to launch — first run only asks for your model API key.
+First run auto-configures SQLite and creates a default admin account (admin/admin). You only need to configure your model API key.
 
-### Web Server Mode
+### Web / Server Mode
 
 ```bash
-go build -o go-ai-agent . && ./go-ai-agent --web
-cd view && pnpm dev
+go build -o go-ai-agent-server ./cmd/server/
+./go-ai-agent-server
 ```
 
-Open `http://localhost:5173` — first run opens the setup wizard.
-
-## How It Works
-
-```
-You: "Create a content review flow"
-         │
-         ▼
-┌─────────────────────────────────┐
-│  AI Agent (manage_flows tool)   │
-│                                 │
-│  1. UNDERSTAND — ask clarifying │
-│     questions about the flow    │
-│  2. DESIGN — propose node       │
-│     structure in plain language │
-│  3. CONFIRM — wait for your     │
-│     explicit approval           │
-│  4. CREATE — build the flow     │
-│     with correct nodes & edges  │
-└─────────────────────────────────┘
-         │
-         ▼
-┌─────────────────────────────────┐
-│  Visual Flow (auto-created)     │
-│  ┌───┐   ┌──────┐   ┌───┐     │
-│  │Start│──▶│ LLM  │──▶│End│     │
-│  └───┘   └──────┘   └───┘     │
-│                                 │
-│  Edit manually anytime in the   │
-│  drag-and-drop designer         │
-└─────────────────────────────────┘
-```
-
-## Flows Inside Conversations
-
-Flows aren't just standalone pipelines — you can run them directly inside a chat conversation. The agent becomes the runtime: it loads the flow, walks through each node, and reports progress as you talk.
-
-```
-Chat: "Run the news review flow on this article: [paste]"
-         │
-         ▼
-┌───────────────────────────────────────┐
-│  Agent executes flow step by step     │
-│  while conversing with you            │
-│                                       │
-│  Agent: "Step 1/4 - Summarizing..."   │
-│  Agent: "Step 2/4 - Sentiment: mixed" │
-│  ┌──────────────────────────┐        │
-│  │  user_input node reached  │        │
-│  │  "This looks negative —   │        │
-│  │   publish anyway or skip?" │        │
-│  └──────────────────────────┘        │
-│                                       │
-│  You: "Skip it"                       │
-│  Agent: "Skipped. Flow complete."     │
-└───────────────────────────────────────┘
-```
-
-This means flows **handle the structured work** while conversation **handles the decisions**. The flow drives the process; you stay in the loop whenever judgment is needed. Run an existing flow mid-chat, or create a new one on the fly — the boundary between chatting and executing is seamless.
-
-## Flows vs Skills
-
-AI skills (single prompts or tool calls) are like individual moves — a flow is the entire playbook.
-
-| | Skill | Flow |
-|---|-------|------|
-| **Structure** | One shot — a prompt + a single action | Multi-step DAG — 14 node types in any combination |
-| **Branching** | None, linear only | Condition nodes, text split, parallel batch |
-| **Human-in-the-loop** | Cannot pause mid-way | `user_input` node pauses for review, approval, or additional input |
-| **State passing** | Stateless | `{{node_label.output}}` template syntax passes data between nodes |
-| **Observability** | Only final result visible | Every node's input, output, and status is traced and logged |
-| **Multi-model** | Single model | Different nodes can use different models (GPT for translation → Claude for polish → Gemini for review) |
-| **Concurrency** | None | `for_each` parallel processing, `iterator` sequential batching, `loop` with break conditions |
-
-**Concrete example** — *"Monitor news → summarize with DeepSeek → sentiment analysis → flag negative for human review → publish positive directly"*
-
-- **As a skill**: Write 5 separate prompts, run them manually, check each result yourself, route positive/negative by hand
-- **As a flow**: One pipeline runs end-to-end — condition node auto-splits, negative goes to human confirmation, positive goes straight to publish
-
-Flows orchestrate human judgment together with AI capabilities, instead of calling AI in isolation.
-
-### Why Flows Are More Reliable
-
-A single skill is like a "god function" — one LLM call has to understand, reason, judge, and output all at once. Flows break that into deterministic pieces:
-
-- **Single responsibility** — each node does one thing. The LLM node generates, the condition node routes, the transform node reshapes. No single point of confusion.
-- **Explicit state passing** — `{{node.output}}` template syntax passes data between nodes. The LLM doesn't need to "remember" — downstream nodes get exact input, every time.
-- **Branching is externalized** — condition nodes use simple `contains`/`equals` rules, not LLM reasoning. The LLM doesn't decide where data goes; the DAG does.
-- **Human checkpoints** — `user_input` nodes pause execution. A human can inspect intermediate results and correct course before the flow continues.
-- **Reduced context, sharper attention** — a skill stuffs everything into one giant prompt, diluting the model's attention. A flow gives each node a focused, short context. The LLM only needs to think about one thing at a time — shorter context, better attention, more reliable output.
-
-Break one big unreliable prompt into small reliable steps + deterministic orchestration + human guardrails.
-
-## Share & Reuse
-
-Flows are stored as portable JSON — export any flow with one click, share the file, import with one click.
-
-- **Team library** — build a collection of proven, battle-tested workflows your whole team can reuse
-- **Community templates** — share flows publicly (GitHub, Discord, etc.) so anyone can import and run them
-- **No lock-in** — the JSON format is human-readable and tool-agnostic; flows outlive any single platform
-- **Instant onboarding** — new team members import shared flows and are productive immediately
-
-```
-Create → Export JSON → Share → Import → Run
-   │                                      │
-   └────────── Iterate & re-share ←───────┘
-```
+Open `http://localhost:19009` — first run opens the setup wizard.
 
 ## Architecture
 
 ```
-Desktop Mode (default)              Web Mode (--web)
+Desktop Mode                        Web Mode
 ┌──────────────────────┐            ┌──────────────────────┐
 │  Native WebView      │            │  Browser             │
-│  ┌────────────────┐  │            │  http://localhost:   │
-│  │  React Frontend │  │            │    5173 (dev)        │
-│  │  (embedded)     │  │            │    19009 (prod)      │
-│  └───────┬────────┘  │            └─────────┬────────────┘
-│          │ reverse    │                      │ HTTP/WS
-│          │ proxy      │                      │
-┌─┴─────────▼──────────┴─┐            ┌────────▼────────────┐
-│  Go HTTP Server :19009 │            │  Go HTTP Server     │
-│  ├─ REST API            │            │  ├─ REST API        │
-│  ├─ WebSocket           │            │  ├─ WebSocket       │
-│  ├─ Agent + Tools       │            │  ├─ Agent + Tools   │
-│  └─ Flow Engine (DAG)   │            │  └─ Flow Engine     │
-└─────────────────────────┘            └─────────────────────┘
+│  ┌────────────────┐  │            └─────────┬────────────┘
+│  │  React Frontend │  │                      │ HTTP/WS
+│  │  (embedded)     │  │                      │
+│  └───────┬────────┘  │            ┌─────────▼────────────┐
+└──────────┼───────────┘            │  Go HTTP Server      │
+           │                        │  ├─ REST API         │
+┌──────────▼──────────────────────┐ │  ├─ WebSocket        │
+│  Go HTTP Server :19009          │ │  ├─ Agent + Tools    │
+│  ├─ REST API + CORS             │ │  └─ Flow Engine      │
+│  ├─ WebSocket                   │ └──────────────────────┘
+│  ├─ Agent + Tools               │
+│  └─ Flow Engine (DAG)           │
+└─────────────────────────────────┘
 ```
+
+## Project Structure
+
+```
+go-ai-agent/
+├── main.go                  # Desktop entry (Wails)
+├── cmd/server/main.go       # Web server entry
+├── internal/app/            # Shared setup (config, desktop init, CORS)
+├── wails.json               # Wails project config
+├── dev.bat                  # One-click desktop dev launcher
+├── Makefile                 # Build targets
+├── agent/                   # Agent loop, tool registry
+├── ai/chat/                 # Unified chat service + 28+ providers
+├── runner/                  # ChatRunner, FlowRunner
+├── rest/                    # REST endpoints
+├── flow/                    # Flow engine + 16 node types
+│   ├── engine/              # DAG executor, task manager, function registry
+│   ├── nodes/               # Node implementations
+│   └── export/              # ZIP import/export
+└── view/                    # React frontend
+    └── src/
+        ├── pages/           # ChatHome, FlowDesigner, ModelManager, SetupWizard
+        ├── components/      # Shared components (ModelForm, WebSocketAdapter)
+        ├── stores/          # Zustand state stores
+        └── i18n/            # Locale files (en, zh, zh-TW, ja)
+```
+
+## Flow Engine
+
+**16 node types**: `start`, `end`, `llm`, `user_input`, `condition`, `switch`, `transform`, `split`, `for_each`, `iterator`, `loop`, `script`, `execute`, `image_gen`, `audio_gen`, `video_gen`
+
+**Script-based nodes** use Starlark (Python dialect):
+```python
+# Condition: returns bool → "yes"/"no" branch
+v = ctx["user_input"]["output"].lower()
+result = v in ("yes", "confirm", "ok")
+
+# Switch: returns string → routes to matching source_handle
+score = int(ctx["score"]["output"])
+if score >= 90:  result = "A"
+elif score >= 60: result = "B"
+else:            result = "C"
+```
+
+**Generic batch processing** — ForEach and Iterator invoke any registered function:
+```json
+{ "items_key": "split", "function": "llm", "args": { "model": "...", "prompt": "{{item.output}}" } }
+```
+ForEach runs in parallel, Iterator runs sequentially (skips failures).
+
+**Execute node** runs local shell commands with configurable timeout (`0` = no limit).
+
+**Flow export** uses ZIP format (`flow.json` + `meta.json`) with future slots for `skills/` and `resources/`.
+
+## WebSocket Protocol
+
+Connect to `ws://localhost:19009/ws`. Message types:
+- `chat` / `agent` — sends to ChatRunner
+- `flow_start` / `flow_user_response` / `flow_stop` — flow execution control
+- Responses: `chunk`, `tool_call`, `tool_result`, `error`, `session_created`
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
 | Desktop Shell | Wails v2 (system WebView) |
-| Backend | Go + go-web-frame + Gorilla WebSocket |
+| Backend | Go + go-web-frame + CORS middleware |
 | Frontend | React 18 + TypeScript + Vite |
 | Flow Editor | reactflow + Zustand |
 | Chat UI | @assistant-ui/react |
 | i18n | react-i18next |
 | Database | SQLite (desktop) / MySQL / PostgreSQL (web) |
-
-## Project Structure
-
-```
-go-ai-agent/
-├── main.go              # Entry point, --web flag, desktop/web routing
-├── app.go               # Wails App struct, asset embedding
-├── desktop_init.go      # Auto SQLite + admin for desktop mode
-├── wails.json           # Wails project config
-├── Makefile             # Build targets
-├── agent/               # Agent loop, tool registry (manage_flows, manage_models, ...)
-├── ai/chat/             # Unified chat service + 28+ providers
-├── runner/              # ChatRunner (WebSocket + Agent), FlowRunner (DAG executor)
-├── rest/                # REST endpoints
-├── flow/                # Flow engine (DAG executor, 14 node types)
-└── view/                # React frontend
-    └── src/
-        ├── pages/       # ChatHome, FlowDesigner, ModelManager, SetupWizard
-        ├── components/  # Chat UI, flow editor, common components
-        ├── stores/      # Zustand state stores
-        └── i18n/        # Locale files (en, zh, zh-TW, ja)
-```
-
-## Makefile
-
-```bash
-make desktop-dev          # wails dev (hot reload)
-make desktop-build-mac    # macOS universal .app
-make desktop-build-win    # Windows .exe
-make desktop-build-linux  # Linux binary
-```
-
-## WebSocket Protocol
-
-Connect to `ws://localhost:19009/ws`. Message types:
-- `chat` / `agent` — send to ChatRunner (agent loop with tool use)
-- `flow_start` / `flow_user_response` / `flow_stop` — flow execution control
-- Responses: `chunk`, `tool_call`, `tool_result`, `session_created`, `error`
 
 ## License
 
