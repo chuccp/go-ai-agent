@@ -135,17 +135,85 @@ func (r *ChatRunner) saveFlowNodesEdges(flowId uint, args map[string]any) flowNo
 		return res
 	}
 
-	// Validate llm nodes: must have prompt and model in config
+	// Validate required config fields for each node type
 	for _, ni := range nodeInputs {
-		if ni.Type == "llm" {
+		label := ni.Label
+		if label == "" {
+			label = ni.Type
+		}
+		switch ni.Type {
+		case "llm":
 			prompt, _ := ni.Config["prompt"].(string)
 			model, _ := ni.Config["model"].(string)
 			if prompt == "" || model == "" {
-				label := ni.Label
-				if label == "" {
-					label = ni.Type
-				}
 				res.err = fmt.Errorf("LLM node '%s': prompt and model are required. Use manage_models list to find available models.", label)
+				return res
+			}
+		case "user_input":
+			prompt, _ := ni.Config["prompt"].(string)
+			if prompt == "" {
+				res.err = fmt.Errorf("User_input node '%s': prompt is required (the question shown to the user).", label)
+				return res
+			}
+		case "condition":
+			script, _ := ni.Config["script"].(string)
+			if script == "" {
+				res.err = fmt.Errorf("Condition node '%s': script is required (Starlark expression, assign bool to 'result').", label)
+				return res
+			}
+		case "switch":
+			script, _ := ni.Config["script"].(string)
+			if script == "" {
+				res.err = fmt.Errorf("Switch node '%s': script is required (Starlark expression, assign string to 'result').", label)
+				return res
+			}
+		case "transform":
+			template, _ := ni.Config["template"].(string)
+			if template == "" {
+				res.err = fmt.Errorf("Transform node '%s': template is required.", label)
+				return res
+			}
+		case "for_each", "iterator":
+			itemsKey, _ := ni.Config["items_key"].(string)
+			if itemsKey == "" {
+				res.err = fmt.Errorf("%s node '%s': items_key is required (which upstream output contains the list).", ni.Type, label)
+				return res
+			}
+		case "loop":
+			maxIter, _ := ni.Config["max_iterations"].(float64)
+			if maxIter <= 0 {
+				res.err = fmt.Errorf("Loop node '%s': max_iterations is required (safety limit).", label)
+				return res
+			}
+		case "script":
+			script, _ := ni.Config["script"].(string)
+			if script == "" {
+				res.err = fmt.Errorf("Script node '%s': script (code) is required.", label)
+				return res
+			}
+		case "execute":
+			command, _ := ni.Config["command"].(string)
+			if command == "" {
+				res.err = fmt.Errorf("Execute node '%s': command is required.", label)
+				return res
+			}
+		case "split":
+			sourceKey, _ := ni.Config["source_key"].(string)
+			if sourceKey == "" {
+				res.err = fmt.Errorf("Split node '%s': source_key is required (which upstream output to split).", label)
+				return res
+			}
+		case "image_gen", "video_gen":
+			prompt, _ := ni.Config["prompt"].(string)
+			if prompt == "" {
+				res.err = fmt.Errorf("%s node '%s': prompt is required.", ni.Type, label)
+				return res
+			}
+		case "audio_gen":
+			text, _ := ni.Config["text"].(string)
+			model, _ := ni.Config["model"].(string)
+			if text == "" || model == "" {
+				res.err = fmt.Errorf("Audio_gen node '%s': text and model are required.", label)
 				return res
 			}
 		}

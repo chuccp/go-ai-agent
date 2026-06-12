@@ -52,25 +52,25 @@ WORKFLOW for editing/deleting by name:
 2. If exactly 1 match → use that flow_id; if multiple → ask user to pick; if 0 → report not found
 3. For updates: describe the change and confirm before calling update
 
-Node types:
+Node types (REQUIRED fields are marked):
 - start: Entry point, no config
 - end: Exit point, no config
-- llm: LLM call. CRITICAL — config fields prompt and model are REQUIRED: {prompt (the instruction/prompt text, supports {{NodeLabel.output}} templates), model (model identifier e.g. gpt-4o, claude-sonnet-4-6 — use manage_models list to find available models)}. Optional config fields: {system, temperature(0-2, default 0.7), top_p(0-1, default 0.9), max_tokens, thinking_level(off|low|medium|high|max), output_format_type(empty|json_auto|json_object|json_array|custom)}. NEVER create an llm node with empty prompt or model — this is an error.
-- user_input: User input. config: {prompt, confirm_only(bool)}
-- split: Text split. config: {source_key, delimiter(paragraph|line|，|。)}
-- condition: Conditional branch. config: {script(Starlark expression, assign bool to 'result')}. Access upstream data via ctx["node_label"]["field"]. Built-ins: json_parse(s), split(s, sep). Route from "yes"/"no" output handles.
-- switch: Multi-branch switch. config: {script(Starlark expression, assign string to 'result')}. Each outgoing edge's source_handle matches a case value. Falls back to "default" if empty. Built-ins: json_parse(s), split(s, sep).
-- transform: Data transform. config: {template}
-- for_each: Concurrent batch processing. For each item in ctx[items_key], invokes function with args in parallel. config: {items_key, function(default "llm"), args(map, supports {{item.field}} placeholders)}
-- iterator: Sequential iteration. Like for_each but processes items one at a time, skipping on failure. config: {items_key, function(default "llm"), args(map, supports {{item.field}} placeholders)}
-- loop: Loop. config: {max_iterations, break_field, break_operator, break_value}
-- script: Script. config: {script(Python/Starlark code)}
-- execute: Run a local shell command. config: {command(supports {{node.output}} placeholders), timeout(int, seconds, 0=no timeout, default 30)}. Returns stdout, failures don't block the flow.
-- image_gen: Image generation. config: {prompt, model}
-- audio_gen: Audio synthesis. config: {text, model, voice}
-- video_gen: Video generation. config: {prompt, model, duration}
+- llm: LLM call. REQUIRED: {prompt, model}. Optional: {system, temperature(0-2, default 0.7), top_p(0-1, default 0.9), max_tokens, thinking_level(off|low|medium|high|max), output_format_type(empty|json_auto|json_object|json_array|custom)}. Prompt supports {{NodeLabel.output}} templates. NEVER create an llm node without prompt and model.
+- user_input: Pause and wait for user input. REQUIRED: {prompt (the question or instruction shown to the user)}. Optional: {confirm_only(bool)}.
+- split: Split text into items. REQUIRED: {source_key (which upstream output to split), delimiter: one of paragraph|line|，|。}.
+- condition: Conditional branch (yes/no). REQUIRED: {script (Starlark expression, MUST assign a bool to the variable 'result')}. Access upstream data via ctx["node_label"]["field"]. Built-ins: json_parse(s), split(s, sep). Route from "yes"/"no" output handles.
+- switch: Multi-branch switch. REQUIRED: {script (Starlark expression, MUST assign a string to the variable 'result')}. Each outgoing edge's source_handle matches a case value. Falls back to "default" if empty.
+- transform: Data transform / string formatting. REQUIRED: {template (the transformation template, supports {{NodeLabel.field}} placeholders)}.
+- for_each: Concurrent batch processing. REQUIRED: {items_key (name of the upstream output containing the list)}. Optional: {function(default "llm"), args(map, supports {{item.field}} placeholders)}.
+- iterator: Sequential iteration (skips failures). REQUIRED: {items_key}. Optional: {function(default "llm"), args(map, supports {{item.field}} placeholders)}.
+- loop: Loop until condition is met. REQUIRED: {max_iterations (int, safety limit)}. Optional: {break_field, break_operator (==|!=|>|<|>=|<=|contains), break_value}.
+- script: Execute Python/Starlark code. REQUIRED: {script (the code to execute)}. Access upstream data via ctx["node_label"]["field"].
+- execute: Run a local shell command. REQUIRED: {command (shell command, supports {{NodeLabel.output}} placeholders)}. Optional: {timeout(int, seconds, 0=no timeout, default 30)}. Failures don't block the flow.
+- image_gen: Image generation. REQUIRED: {prompt (image description)}. Optional: {model}.
+- audio_gen: Audio synthesis. REQUIRED: {text (text to speak), model}. Optional: {voice}.
+- video_gen: Video generation. REQUIRED: {prompt (video description)}. Optional: {model, duration}.
 
-Creation rules: nodes must include start and end nodes. edges use source_index/target_index (0-based). Each llm node MUST have prompt and model in its config — never create an llm node without them. Discuss plan → get user confirmation → then create.`,
+Creation rules: nodes must include start and end nodes. edges use source_index/target_index (0-based). Every REQUIRED config field listed above MUST be filled in — never create a node with empty required fields. In DESIGN step, specify the key config values for every node. Discuss plan → get user confirmation → then create.`,
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -106,7 +106,7 @@ Creation rules: nodes must include start and end nodes. edges use source_index/t
 						"properties": map[string]any{
 							"type":   map[string]any{"type": "string", "description": "Node type"},
 							"label":  map[string]any{"type": "string", "description": "Node display label"},
-							"config": map[string]any{"type": "object", "description": "Node config — see node type descriptions above. For llm nodes, prompt and model are REQUIRED."},
+							"config": map[string]any{"type": "object", "description": "Node config — see node type descriptions above for REQUIRED fields. Every node type has specific required config fields that MUST be filled."},
 						},
 					},
 					"description": "Array of nodes. Must include start and end nodes. For llm nodes, config MUST contain prompt and model. Only call after user confirmation",

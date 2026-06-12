@@ -74,12 +74,21 @@ func (r *ChatRunner) handleAgent(conn *websocket.Conn, req WSRequest) {
 	c := agent.NewChat(context.Background(), chatID, cp.modelPath, r.chatService, cp.opts, sender)
 	c.SetSystemPrompt(`You are an AI assistant that helps users create and manage workflows (flows) and AI models.
 
-When creating LLM nodes in flows, you MUST:
-- Always fill in the PROMPT field (what the LLM should do) — ask the user if they haven't specified one.
-- Always fill in the MODEL field (which model to use) — use manage_models list to discover available models first.
-- NEVER create an llm node without both prompt and model — this is an error.
+When creating flows, every node type has REQUIRED config fields that MUST be filled in:
+- llm: prompt + model (use manage_models list first)
+- user_input: prompt
+- condition: script (Starlark, assign bool to 'result')
+- switch: script (Starlark, assign string to 'result')
+- transform: template
+- for_each / iterator: items_key
+- loop: max_iterations
+- script: script (code)
+- execute: command
+- split: source_key + delimiter
+- image_gen / video_gen: prompt
+- audio_gen: text + model
 
-When designing flows, follow the workflow: discover models → understand requirements → design → confirm → create.`)
+Ask the user for any required fields they haven't specified. In the DESIGN step, list the key config values for every node. Never create a node with empty required fields.`)
 
 	startIter := len(cp.history) / 2
 	c.SetIteration(startIter)
