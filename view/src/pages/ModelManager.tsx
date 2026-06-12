@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useModelStore, AIModel } from '@/stores/modelStore'
 import ModelForm, { emptyModelForm, ModelFormData } from '@/components/ModelForm'
@@ -23,11 +23,6 @@ export default function ModelManager() {
     if (category === 'all') return store.models
     return store.models.filter(m => m.category === category)
   }, [store.models, category])
-
-  const providerList = useMemo(() => {
-    const defaults = store.providerDefaults[apiType]
-    return defaults ? Object.keys(defaults) : []
-  }, [store.providerDefaults, apiType])
 
   const maskKey = (key: string) => {
     if (!key) return ''
@@ -149,25 +144,10 @@ export default function ModelManager() {
     display: 'flex', justifyContent: 'flex-end', gap: 8,
     padding: '16px 24px', borderTop: '0.5px solid rgba(16,24,40,0.08)',
   }
-  const inputStyle: React.CSSProperties = {
-    width: '100%', padding: '8px 10px', borderRadius: 8, fontSize: 13,
-    border: '0.5px solid rgba(16,24,40,0.15)', outline: 'none', background: '#fcfcfd', color: '#101828',
-  }
-  const labelStyle: React.CSSProperties = {
-    fontSize: 12, color: '#354052', fontWeight: 500, marginBottom: 4, display: 'block',
-  }
   const emptyState: React.CSSProperties = {
     display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
     padding: '64px 24px', color: '#676f83', fontSize: 14,
   }
-  const stepIndicator: React.CSSProperties = {
-    display: 'flex', gap: 12, marginBottom: 20, padding: '0 24px',
-  }
-  const stepDot = (active: boolean): React.CSSProperties => ({
-    width: 8, height: 8, borderRadius: '50%',
-    background: active ? '#155aef' : '#d0d5dd',
-  })
-
   return (
     <div style={pageBg}>
       {/* Toolbar */}
@@ -253,12 +233,6 @@ export default function ModelManager() {
                 {editId ? t('model.editModel') : t('model.addModel')}
               </span>
               <button onClick={() => setDialogOpen(false)} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#676f83' }}>x</button>
-            </div>
-
-            {/* Step Indicator */}
-            <div style={stepIndicator}>
-              <div style={stepDot(step === 1)} />
-              <div style={stepDot(step === 2)} />
             </div>
 
             <div style={dialogBody}>
