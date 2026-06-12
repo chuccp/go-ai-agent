@@ -3,12 +3,11 @@ import { useTranslation } from 'react-i18next'
 import i18n from '@/i18n'
 import { API_BASE, IS_DESKTOP } from '@/constants'
 import { useFlowStore } from '@/stores/flowStore'
-import { MyRuntimeProvider } from '@/components/assistant-ui/MyRuntimeProvider'
+import { MyRuntimeProvider, type ThreadMessageLike } from '@/components/assistant-ui/MyRuntimeProvider'
 import { Thread } from '@/components/assistant-ui/Thread'
 
 interface Session { id: number; title: string; flow_id?: number | null; created_at: string }
 interface LLMModel { id: string; name: string; provider: string; model: string; category: string; is_default: boolean }
-interface ThreadMessageLike { role: 'assistant' | 'user' | 'system'; content: string }
 
 export default function ChatHome() {
   const { t } = useTranslation()
@@ -121,7 +120,7 @@ export default function ChatHome() {
       const res = await fetch(`${API_BASE}/api/sessions/${id}/messages`)
       const data = await res.json()
       const msgs = Array.isArray(data.data) ? data.data : []
-      setSessionMessages(msgs.map((m: any) => ({ role: m.role, content: m.content })))
+      setSessionMessages(msgs.map((m: any) => ({ role: m.role, content: [{ type: 'text' as const, text: String(m.content ?? '') }] })))
     } catch {
       setSessionMessages([])
     }

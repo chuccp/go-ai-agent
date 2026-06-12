@@ -4,9 +4,9 @@ import { createStreamingWebSocketAdapter } from './WebSocketAdapter'
 import { createIpcAdapter } from './IpcAdapter'
 import { IS_DESKTOP } from '@/constants'
 
-interface ThreadMessageLike {
+export interface ThreadMessageLike {
   role: 'assistant' | 'user' | 'system'
-  content: string
+  content: string | { type: 'text'; text: string }[]
 }
 
 interface RuntimeProviderProps {
