@@ -55,10 +55,16 @@ export default function ChatHome() {
     let ws: WebSocket | null = null
     let reconnecting = false
     const connect = () => {
-      const proto = location.protocol === 'https:' ? 'wss' : 'ws'
-      const isDev = location.port === '5173'
-      const wsHost = isDev ? `${location.hostname}:19009` : location.host
-      const wsUrl = `${proto}://${wsHost}${API_BASE}/ws/chat`
+      let wsUrl: string
+      if (API_BASE) {
+        // Wails dev mode: API_BASE is a full URL like http://localhost:19009
+        wsUrl = API_BASE.replace(/^http/, 'ws') + '/ws/chat'
+      } else {
+        const proto = location.protocol === 'https:' ? 'wss' : 'ws'
+        const isDev = location.port === '5173'
+        const wsHost = isDev ? `${location.hostname}:19009` : location.host
+        wsUrl = `${proto}://${wsHost}/ws/chat`
+      }
       ws = new WebSocket(wsUrl)
       wsRef.current = ws
       ws.onclose = () => {

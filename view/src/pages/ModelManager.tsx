@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useModelStore, AIModel } from '@/stores/modelStore'
 import ModelForm, { emptyModelForm, ModelFormData } from '@/components/ModelForm'
@@ -193,7 +193,7 @@ export default function ModelManager() {
               <div>{t('common.default')}</div>
               <div>{t('common.actions')}</div>
             </div>
-            {filteredModels.map(m => (
+            {filteredModels.map((m: AIModel) => (
               <div key={m.id} style={tableRow}>
                 <div style={{ fontWeight: 500 }}>{m.name}</div>
                 <div style={{ color: '#676f83' }}>{m.provider}</div>

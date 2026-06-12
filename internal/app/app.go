@@ -119,6 +119,10 @@ func CreateDesktop() *wf.WebFrame {
 func loadOrCreateConfig(webMode bool) (*config.Config, bool) {
 	loadConfig, err := config.LoadConfig(configFilePath)
 	if err == nil {
+		// Desktop mode: always ensure desktop flag is set
+		if !webMode {
+			loadConfig.Put("system.desktop", true)
+		}
 		init := loadConfig.GetBoolOrDefault("system.init", false)
 		if init {
 			return loadConfig, false

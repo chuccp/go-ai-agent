@@ -60,10 +60,16 @@ func (l *Api) getSetupStatus(_ *web.Request) (any, error) {
 		}
 	}
 
+	mode := "web"
+	if cfg.GetBoolOrDefault("system.desktop", false) {
+		mode = "desktop"
+	}
+
 	return web.Data(map[string]interface{}{
-		"initialized":  initialized,
-		"dbConfigured": dbConfigured,
-		"hasAdmin":     hasAdmin,
-		"hasBaseModel": hasBaseModel,
+		"initialized":      initialized,
+		"db_configured":    dbConfigured,
+		"admin_configured": hasAdmin,
+		"hasBaseModel":     hasBaseModel,
+		"mode":             mode,
 	}), nil
 }

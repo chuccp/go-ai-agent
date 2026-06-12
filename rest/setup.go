@@ -48,8 +48,6 @@ func (s *SetupRest) Init(ctx *core.Context) error {
 	ctx.Get("/api/setup/providers", s.getProviders)
 
 	// Setup status (per-step progress)
-	ctx.Get("/api/setup/status", s.getSetupStatus)
-
 	// Complete setup
 	ctx.Post("/api/setup/complete", s.completeSetup)
 
