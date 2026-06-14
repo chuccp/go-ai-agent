@@ -26,13 +26,9 @@ type ChatRest struct {
 	sessionModel *model.ChatSessionModel
 	messageModel *model.ChatMessageModel
 	aiModelModel *model.AIModelModel
-	chatRunner   *runner.ChatRunner
-	flowRunner   *runner.FlowRunner
 }
 
-func NewChatRest(r *runner.ChatRunner, fr *runner.FlowRunner) *ChatRest {
-	return &ChatRest{chatRunner: r, flowRunner: fr}
-}
+func NewChatRest() *ChatRest { return &ChatRest{} }
 
 func (c *ChatRest) Init(context *core.Context) error {
 	c.context = context
@@ -46,13 +42,16 @@ func (c *ChatRest) Init(context *core.Context) error {
 	c.messageModel = core.GetModel[*model.ChatMessageModel](context)
 	c.aiModelModel = core.GetModel[*model.AIModelModel](context)
 
+	chatRunner := core.GetRunner[*runner.ChatRunner](context)
+	flowRunner := core.GetRunner[*runner.FlowRunner](context)
+	chatRunner.SetFlowRunner(flowRunner)
+
 	c.context.Get("/api/sessions", c.listSessions)
 	c.context.Post("/api/sessions", c.createSession)
 	c.context.Delete("/api/sessions/:id", c.deleteSession)
 	c.context.Get("/api/sessions/:id/messages", c.getSessionMessages)
 	c.context.Get("/api/models", c.listModels)
-	c.chatRunner.SetFlowRunner(c.flowRunner)
-	c.context.WebSocket("/ws/chat", c.chatRunner.HandleWebSocket)
+	c.context.WebSocket("/ws/chat", chatRunner.HandleWebSocket)
 
 	// File upload
 	c.context.Post("/api/upload", c.uploadFile)

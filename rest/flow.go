@@ -10,7 +10,6 @@ import (
 	"github.com/chuccp/go-ai-agent/entity"
 	"github.com/chuccp/go-ai-agent/flow/export"
 	flowModel "github.com/chuccp/go-ai-agent/model"
-	"github.com/chuccp/go-ai-agent/runner"
 	"github.com/chuccp/go-ai-agent/service"
 	"github.com/chuccp/go-web-frame/core"
 	"github.com/chuccp/go-web-frame/web"
@@ -22,11 +21,10 @@ type FlowRest struct {
 	nodeModel      *flowModel.FlowNodeModel
 	edgeModel      *flowModel.FlowEdgeModel
 	executionModel *flowModel.FlowExecutionModel
-	flowRunner     *runner.FlowRunner
 	flowService    *service.FlowService
 }
 
-func NewFlowRest(fr *runner.FlowRunner) *FlowRest { return &FlowRest{flowRunner: fr} }
+func NewFlowRest() *FlowRest { return &FlowRest{} }
 
 type FlowDetail struct {
 	*entity.FlowDefinition
@@ -40,7 +38,6 @@ func (r *FlowRest) Init(ctx *core.Context) error {
 	r.nodeModel = core.GetModel[*flowModel.FlowNodeModel](ctx)
 	r.edgeModel = core.GetModel[*flowModel.FlowEdgeModel](ctx)
 	r.executionModel = core.GetModel[*flowModel.FlowExecutionModel](ctx)
-	if r.flowRunner != nil { r.flowRunner.Init(ctx) }
 	r.flowService = core.GetService[*service.FlowService](ctx)
 
 	r.context.Get("/api/flows", r.listFlows)

@@ -34,23 +34,21 @@ func Create(webMode bool) *wf.WebFrame {
 
 	chatRunner := runner.NewChatRunner()
 	builder.Runner(chatRunner)
-
-	flowRun := runner.NewFlowRunner()
+	builder.Runner(runner.NewFlowRunner())
 
 	rests := []core.IRest{
 		&rest.Api{},
-		rest.NewChatRest(chatRunner, flowRun),
+		rest.NewChatRest(),
 	}
 
 	if isFirstRun {
 		log.Info("First run detected, enabling setup wizard", zap.String("configPath", configFilePath))
 		rests = append(rests, rest.NewSetupRest(configFilePath))
-	} else {
-		rests = append(rests,
-			rest.NewFlowRest(flowRun),
-			rest.NewModelRest(),
-		)
 	}
+	rests = append(rests,
+		rest.NewFlowRest(),
+		rest.NewModelRest(),
+	)
 
 	builder.Rest(rests...)
 
@@ -79,18 +77,18 @@ func CreateDesktop() (*wf.WebFrame, *runner.ChatRunner) {
 		&cache.Cache{},
 		chat.NewDefaultChatService(),
 		&DesktopInitService{},
+		&service.FlowService{},
 	}
 
 	builder.Service(services...)
 
 	chatRunner := runner.NewChatRunner()
 	builder.Runner(chatRunner)
-
-	flowRun := runner.NewFlowRunner()
+	builder.Runner(runner.NewFlowRunner())
 
 	rests := []core.IRest{
 		&rest.Api{},
-		rest.NewChatRest(chatRunner, flowRun),
+		rest.NewChatRest(),
 	}
 
 	if isFirstRun {
@@ -98,7 +96,7 @@ func CreateDesktop() (*wf.WebFrame, *runner.ChatRunner) {
 		rests = append(rests, rest.NewSetupRest(configFilePath))
 	} else {
 		rests = append(rests,
-			rest.NewFlowRest(flowRun),
+			rest.NewFlowRest(),
 			rest.NewModelRest(),
 		)
 	}

@@ -22,6 +22,7 @@ import (
 
 // FlowRunner manages flow execution via WebSocket interaction
 type FlowRunner struct {
+	core.IRunner
 	ctx            *core.Context
 	chatService    *chat.UnifiedChatService
 	flowModel      *flowModel.FlowModel
@@ -89,6 +90,11 @@ func (r *FlowRunner) Init(ctx *core.Context) error {
 	r.cacheMgr = cache.NewCacheManager("./data/cache", true)
 
 	log.Info("FlowRunner initialized")
+	return nil
+}
+
+func (r *FlowRunner) Run() error {
+	<-r.ctx.Done()
 	return nil
 }
 
