@@ -3,6 +3,7 @@ package rest
 import (
 	"github.com/chuccp/go-ai-agent/config"
 	"github.com/chuccp/go-ai-agent/model"
+	"github.com/chuccp/go-ai-agent/util"
 	wf "github.com/chuccp/go-web-frame"
 	"github.com/chuccp/go-web-frame/core"
 	"github.com/chuccp/go-web-frame/web"
@@ -30,7 +31,7 @@ func (l *Api) Init(context *core.Context) error {
 func (l *Api) index(request *web.Request) (any, error) {
 	return map[string]interface{}{
 		"name":    "go-ai-agent",
-		"version": "1.0.0",
+		"version": util.Version,
 	}, nil
 }
 
