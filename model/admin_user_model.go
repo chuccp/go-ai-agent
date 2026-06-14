@@ -1,6 +1,7 @@
 package model
 
 import (
+	"context"
 	"errors"
 
 	"github.com/chuccp/go-ai-agent/entity"
@@ -18,6 +19,16 @@ func (m *AdminUserModel) Init(d *db.DB, ctx *core.Context) error {
 	tableName := (&entity.AdminUser{}).TableName()
 	m.EntryModel = fwModel.NewEntryModel[*entity.AdminUser, uint](d, tableName)
 	return m.CreateTable()
+}
+
+func (m *AdminUserModel) WithContext(ctx context.Context) *AdminUserModel {
+	if m.EntryModel == nil {
+		return &AdminUserModel{IModel: m.IModel}
+	}
+	return &AdminUserModel{
+		IModel:     m.IModel,
+		EntryModel: m.EntryModel.WithContext(ctx),
+	}
 }
 
 var errAdminNotInitialized = errors.New("admin user model not initialized: database not configured")

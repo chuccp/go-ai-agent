@@ -43,13 +43,13 @@ func (r *ModelRest) getProviders(_ *web.Request) (any, error) {
 func (r *ModelRest) listModels(req *web.Request) (any, error) {
 	category := req.Query("category")
 	if category != "" {
-		models, err := r.aiModel.ListByCategory(category)
+		models, err := r.aiModel.WithContext(req.Ctx()).ListByCategory(category)
 		if err != nil {
 			return nil, err
 		}
 		return web.Data(models), nil
 	}
-	models, err := r.aiModel.List()
+	models, err := r.aiModel.WithContext(req.Ctx()).List()
 	if err != nil {
 		return nil, err
 	}
@@ -79,12 +79,12 @@ func (r *ModelRest) createModel(req *web.Request) (any, error) {
 		m.Category = aiTypes.CategoryLLM
 	}
 	if m.IsDefault {
-		r.aiModel.ClearDefaultByCategory(m.Category)
+		r.aiModel.WithContext(req.Ctx()).ClearDefaultByCategory(m.Category)
 	}
 	if m.IsBase {
-		r.aiModel.ClearBase()
+		r.aiModel.WithContext(req.Ctx()).ClearBase()
 	}
-	if err := r.aiModel.Create(m); err != nil {
+	if err := r.aiModel.WithContext(req.Ctx()).Create(m); err != nil {
 		return nil, err
 	}
 	// Activate provider immediately if system is initialized
@@ -108,7 +108,7 @@ func (r *ModelRest) activateModel(m *entity.AIModel) {
 
 func (r *ModelRest) updateModel(req *web.Request) (any, error) {
 	id := req.ParamUint("id")
-	m, err := r.aiModel.FindById(id)
+	m, err := r.aiModel.WithContext(req.Ctx()).FindById(id)
 	if err != nil {
 		return nil, err
 	}
@@ -147,16 +147,16 @@ func (r *ModelRest) updateModel(req *web.Request) (any, error) {
 		m.ThinkingLevel = v
 	}
 	if isDefault := jsonBool(j, "is_default"); isDefault {
-		r.aiModel.ClearDefaultByCategory(m.Category)
+		r.aiModel.WithContext(req.Ctx()).ClearDefaultByCategory(m.Category)
 		m.IsDefault = true
 	}
 	if _, ok := (*j)["is_base"]; ok {
 		if isBase := jsonBool(j, "is_base"); isBase {
-			r.aiModel.ClearBase()
+			r.aiModel.WithContext(req.Ctx()).ClearBase()
 		}
 		m.IsBase = jsonBool(j, "is_base")
 	}
-	if err := r.aiModel.Update(m); err != nil {
+	if err := r.aiModel.WithContext(req.Ctx()).Update(m); err != nil {
 		return nil, err
 	}
 	// Reconfigure provider if system is initialized
@@ -168,7 +168,7 @@ func (r *ModelRest) updateModel(req *web.Request) (any, error) {
 
 func (r *ModelRest) deleteModel(req *web.Request) (any, error) {
 	id := req.ParamUint("id")
-	if err := r.aiModel.Delete(id); err != nil {
+	if err := r.aiModel.WithContext(req.Ctx()).Delete(id); err != nil {
 		return nil, err
 	}
 	r.chatService.UnregisterProvider(id)
@@ -177,13 +177,13 @@ func (r *ModelRest) deleteModel(req *web.Request) (any, error) {
 
 func (r *ModelRest) setDefault(req *web.Request) (any, error) {
 	id := req.ParamUint("id")
-	m, err := r.aiModel.FindById(id)
+	m, err := r.aiModel.WithContext(req.Ctx()).FindById(id)
 	if err != nil {
 		return nil, err
 	}
-	r.aiModel.ClearDefaultByCategory(m.Category)
+	r.aiModel.WithContext(req.Ctx()).ClearDefaultByCategory(m.Category)
 	m.IsDefault = true
-	if err := r.aiModel.Update(m); err != nil {
+	if err := r.aiModel.WithContext(req.Ctx()).Update(m); err != nil {
 		return nil, err
 	}
 	return web.Data(m), nil
@@ -191,13 +191,13 @@ func (r *ModelRest) setDefault(req *web.Request) (any, error) {
 
 func (r *ModelRest) setBase(req *web.Request) (any, error) {
 	id := req.ParamUint("id")
-	m, err := r.aiModel.FindById(id)
+	m, err := r.aiModel.WithContext(req.Ctx()).FindById(id)
 	if err != nil {
 		return nil, err
 	}
-	r.aiModel.ClearBase()
+	r.aiModel.WithContext(req.Ctx()).ClearBase()
 	m.IsBase = true
-	if err := r.aiModel.Update(m); err != nil {
+	if err := r.aiModel.WithContext(req.Ctx()).Update(m); err != nil {
 		return nil, err
 	}
 	return web.Data(m), nil

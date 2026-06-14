@@ -1,6 +1,7 @@
 package model
 
 import (
+	"context"
 	"errors"
 
 	"github.com/chuccp/go-ai-agent/entity"
@@ -18,6 +19,16 @@ func (m *AIModelModel) Init(d *db.DB, ctx *core.Context) error {
 	tableName := (&entity.AIModel{}).TableName()
 	m.EntryModel = fwModel.NewEntryModel[*entity.AIModel, uint](d, tableName)
 	return m.CreateTable()
+}
+
+func (m *AIModelModel) WithContext(ctx context.Context) *AIModelModel {
+	if m.EntryModel == nil {
+		return &AIModelModel{IModel: m.IModel}
+	}
+	return &AIModelModel{
+		IModel:     m.IModel,
+		EntryModel: m.EntryModel.WithContext(ctx),
+	}
 }
 
 var errNotInitialized = errors.New("AI model not initialized: database not configured")

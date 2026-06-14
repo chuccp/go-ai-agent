@@ -216,24 +216,24 @@ func (s *SetupRest) putAdminInit(req *web.Request) (any, error) {
 		return nil, errors.New("admin model not initialized")
 	}
 
-	hasAdmin, err := adminModel.HasAdminUser()
+	hasAdmin, err := adminModel.WithContext(req.Ctx()).HasAdminUser()
 	if err != nil {
 		return nil, errors.New("failed to query admin status: " + err.Error())
 	}
 
 	if hasAdmin {
 		// Reset existing admin password
-		user, err := adminModel.FindByUsername(username)
+		user, err := adminModel.WithContext(req.Ctx()).FindByUsername(username)
 		if err != nil {
 			return nil, errors.New("admin user not found, please check username")
 		}
-		if err := adminModel.UpdatePassword(user.Id, hash); err != nil {
+		if err := adminModel.WithContext(req.Ctx()).UpdatePassword(user.Id, hash); err != nil {
 			return nil, errors.New("failed to reset password: " + err.Error())
 		}
 		log.Info("Admin password reset", zap.String("username", username))
 	} else {
 		// Create new admin
-		if err := adminModel.Create(&entity.AdminUser{
+		if err := adminModel.WithContext(req.Ctx()).Create(&entity.AdminUser{
 			Username:     username,
 			PasswordHash: hash,
 			IsAdmin:      true,
@@ -263,10 +263,10 @@ func (s *SetupRest) getAdminExists(req *web.Request) (any, error) {
 		}), nil
 	}
 
-	hasAdmin, _ := adminModel.HasAdminUser()
+	hasAdmin, _ := adminModel.WithContext(req.Ctx()).HasAdminUser()
 	adminName := ""
 	if hasAdmin {
-		user, err := adminModel.FindByUsername("")
+		user, err := adminModel.WithContext(req.Ctx()).FindByUsername("")
 		if err == nil && user != nil {
 			adminName = user.Username
 		}
@@ -330,7 +330,7 @@ func (s *SetupRest) putModelInit(req *web.Request) (any, error) {
 		Description: j.GetString("description"),
 	}
 
-	if err := aiModel.Create(m); err != nil {
+	if err := aiModel.WithContext(req.Ctx()).Create(m); err != nil {
 		return nil, errors.New("failed to create base model: " + err.Error())
 	}
 
@@ -346,7 +346,7 @@ func (s *SetupRest) getProviders(_ *web.Request) (any, error) {
 
 // ---- Setup Status ----
 
-func (s *SetupRest) getSetupStatus(_ *web.Request) (any, error) {
+func (s *SetupRest) getSetupStatus(req *web.Request) (any, error) {
 	cfg := s.context.GetConfig()
 
 	initialized := cfg.GetBoolOrDefault("system.init", false)
@@ -356,7 +356,7 @@ func (s *SetupRest) getSetupStatus(_ *web.Request) (any, error) {
 	if dbConfigured {
 		adminModel := core.GetModel[*model.AdminUserModel](s.context)
 		if adminModel != nil {
-			hasAdmin, _ := adminModel.HasAdminUser()
+			hasAdmin, _ := adminModel.WithContext(req.Ctx()).HasAdminUser()
 			adminConfigured = hasAdmin
 		}
 	}

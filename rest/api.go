@@ -38,7 +38,7 @@ func (l *Api) health(request *web.Request) (any, error) {
 	return web.Ok("healthy"), nil
 }
 
-func (l *Api) getSetupStatus(_ *web.Request) (any, error) {
+func (l *Api) getSetupStatus(req *web.Request) (any, error) {
 	cfg := l.context.GetConfig()
 	initialized := cfg.GetBoolOrDefault("system.init", false)
 	dbConfigured := cfg.HasKey("web.db") && cfg.GetString("web.db.type") != ""
@@ -49,13 +49,13 @@ func (l *Api) getSetupStatus(_ *web.Request) (any, error) {
 	if dbConfigured {
 		adminModel := core.GetModel[*model.AdminUserModel](l.context)
 		if adminModel != nil {
-			ok, _ := adminModel.HasAdminUser()
+			ok, _ := adminModel.WithContext(req.Ctx()).HasAdminUser()
 			hasAdmin = ok
 		}
 
 		aiModel := core.GetModel[*model.AIModelModel](l.context)
 		if aiModel != nil {
-			models, _ := aiModel.FindBase()
+			models, _ := aiModel.WithContext(req.Ctx()).FindBase()
 			hasBaseModel = len(models) > 0
 		}
 	}

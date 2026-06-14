@@ -1,6 +1,7 @@
 package model
 
 import (
+	"context"
 	"errors"
 
 	"github.com/chuccp/go-ai-agent/entity"
@@ -14,6 +15,21 @@ type ChatSessionModel struct {
 	core.IModel
 	*fwModel.EntryModel[*entity.ChatSession, uint]
 	messageModel *ChatMessageModel
+}
+
+func (m *ChatSessionModel) WithContext(ctx context.Context) *ChatSessionModel {
+	var mm *ChatMessageModel
+	if m.messageModel != nil {
+		mm = m.messageModel.WithContext(ctx)
+	}
+	if m.EntryModel == nil {
+		return &ChatSessionModel{IModel: m.IModel, messageModel: mm}
+	}
+	return &ChatSessionModel{
+		IModel:       m.IModel,
+		EntryModel:   m.EntryModel.WithContext(ctx),
+		messageModel: mm,
+	}
 }
 
 var errSessionNotInitialized = errors.New("chat session model not initialized: database not configured")
@@ -121,6 +137,16 @@ func (m *ChatSessionModel) ReNew(d *db.DB, c *core.Context) core.IModel {
 type ChatMessageModel struct {
 	core.IModel
 	*fwModel.EntryModel[*entity.ChatMessage, uint]
+}
+
+func (m *ChatMessageModel) WithContext(ctx context.Context) *ChatMessageModel {
+	if m.EntryModel == nil {
+		return &ChatMessageModel{IModel: m.IModel}
+	}
+	return &ChatMessageModel{
+		IModel:     m.IModel,
+		EntryModel: m.EntryModel.WithContext(ctx),
+	}
 }
 
 var errMessageNotInitialized = errors.New("chat message model not initialized: database not configured")

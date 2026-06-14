@@ -11,6 +11,7 @@ import (
 	"github.com/chuccp/go-ai-agent/flow/export"
 	flowModel "github.com/chuccp/go-ai-agent/model"
 	"github.com/chuccp/go-ai-agent/runner"
+	"github.com/chuccp/go-ai-agent/service"
 	"github.com/chuccp/go-web-frame/core"
 	"github.com/chuccp/go-web-frame/web"
 )
@@ -22,6 +23,7 @@ type FlowRest struct {
 	edgeModel      *flowModel.FlowEdgeModel
 	executionModel *flowModel.FlowExecutionModel
 	flowRunner     *runner.FlowRunner
+	flowService    *service.FlowService
 }
 
 func NewFlowRest(fr *runner.FlowRunner) *FlowRest { return &FlowRest{flowRunner: fr} }
@@ -39,6 +41,7 @@ func (r *FlowRest) Init(ctx *core.Context) error {
 	r.edgeModel = core.GetModel[*flowModel.FlowEdgeModel](ctx)
 	r.executionModel = core.GetModel[*flowModel.FlowExecutionModel](ctx)
 	if r.flowRunner != nil { r.flowRunner.Init(ctx) }
+	r.flowService = core.GetService[*service.FlowService](ctx)
 
 	r.context.Get("/api/flows", r.listFlows)
 	r.context.Post("/api/flows", r.createFlow)
@@ -59,110 +62,66 @@ func (r *FlowRest) listFlows(req *web.Request) (any, error) {
 	c := req.Query("category")
 	var fs []*entity.FlowDefinition
 	var err error
-	if c != "" { fs, err = r.flowModel.ListByCategory(c) } else { fs, err = r.flowModel.List() }
+	if c != "" { fs, err = r.flowModel.WithContext(req.Ctx()).ListByCategory(c) } else { fs, err = r.flowModel.WithContext(req.Ctx()).List() }
 	if err != nil { return nil, err }
 	return web.Data(fs), nil
 }
 
 func (r *FlowRest) createFlow(req *web.Request) (any, error) {
 	j, _ := req.Json()
-	n := j.GetString("name")
-	if n == "" { n = "Untitled Flow" }
-	f := &entity.FlowDefinition{Name: n, Description: j.GetString("description"), Category: j.GetString("category"), Config: j.GetString("config")}
-	if err := r.flowModel.Create(f); err != nil { return nil, err }
-	r.saveNodesAndEdges(f.Id, map[string]any(*j))
+	name := j.GetString("name")
+	if name == "" { name = "Untitled Flow" }
+	nodes, edges := extractNodesAndEdges(map[string]any(*j))
+	f, err := r.flowService.CreateFlow(name, j.GetString("description"), j.GetString("category"), j.GetString("config"), nodes, edges)
+	if err != nil { return nil, err }
 	return web.Data(f), nil
 }
 
 func (r *FlowRest) getFlow(req *web.Request) (any, error) {
 	id := req.ParamUint("id")
-	f, err := r.flowModel.FindById(id)
+	f, err := r.flowModel.WithContext(req.Ctx()).FindById(id)
 	if err != nil { return nil, err }
-	ns, _ := r.nodeModel.FindByFlowId(id)
-	es, _ := r.edgeModel.FindByFlowId(id)
+	ns, _ := r.nodeModel.WithContext(req.Ctx()).FindByFlowId(id)
+	es, _ := r.edgeModel.WithContext(req.Ctx()).FindByFlowId(id)
 	return web.Data(&FlowDetail{FlowDefinition: f, Nodes: ns, Edges: es}), nil
 }
 
 func (r *FlowRest) updateFlow(req *web.Request) (any, error) {
 	id := req.ParamUint("id")
-	f, err := r.flowModel.FindById(id)
-	if err != nil { return nil, err }
 	j, _ := req.Json()
-	if v := j.GetString("name"); v != "" { f.Name = v }
-	if v := j.GetString("description"); v != "" { f.Description = v }
-	if v := j.GetString("category"); v != "" { f.Category = v }
-	if v := j.GetString("config"); v != "" { f.Config = v }
-	r.saveNodesAndEdges(id, map[string]any(*j))
-	if err := r.flowModel.Update(f); err != nil { return nil, err }
+	nodes, edges := extractNodesAndEdges(map[string]any(*j))
+	if err := r.flowService.UpdateFlow(id, j.GetString("name"), j.GetString("description"), j.GetString("category"), j.GetString("config"), nodes, edges); err != nil {
+		return nil, err
+	}
+	f, _ := r.flowModel.WithContext(req.Ctx()).FindById(id)
 	return web.Data(f), nil
 }
 
 func (r *FlowRest) duplicateFlow(req *web.Request) (any, error) {
 	id := req.ParamUint("id")
-	src, err := r.flowModel.FindById(id)
+	clone, err := r.flowService.DuplicateFlow(id)
 	if err != nil { return nil, err }
-	clone := &entity.FlowDefinition{Name: src.Name + " (copy)", Description: src.Description, Category: src.Category, Config: src.Config}
-	if err := r.flowModel.Create(clone); err != nil { return nil, err }
-	sns, _ := r.nodeModel.FindByFlowId(id)
-	idMap := make(map[uint]uint)
-	for _, n := range sns {
-		oid := n.Id; n.Id = 0; n.FlowId = clone.Id
-		r.nodeModel.Create(n)
-		idMap[oid] = n.Id
-	}
-	ses, _ := r.edgeModel.FindByFlowId(id)
-	for _, e := range ses {
-		e.Id = 0; e.FlowId = clone.Id
-		if nid, ok := idMap[e.SourceNodeId]; ok { e.SourceNodeId = nid }
-		if nid, ok := idMap[e.TargetNodeId]; ok { e.TargetNodeId = nid }
-		r.edgeModel.Create(e)
-	}
 	return web.Data(clone), nil
 }
 
 func (r *FlowRest) deleteFlow(req *web.Request) (any, error) {
 	id := req.ParamUint("id")
-	r.nodeModel.DeleteByFlowId(id)
-	r.edgeModel.DeleteByFlowId(id)
-	if err := r.flowModel.Delete(id); err != nil { return nil, err }
+	if err := r.flowService.DeleteFlow(id); err != nil { return nil, err }
 	return web.Ok("deleted"), nil
 }
 
-func (r *FlowRest) saveNodesAndEdges(flowId uint, jsonMap map[string]any) {
+func extractNodesAndEdges(jsonMap map[string]any) ([]*entity.FlowNode, []*entity.FlowEdge) {
 	var ns []*entity.FlowNode
-	idMap := make(map[uint]uint)
 	if nodesRaw, ok := jsonMap["nodes"]; ok {
 		nodesBytes, _ := json.Marshal(nodesRaw)
-		if json.Unmarshal(nodesBytes, &ns) != nil { return }
-		r.nodeModel.DeleteByFlowId(flowId)
-		oldIds := make([]uint, len(ns))
-		for i, n := range ns {
-			oldIds[i] = n.Id
-			n.Id = 0
-			n.FlowId = flowId
-			r.nodeModel.Create(n)
-		}
-		// Reload to get real DB IDs, build oldId->newId mapping
-		savedNodes, _ := r.nodeModel.FindByFlowId(flowId)
-		for i, sn := range savedNodes {
-			if i < len(oldIds) {
-				idMap[oldIds[i]] = sn.Id
-			}
-		}
+		json.Unmarshal(nodesBytes, &ns)
 	}
+	var es []*entity.FlowEdge
 	if edgesRaw, ok := jsonMap["edges"]; ok {
 		edgesBytes, _ := json.Marshal(edgesRaw)
-		var es []*entity.FlowEdge
-		if json.Unmarshal(edgesBytes, &es) != nil { return }
-		r.edgeModel.DeleteByFlowId(flowId)
-		for _, e := range es {
-			e.Id = 0
-			e.FlowId = flowId
-			if nid, ok := idMap[e.SourceNodeId]; ok { e.SourceNodeId = nid }
-			if nid, ok := idMap[e.TargetNodeId]; ok { e.TargetNodeId = nid }
-			r.edgeModel.Create(e)
-		}
+		json.Unmarshal(edgesBytes, &es)
 	}
+	return ns, es
 }
 
 func (r *FlowRest) executeFlow(req *web.Request) (any, error) {
@@ -170,7 +129,7 @@ func (r *FlowRest) executeFlow(req *web.Request) (any, error) {
 	j, _ := req.Json()
 	sid := uint(j.GetInt("session_id"))
 	exec := &entity.FlowExecution{FlowId: fid, SessionId: sid, Status: "created", Context: "{}"}
-	if err := r.executionModel.Create(exec); err != nil { return nil, err }
+	if err := r.executionModel.WithContext(req.Ctx()).Create(exec); err != nil { return nil, err }
 	return web.Data(map[string]any{"execution_id": exec.Id, "flow_id": fid}), nil
 }
 
@@ -179,10 +138,10 @@ func (r *FlowRest) listExecutions(req *web.Request) (any, error) {
 	var err error
 	if fid := req.Query("flow_id"); fid != "" {
 		id, _ := strconv.ParseUint(fid, 10, 64)
-		es, err = r.executionModel.FindByFlowId(uint(id))
+		es, err = r.executionModel.WithContext(req.Ctx()).FindByFlowId(uint(id))
 	} else if sid := req.Query("session_id"); sid != "" {
 		id, _ := strconv.ParseUint(sid, 10, 64)
-		es, err = r.executionModel.FindBySessionId(uint(id))
+		es, err = r.executionModel.WithContext(req.Ctx()).FindBySessionId(uint(id))
 	} else {
 		return web.Data([]any{}), nil
 	}
@@ -193,12 +152,12 @@ func (r *FlowRest) listExecutions(req *web.Request) (any, error) {
 // exportFlow downloads a flow as a ZIP package.
 func (r *FlowRest) exportFlow(req *web.Request) (any, error) {
 	id := req.ParamUint("id")
-	f, err := r.flowModel.FindById(id)
+	f, err := r.flowModel.WithContext(req.Ctx()).FindById(id)
 	if err != nil {
 		return nil, err
 	}
-	ns, _ := r.nodeModel.FindByFlowId(id)
-	es, _ := r.edgeModel.FindByFlowId(id)
+	ns, _ := r.nodeModel.WithContext(req.Ctx()).FindByFlowId(id)
+	es, _ := r.edgeModel.WithContext(req.Ctx()).FindByFlowId(id)
 
 	data, err := export.BuildFlowPackage(f.Name, ns, es, f.Description, f.Category)
 	if err != nil {
@@ -247,7 +206,7 @@ func (r *FlowRest) importFlow(req *web.Request) (any, error) {
 		Description: fd.Description,
 		Category:    fd.Category,
 	}
-	if err := r.flowModel.Create(flow); err != nil {
+	if err := r.flowModel.WithContext(req.Ctx()).Create(flow); err != nil {
 		return nil, fmt.Errorf("failed to create flow: %w", err)
 	}
 
@@ -257,7 +216,7 @@ func (r *FlowRest) importFlow(req *web.Request) (any, error) {
 		oldID := n.Id
 		n.Id = 0
 		n.FlowId = flow.Id
-		if err := r.nodeModel.Create(n); err != nil {
+		if err := r.nodeModel.WithContext(req.Ctx()).Create(n); err != nil {
 			return nil, fmt.Errorf("failed to create node: %w", err)
 		}
 		idMap[oldID] = n.Id
@@ -272,7 +231,7 @@ func (r *FlowRest) importFlow(req *web.Request) (any, error) {
 		if nid, ok := idMap[e.TargetNodeId]; ok {
 			e.TargetNodeId = nid
 		}
-		if err := r.edgeModel.Create(e); err != nil {
+		if err := r.edgeModel.WithContext(req.Ctx()).Create(e); err != nil {
 			return nil, fmt.Errorf("failed to create edge: %w", err)
 		}
 	}

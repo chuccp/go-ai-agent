@@ -5,6 +5,7 @@ import (
 	"github.com/chuccp/go-ai-agent/model"
 	"github.com/chuccp/go-ai-agent/rest"
 	"github.com/chuccp/go-ai-agent/runner"
+	"github.com/chuccp/go-ai-agent/service"
 	wf "github.com/chuccp/go-web-frame"
 	"github.com/chuccp/go-web-frame/component/cache"
 	"github.com/chuccp/go-web-frame/component/cors"
@@ -26,6 +27,7 @@ func Create(webMode bool) *wf.WebFrame {
 	services := []core.IService{
 		&cache.Cache{},
 		chat.NewDefaultChatService(),
+		&service.FlowService{},
 	}
 
 	builder.Service(services...)

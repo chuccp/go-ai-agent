@@ -1,6 +1,8 @@
 package model
 
 import (
+	"context"
+
 	"github.com/chuccp/go-ai-agent/entity"
 	"github.com/chuccp/go-web-frame/core"
 	"github.com/chuccp/go-web-frame/db"
@@ -12,6 +14,13 @@ import (
 type FlowExecutionModel struct {
 	core.IModel
 	*fwModel.EntryModel[*entity.FlowExecution, uint]
+}
+
+func (m *FlowExecutionModel) WithContext(ctx context.Context) *FlowExecutionModel {
+	return &FlowExecutionModel{
+		IModel:     m.IModel,
+		EntryModel: m.EntryModel.WithContext(ctx),
+	}
 }
 
 func (m *FlowExecutionModel) Init(d *db.DB, ctx *core.Context) error {

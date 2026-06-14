@@ -68,7 +68,7 @@ func (c *ChatRest) Init(context *core.Context) error {
 }
 
 func (c *ChatRest) listSessions(request *web.Request) (any, error) {
-	sessions, err := c.sessionModel.List()
+	sessions, err := c.sessionModel.WithContext(request.Ctx()).List()
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +87,7 @@ func (c *ChatRest) createSession(request *web.Request) (any, error) {
 	}
 
 	session := &entity.ChatSession{Title: title}
-	if err := c.sessionModel.Create(session); err != nil {
+	if err := c.sessionModel.WithContext(request.Ctx()).Create(session); err != nil {
 		return nil, err
 	}
 
@@ -96,7 +96,7 @@ func (c *ChatRest) createSession(request *web.Request) (any, error) {
 
 func (c *ChatRest) deleteSession(request *web.Request) (any, error) {
 	id := request.ParamUint("id")
-	if err := c.sessionModel.Delete(id); err != nil {
+	if err := c.sessionModel.WithContext(request.Ctx()).Delete(id); err != nil {
 		return nil, err
 	}
 	return web.Ok("deleted"), nil
@@ -104,7 +104,7 @@ func (c *ChatRest) deleteSession(request *web.Request) (any, error) {
 
 func (c *ChatRest) getSessionMessages(request *web.Request) (any, error) {
 	sessionId := request.ParamUint("id")
-	messages, err := c.messageModel.FindBySessionId(sessionId)
+	messages, err := c.messageModel.WithContext(request.Ctx()).FindBySessionId(sessionId)
 	if err != nil {
 		return nil, err
 	}
@@ -117,7 +117,7 @@ func (c *ChatRest) listModels(request *web.Request) (any, error) {
 		category = aiTypes.CategoryLLM
 	}
 
-	dbModels, err := c.aiModelModel.ListByCategory(category)
+	dbModels, err := c.aiModelModel.WithContext(request.Ctx()).ListByCategory(category)
 	if err != nil {
 		return nil, err
 	}
