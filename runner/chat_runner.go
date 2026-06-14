@@ -48,8 +48,8 @@ func (r *ChatRunner) Init(ctx *core.Context) error {
 
 	toolRegistry := core.GetService[*tool.Registry](ctx)
 	if toolRegistry != nil {
-		toolRegistry.FlowHandler = r.handleFlowAction
-		toolRegistry.ModelHandler = r.handleModelAction
+		toolRegistry.SetFlowHandler(r.handleFlowAction)
+		toolRegistry.SetModelHandler(r.handleModelAction)
 	}
 
 	r.flowRunner = core.GetRunner[*FlowRunner](ctx)

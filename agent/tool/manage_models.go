@@ -10,9 +10,6 @@ import (
 	"encoding/json"
 )
 
-// ModelActionHandler is the handler for AI model CRUD operations (injected by runner).
-type ModelActionHandler func(action string, params map[string]any) (string, error)
-
 // pendingModelOp stores a model operation awaiting confirmation.
 type pendingModelOp struct {
 	action  string
@@ -57,7 +54,11 @@ func dropPendingOp(key string) {
 
 // ManageModels lets the user manage AI models through conversation.
 type ManageModels struct {
-	reg *Registry
+	modelHandler ModelActionHandler
+}
+
+func (t *ManageModels) SetModelHandler(h ModelActionHandler) {
+	t.modelHandler = h
 }
 
 func (t *ManageModels) Definition() Definition {
@@ -133,10 +134,10 @@ For creating a model, you need: name (display name), provider (e.g. openai, deep
 }
 
 func (t *ManageModels) Execute(call Call) (string, error) {
-	if t.reg == nil || t.reg.ModelHandler == nil {
+	if t.modelHandler == nil {
 		return "", fmt.Errorf("model handler not initialized")
 	}
-	mh := t.reg.ModelHandler
+	mh := t.modelHandler
 
 	var params map[string]any
 	if err := json.Unmarshal([]byte(call.Arguments), &params); err != nil {

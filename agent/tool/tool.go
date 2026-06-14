@@ -26,3 +26,21 @@ type Executor interface {
 	Execute(call Call) (string, error)
 	Definition() Definition
 }
+
+// FlowActionHandler handles flow operations (injected by runner)
+type FlowActionHandler func(action string, args map[string]any) (string, error)
+
+// ModelActionHandler handles AI model CRUD operations (injected by runner)
+type ModelActionHandler func(action string, params map[string]any) (string, error)
+
+// FlowHandlerSetter is implemented by tools that need a flow action handler.
+// Registry.Register auto-injects the handler via this interface.
+type FlowHandlerSetter interface {
+	SetFlowHandler(handler FlowActionHandler)
+}
+
+// ModelHandlerSetter is implemented by tools that need a model action handler.
+// Registry.Register auto-injects the handler via this interface.
+type ModelHandlerSetter interface {
+	SetModelHandler(handler ModelActionHandler)
+}

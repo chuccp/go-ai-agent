@@ -11,8 +11,8 @@ import (
 // tool registries (e.g., per context or per application instance).
 type Registry struct {
 	registry     map[string]Executor
-	FlowHandler  FlowActionHandler
-	ModelHandler ModelActionHandler
+	flowHandler  FlowActionHandler
+	modelHandler ModelActionHandler
 }
 
 // NewRegistry creates a new tool registry.
@@ -20,19 +20,52 @@ func NewRegistry() *Registry {
 	return &Registry{registry: make(map[string]Executor)}
 }
 
+// SetFlowHandler sets the flow action handler and pushes it to any tool
+// that implements FlowHandlerSetter.
+func (r *Registry) SetFlowHandler(h FlowActionHandler) {
+	r.flowHandler = h
+	for _, e := range r.registry {
+		if s, ok := e.(FlowHandlerSetter); ok {
+			s.SetFlowHandler(h)
+		}
+	}
+}
+
+// SetModelHandler sets the model action handler and pushes it to any tool
+// that implements ModelHandlerSetter.
+func (r *Registry) SetModelHandler(h ModelActionHandler) {
+	r.modelHandler = h
+	for _, e := range r.registry {
+		if s, ok := e.(ModelHandlerSetter); ok {
+			s.SetModelHandler(h)
+		}
+	}
+}
+
 func (r *Registry) Init(ctx *core.Context) error {
 	r.Register(&ExecuteCommand{})
 	r.Register(&ReadDocument{})
 	r.Register(&WebSearch{})
-	r.Register(&ManageFlows{reg: r})
-	r.Register(&ManageModels{reg: r})
+	r.Register(&ManageFlows{})
+	r.Register(&ManageModels{})
 	return nil
 }
 
-// Register adds an executor to the registry.
+// Register adds an executor to the registry and auto-injects handlers
+// if the executor implements FlowHandlerSetter / ModelHandlerSetter.
 func (r *Registry) Register(e Executor) {
 	def := e.Definition()
 	r.registry[def.Name] = e
+	if r.flowHandler != nil {
+		if s, ok := e.(FlowHandlerSetter); ok {
+			s.SetFlowHandler(r.flowHandler)
+		}
+	}
+	if r.modelHandler != nil {
+		if s, ok := e.(ModelHandlerSetter); ok {
+			s.SetModelHandler(r.modelHandler)
+		}
+	}
 }
 
 // Get returns an executor by name.
