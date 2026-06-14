@@ -13,17 +13,6 @@ import (
 // ModelActionHandler is the handler for AI model CRUD operations (injected by runner).
 type ModelActionHandler func(action string, params map[string]any) (string, error)
 
-var modelHandler ModelActionHandler
-
-// SetModelHandler registers the model operation handler.
-func SetModelHandler(handler ModelActionHandler) {
-	modelHandler = handler
-}
-
-func init() {
-	Register(&ManageModels{})
-}
-
 // pendingModelOp stores a model operation awaiting confirmation.
 type pendingModelOp struct {
 	action  string
@@ -67,7 +56,9 @@ func dropPendingOp(key string) {
 }
 
 // ManageModels lets the user manage AI models through conversation.
-type ManageModels struct{}
+type ManageModels struct {
+	reg *Registry
+}
 
 func (t *ManageModels) Definition() Definition {
 	return Definition{
@@ -142,9 +133,10 @@ For creating a model, you need: name (display name), provider (e.g. openai, deep
 }
 
 func (t *ManageModels) Execute(call Call) (string, error) {
-	if modelHandler == nil {
+	if t.reg == nil || t.reg.ModelHandler == nil {
 		return "", fmt.Errorf("model handler not initialized")
 	}
+	mh := t.reg.ModelHandler
 
 	var params map[string]any
 	if err := json.Unmarshal([]byte(call.Arguments), &params); err != nil {
@@ -158,7 +150,7 @@ func (t *ManageModels) Execute(call Call) (string, error) {
 
 	switch action {
 	case "list", "get":
-		return modelHandler(action, params)
+		return mh(action, params)
 
 	case "create", "update", "delete":
 		if confirmKey, _ := params["confirm_key"].(string); confirmKey != "" {
@@ -166,7 +158,7 @@ func (t *ManageModels) Execute(call Call) (string, error) {
 			if !found {
 				return "Confirmation key is invalid or expired. Please retry the operation.", nil
 			}
-			return modelHandler(op.action, op.params)
+			return mh(op.action, op.params)
 		}
 		key := storePendingOp(action, params)
 		desc := describePendingOp(action, params)
@@ -181,7 +173,7 @@ func (t *ManageModels) Execute(call Call) (string, error) {
 		if !found {
 			return "Confirmation key is invalid or expired. Please retry the operation.", nil
 		}
-		return modelHandler(op.action, op.params)
+		return mh(op.action, op.params)
 
 	case "cancel":
 		confirmKey, _ := params["confirm_key"].(string)

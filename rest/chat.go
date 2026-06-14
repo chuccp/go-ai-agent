@@ -42,9 +42,7 @@ func (c *ChatRest) Init(context *core.Context) error {
 	c.messageModel = core.GetModel[*model.ChatMessageModel](context)
 	c.aiModelModel = core.GetModel[*model.AIModelModel](context)
 
-	chatRunner := core.GetRunner[*runner.ChatRunner](context)
-	flowRunner := core.GetRunner[*runner.FlowRunner](context)
-	chatRunner.SetFlowRunner(flowRunner)
+		chatRunner := core.GetRunner[*runner.ChatRunner](context)
 
 	c.context.Get("/api/sessions", c.listSessions)
 	c.context.Post("/api/sessions", c.createSession)

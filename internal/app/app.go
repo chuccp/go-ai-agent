@@ -1,6 +1,7 @@
 package app
 
 import (
+	"github.com/chuccp/go-ai-agent/agent/tool"
 	"github.com/chuccp/go-ai-agent/ai/chat"
 	"github.com/chuccp/go-ai-agent/model"
 	"github.com/chuccp/go-ai-agent/rest"
@@ -27,6 +28,7 @@ func Create(webMode bool) *wf.WebFrame {
 	services := []core.IService{
 		&cache.Cache{},
 		chat.NewDefaultChatService(),
+		tool.NewRegistry(),
 		&service.FlowService{},
 	}
 
@@ -76,6 +78,7 @@ func CreateDesktop() (*wf.WebFrame, *runner.ChatRunner) {
 	services := []core.IService{
 		&cache.Cache{},
 		chat.NewDefaultChatService(),
+		tool.NewRegistry(),
 		&DesktopInitService{},
 		&service.FlowService{},
 	}

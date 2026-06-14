@@ -46,9 +46,24 @@ func (r *ChatRunner) Init(ctx *core.Context) error {
 	r.nodeModel = core.GetModel[*model.FlowNodeModel](ctx)
 	r.edgeModel = core.GetModel[*model.FlowEdgeModel](ctx)
 
-	tool.SetFlowHandler(r.handleFlowAction)
-	tool.SetModelHandler(r.handleModelAction)
+	toolRegistry := core.GetService[*tool.Registry](ctx)
+	if toolRegistry != nil {
+		toolRegistry.FlowHandler = r.handleFlowAction
+		toolRegistry.ModelHandler = r.handleModelAction
+	}
 
+	r.flowRunner = core.GetRunner[*FlowRunner](ctx)
+	if r.flowRunner != nil {
+		r.flowRunner.SetSendFunc(func(data []byte) {
+			r.mu.Lock()
+			defer r.mu.Unlock()
+			for conn := range r.activeConns {
+				if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
+					log.Warn("flow event write failed", zap.Error(err))
+				}
+			}
+		})
+	}
 	// If system is already initialized, load providers from DB immediately.
 	// Otherwise defer until after setup completes (checked in Run() tick).
 	if ctx.GetConfig().GetBoolOrDefault("system.init", false) {
@@ -96,20 +111,6 @@ func (r *ChatRunner) loadProvidersFromDB() {
 	log.Info("providers loaded from DB", zap.Int("count", len(models)))
 }
 
-func (r *ChatRunner) SetFlowRunner(fr *FlowRunner) {
-	r.flowRunner = fr
-	if fr != nil {
-		fr.SetSendFunc(func(data []byte) {
-			r.mu.Lock()
-			defer r.mu.Unlock()
-			for conn := range r.activeConns {
-				if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
-					log.Warn("flow event write failed", zap.Error(err))
-				}
-			}
-		})
-	}
-}
 
 func (r *ChatRunner) Run() error {
 	ticker := time.NewTicker(30 * time.Second)

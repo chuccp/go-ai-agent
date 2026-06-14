@@ -1,7 +1,6 @@
 package runner
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -90,7 +89,7 @@ func (r *ChatRunner) handleAgent(conn *websocket.Conn, req WSRequest) {
 
 	sender := &wsSender{conn: conn, runner: r}
 	chatID := fmt.Sprintf("%d", cp.sessionID)
-	c := agent.NewChat(context.Background(), chatID, cp.modelPath, r.chatService, cp.opts, sender)
+	c := agent.NewChat(r.ctx, chatID, cp.modelPath, cp.opts, sender)
 	c.SetSystemPrompt(agentSystemPrompt)
 
 	startIter := len(cp.history) / 2

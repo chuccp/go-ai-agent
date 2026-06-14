@@ -10,8 +10,8 @@ import (
 	"github.com/chuccp/go-ai-agent/agent"
 	"github.com/chuccp/go-ai-agent/ai/chat/common"
 	"github.com/chuccp/go-ai-agent/entity"
-	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 	"github.com/chuccp/go-web-frame/log"
+	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 	"go.uber.org/zap"
 )
 
@@ -99,7 +99,7 @@ func (r *ChatRunner) StartAgentIPC(ctx context.Context, sessionID uint, modelPat
 
 	sender := newIpcSender(ctx, sessionID)
 	chatID := fmt.Sprintf("%d", sessionID)
-	c := agent.NewChat(context.Background(), chatID, modelPath, r.chatService, opts, sender)
+	c := agent.NewChat(r.ctx, chatID, modelPath, opts, sender)
 	c.SetSystemPrompt(agentSystemPrompt)
 
 	startIter := len(history) / 2

@@ -8,10 +8,6 @@ import (
 	"time"
 )
 
-func init() {
-	Register(&ExecuteCommand{})
-}
-
 // ExecuteCommand executes local commands
 type ExecuteCommand struct{}
 

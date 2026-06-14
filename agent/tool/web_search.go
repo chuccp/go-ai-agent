@@ -10,10 +10,6 @@ import (
 	"time"
 )
 
-func init() {
-	Register(&WebSearch{})
-}
-
 // WebSearch is an internet search tool.
 // For Claude models, type=web_search_20260209 is handled natively by the API, bypassing Execute.
 // For other models (OpenAI/Gemini etc.), Execute performs actual search via DuckDuckGo.

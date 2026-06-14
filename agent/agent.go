@@ -10,6 +10,7 @@ import (
 	"github.com/chuccp/go-ai-agent/agent/tool"
 	"github.com/chuccp/go-ai-agent/ai/chat"
 	"github.com/chuccp/go-ai-agent/ai/chat/common"
+	"github.com/chuccp/go-web-frame/core"
 	"github.com/chuccp/go-web-frame/log"
 	"go.uber.org/zap"
 )
@@ -80,6 +81,7 @@ type Chat struct {
 	opts           *common.LLMOptions
 	svc            *chat.UnifiedChatService
 	conn           Sender
+	toolRegistry    *tool.Registry
 
 	messages []Message   // Full message history
 	mu       sync.Mutex
@@ -88,16 +90,18 @@ type Chat struct {
 	systemPrompt string
 }
 
-// NewChat creates a new agent conversation
-func NewChat(ctx context.Context, id string, path string, service *chat.UnifiedChatService, opts *common.LLMOptions, conn Sender) *Chat {
+// NewChat creates a new agent conversation.
+// It resolves UnifiedChatService and ToolRegistry from the given core.Context.
+func NewChat(appCtx *core.Context, id string, path string, opts *common.LLMOptions, conn Sender) *Chat {
 	return &Chat{
-		ctx:      ctx,
-		id:       id,
-		path:     path,
-		svc:      service,
-		opts:     opts,
-		conn:     conn,
-		messages: make([]Message, 0),
+		ctx:          context.Background(),
+		id:           id,
+		path:         path,
+		svc:          core.GetService[*chat.UnifiedChatService](appCtx),
+		opts:         opts,
+		conn:         conn,
+		toolRegistry: core.GetService[*tool.Registry](appCtx),
+		messages:     make([]Message, 0),
 	}
 }
 
@@ -140,7 +144,7 @@ func (c *Chat) Process() {
 	if c.iteration == 0 {
 		// Only reset on first Process call; preserves SetIteration override
 	}
-	c.opts.SetTools(tool.List())
+	c.opts.SetTools(c.toolRegistry.List())
 
 	for c.iteration < MaxIterations {
 		if c.ctx.Err() != nil {
@@ -219,7 +223,7 @@ func (c *Chat) addToolCalls(resp *common.ChatResponse) {
 
 		start := time.Now()
 		call := tool.Call{ID: tc.ID, Name: tc.Name, Arguments: tc.Arguments}
-		result := tool.Execute(call)
+		result := c.toolRegistry.Execute(call)
 		duration := time.Since(start).Milliseconds()
 
 		tr := ToolResult{

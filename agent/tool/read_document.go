@@ -13,10 +13,6 @@ import (
 	"github.com/xuri/excelize/v2"
 )
 
-func init() {
-	Register(&ReadDocument{})
-}
-
 // ReadDocument reads uploaded document files (TXT, DOCX, XLSX, PDF).
 type ReadDocument struct{}
 

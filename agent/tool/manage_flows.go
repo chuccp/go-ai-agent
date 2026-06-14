@@ -8,19 +8,10 @@ import (
 // FlowActionHandler handles flow operations (injected by runner)
 type FlowActionHandler func(action string, args map[string]any) (string, error)
 
-var flowHandler FlowActionHandler
-
-// SetFlowHandler registers a flow operation handler
-func SetFlowHandler(handler FlowActionHandler) {
-	flowHandler = handler
-}
-
-func init() {
-	Register(&ManageFlows{})
-}
-
 // ManageFlows is a flow management tool - create/query/update/delete flows via conversation
-type ManageFlows struct{}
+type ManageFlows struct {
+	reg *Registry
+}
 
 func (t *ManageFlows) Definition() Definition {
 	return Definition{
@@ -131,7 +122,7 @@ Creation rules: nodes must include start and end nodes. edges use source_index/t
 }
 
 func (t *ManageFlows) Execute(call Call) (string, error) {
-	if flowHandler == nil {
+	if t.reg == nil || t.reg.FlowHandler == nil {
 		return "", fmt.Errorf("flow handler not initialized")
 	}
 
@@ -145,5 +136,5 @@ func (t *ManageFlows) Execute(call Call) (string, error) {
 		return "", fmt.Errorf("action is required")
 	}
 
-	return flowHandler(action, params)
+	return t.reg.FlowHandler(action, params)
 }
