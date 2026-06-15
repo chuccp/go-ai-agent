@@ -12,7 +12,7 @@ Built with **Wails v2** + **React** + **Go**.
 
 ## Core Concept: App = Flow
 
-In Go AI Agent, **an App is a Flow**. There's no separate "package" or "skill" management — you create an app, design its flow visually or via chat, and run it. Everything is unified under a single concept.
+In Go AI Agent, **an App is a Flow**. There's no separate "package" or "skill" management — you create an app, design its flow visually or via chat, and run it.
 
 - **App**: A complete, self-contained workflow with nodes, edges, and configurations
 - **Flow**: The visual representation of an app's logic
