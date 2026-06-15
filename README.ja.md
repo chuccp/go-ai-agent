@@ -1,8 +1,8 @@
 # Go AI Agent
 
-> 🚧 **開発中** — このプロジェクトは活発に開発中です。Claude Fable 5 を使って機能の改善・完成にご協力いただける方を歓迎します。ありがとうございます！
+> 🚧 **開発中** — プロジェクトは活発に開発中です。貢献を歓迎します！
 
-クロスプラットフォームデスクトップ AI エージェントプラットフォーム。**チャットで AI ワークフローを作成** — 自然言語でやりたいことを説明するだけで、エージェントがパイプラインを設計・構築・実行します。
+クロスプラットフォームデスクトップ AI エージェントプラットフォーム。**チャットでアプリを作成** — 自然言語でやりたいことを説明するだけで、エージェントがフローを設計・構築・実行します。
 
 **Wails v2** + **React** + **Go** で構築。
 
@@ -10,34 +10,28 @@
 
 ![Screenshot](screenshot.webp)
 
-## チャットによるワークフロー作成の利点
+## コアコンセプト：アプリ = フロー
 
-従来のワークフローツールでは、ビジュアルエディタの使い方を学ぶ必要がありました — ノードをドラッグし、エッジを配線し、パラメータを設定します。Go AI Agent では、必要なことを伝えるだけです：
+Go AI Agent では、**アプリはフローです**。独立した「パッケージ」や「スキル」管理はありません — アプリを作成し、チャットまたは視覚的にそのフローを設計し、実行します。すべてが単一の概念の下に統合されています。
 
-> *「最新のAIニュースを取得し、DeepSeekで要約し、要約を日本語に翻訳して、保存前に私にレビューさせてください」*
-
-エージェントは**意図を理解 → ノード構造を提案 → 確認を待つ → 自動的にフローを作成**します。手動配線も設定の推測も不要です。会話を通じて反復的に改善できます — 「モデルをGPT-5に変更して」「要約の前に感情分析ステップを追加して」 — エージェントがすぐにフローを更新します。
-
-**手動エディタと比較した利点：**
-
-- **学習不要** — ノードタイプ、接続ルール、設定スキーマを学ぶ必要なし
-- **自然な反復** — 同僚と話すように、会話を通じてフローを洗練
-- **設計ガイダンス** — エージェントがベストプラクティスを提案（例：「このフローには送信前のユーザー確認ステップが必要です」）
-- **高速プロトタイピング** — アイデアから動作するパイプラインまで1分未満
-- **完全な制御** — ビジュアルエディタでいつでも手動微調整が可能
+- **アプリ (App)**：ノード、エッジ、設定を含む完全で自己完結したワークフロー
+- **フロー (Flow)**：アプリのロジックの視覚的表現
+- **スキルノード (Skill Node)**：フロー内で直接プロンプトを実行するノード（外部スキル管理不要）
 
 ## 機能
 
-- **チャットによるワークフロー作成** — 自然言語での会話を通じて `manage_flows` ツールで AI パイプラインを構築
-- **ビジュアルフローデザイナー** — Difyスタイルのドラッグ＆ドロップDAGエディタ、16種類のノード、必要に応じて手動編集可能
-- **スクリプトノード** — 条件とスイッチノードは Starlark（Python方言）式を使用、全アップストリームデータにアクセス可能
-- **汎用バッチ処理** — ForEach と Iterator ノードは任意の関数を呼び出し、LLM に限定されない
-- **デスクトップアプリ** — Wails v2によるネイティブ macOS/Windows/Linux ウィンドウ、IPC通信を使用
-- **ワンステップ設定** — デスクトップ版はSQLite + 管理者アカウントを自動設定、モデルAPIキーのみ必要
-- **アプリ共有** — アプリをZIPパッケージとしてエクスポート（app.json + meta.json）、ワンクリックでインポート実行
+- **チャットでアプリ作成** — 自然言語会話を通じて完全なワークフローを構築
+- **視覚的フローデザイナー** — 17種類のノードタイプをサポートするドラッグ＆ドロップDAGエディタ
+- **17種類のノードタイプ**：start, end, llm, skill, user_input, condition, switch, transform, split, for_each, iterator, loop, script, execute, image_gen, audio_gen, video_gen
+- **スキルノード** — フロー内で直接プロンプトを実行（外部スキル管理不要）
+- **スクリプトベースのロジック** — 条件とスイッチノードは Starlark（Python方言）を使用して複雑な分岐を実装
+- **バッチ処理** — 配列処理用の for_each（並列）と iterator（逐次）ノード
+- **デスクトップアプリ** — Wails v2 によるネイティブ Windows/macOS/Linux、IPC通信を使用
+- **Webモード** — ブラウザベースのサーバーとして実行、WebSocket通信を使用
+- **ワンステップ設定** — デスクトップモードは SQLite + 管理者アカウントを自動設定
+- **アプリエクスポート** — アプリをZIPパッケージとしてエクスポート、ワンクリックでインポート
 - **マルチモデル** — OpenAI、Claude、Gemini、DeepSeekなど28以上のプロバイダーに統一インターフェースで対応
 - **Agentツール実行** — 拡張可能なツールレジストリ：manage_flows、manage_models、execute_command、read_document、web_search
-- **Webモード** — `cmd/server/main.go` でブラウザサーバーとして起動
 - **多言語** — English, 简体中文, 繁體中文, 日本語
 
 ## クイックスタート
@@ -51,138 +45,203 @@ go install github.com/wailsapp/wails/v2/cmd/wails@latest
 git clone https://github.com/chuccp/go-ai-agent.git
 cd go-ai-agent
 
-# ワンクリック開発モード
-wails dev
+# 開発モード（ホットリロード）
+make desktop-dev  # macOS/Linux
+dev.bat           # Windows
 
-# macOS .app をビルド
-wails build
+# 本番アプリをビルド
+make desktop-build  # macOS/Linux
+wails build         # 手動
 ```
 
-ビルド成果物は `build/bin/go-ai-agent.app`。ダブルクリックで起動、初回起動時はSQLiteとデフォルト管理者アカウント（admin/admin）を自動設定、モデルAPIキーの設定のみ必要です。
+初回実行時に SQLite を自動設定し、デフォルトの管理者アカウント（admin/admin）を作成します。モデル API キーを設定するだけです。
 
 ### Webサーバーモード
 
 ```bash
-go build -o go-ai-agent-server ./cmd/server/
+make server-build  # macOS/Linux
+go build -o go-ai-agent-server.exe ./cmd/server/  # Windows
+
 ./go-ai-agent-server
 ```
 
-`http://localhost:19009` を開くと、初回実行時にセットアップウィザードが表示されます。
+`http://localhost:19009` を開きます — 初回実行時にセットアップウィザードが表示されます。
 
 ## アーキテクチャ
 
+### デスクトップモード (IPC)
 ```
-デスクトップモード                    Webモード
-┌──────────────────────┐            ┌──────────────────────┐
-│  Native WebView      │            │  ブラウザ             │
-│  ┌────────────────┐  │            └─────────┬────────────┘
-│  │  React フロント  │  │                      │ HTTP/WS
-│  │  (埋め込み)      │  │                      │
-│  └───────┬────────┘  │            ┌─────────▼────────────┐
-└──────────┼───────────┘            │  Go HTTP サーバー     │
-           │ IPC                    │  ├─ REST API         │
-┌──────────▼──────────────────────┐ │  ├─ WebSocket        │
-│  Go HTTP サーバー :19009        │ │  ├─ Agent + ツール    │
-│  ├─ REST API + CORS             │ │  └─ フローエンジン    │
-│  ├─ IPC イベント (Wails)        │ └──────────────────────┘
+┌─────────────────────────────────┐
+│  Native WebView (Wails v2)      │
+│  ┌───────────────────────────┐  │
+│  │  React フロントエンド      │  │
+│  │  - ChatHome               │  │
+│  │  - FlowDesigner           │  │
+│  │  - ModelManager           │  │
+│  └──────────┬────────────────┘  │
+└─────────────┼───────────────────┘
+              │ Wails IPC (Events)
+┌─────────────┼───────────────────┐
+│  Go バックエンド :19009         │
+│  ├─ REST API (/api/*)           │
+│  ├─ IPC イベントバス            │
 │  ├─ Agent + ツール              │
-│  └─ フローエンジン (DAG)        │
+│  └─ フローエンジン (DAG実行)    │
 └─────────────────────────────────┘
 ```
 
-**デスクトップモード**: Wails IPC を使用した通信（WebSocket不要）  
-**Webモード**: リアルタイム通信に WebSocket を使用
-
-## プロジェクト構成
-
+### Webモード (WebSocket)
 ```
-go-ai-agent/
-├── main.go                  # デスクトップエントリー (Wails)
-├── cmd/server/main.go       # Webサーバーエントリー
-├── internal/
-│   ├── app/                 # 共有セットアップ（設定、デスクトップ初期化、CORS）
-│   ├── agent/               # エージェントループとツールレジストリ
-│   │   └── tool/            # ツール実装
-│   ├── ai/                  # AIサービス
-│   │   └── chat/            # 統合チャットサービス + 28以上のプロバイダー
-│   ├── entity/              # データベースエンティティ（FlowDefinition, AIModelなど）
-│   ├── model/               # データアクセス層
-│   ├── rest/                # RESTエンドポイント
-│   ├── runner/              # ChatRunner, FlowRunner
-│   └── flow/                # フローエンジン
-│       ├── engine/          # DAGエグゼキューター、タスクマネージャー、関数レジストリ
-│       ├── nodes/           # ノード実装（16種類）
-│       └── export/          # ZIPインポート/エクスポート
-├── view/                    # Reactフロントエンド
-│   └── src/
-│       ├── pages/           # ChatHome, FlowDesigner, ModelManager, SetupWizard
-│       ├── components/      # 共有コンポーネント（ModelForm, IpcAdapter）
-│       ├── stores/          # Zustand状態管理
-│       └── i18n/            # 多言語ファイル（en, zh, zh-TW, ja）
-├── wails.json               # Wailsプロジェクト設定
-├── Makefile                 # ビルドターゲット
-└── dev.bat                  # ワンクリックデスクトップ開発ランチャー (Windows)
+┌─────────────────────────────────┐
+│  ブラウザ                        │
+│  ┌───────────────────────────┐  │
+│  │  React フロントエンド      │  │
+│  └──────────┬────────────────┘  │
+└─────────────┼───────────────────┘
+              │ WebSocket (/ws/chat)
+              │ HTTP (/api/*)
+┌─────────────┼───────────────────┐
+│  Go バックエンド :19009         │
+│  ├─ REST API                    │
+│  ├─ WebSocket サーバー          │
+│  ├─ Agent + ツール              │
+│  └─ フローエンジン              │
+└─────────────────────────────────┘
 ```
 
-## フローエンジン
+**通信プロトコル：**
+- デスクトップ：Wails IPC イベント（例：`chat:{sessionId}:chunk`）
+- Web：WebSocket メッセージ（JSON形式）
 
-**16種類のノード**: `start`, `end`, `llm`, `skill`, `user_input`, `condition`, `switch`, `transform`, `split`, `for_each`, `iterator`, `loop`, `script`, `execute`, `image_gen`, `audio_gen`, `video_gen`
+## ノードタイプ
 
-**スキルノード**: モデル選択でプロンプトを直接実行
-```json
-{ "prompt": "{{start.output}}", "model": "1.default" }
-```
+### 基本ノード
+- **start**：フローの開始点
+- **end**：フローの終了点
+- **user_input**：ユーザー入力または確認を待機
 
-**スクリプトベースノード**は Starlark（Python方言）を使用:
+### AIノード
+- **llm**：プロンプトとシステムメッセージでLLMを呼び出し
+- **skill**：プロンプトを直接実行（簡略化されたLLMノード）
+- **image_gen**：AIモデルで画像を生成
+- **audio_gen**：AIモデルで音声/スピーチを生成
+- **video_gen**：AIモデルで動画を生成
+
+### ロジックノード
+- **condition**：if/else分岐（Starlarkブール式）
+- **switch**：多方向分岐（Starlark文字列式）
+- **loop**：条件を満たすまで繰り返し実行
+
+### データ処理ノード
+- **transform**：Goテンプレートベースのデータ変換
+- **split**：区切り文字でテキストをJSON配列に分割
+- **for_each**：配列項目を並列処理
+- **iterator**：配列項目を逐次処理
+
+### 実行ノード
+- **script**：Starlark Pythonカスタムコード
+- **execute**：ローカルシェルコマンドを実行
+
+## スクリプトベースノード
+
+**条件**と**スイッチ**ノードは Starlark（Python方言）を使用：
+
 ```python
-# 条件ノード: bool を返す → "yes"/"no" 分岐
+# 条件：boolを返す → "yes"/"no"分岐
 v = ctx["user_input"]["output"].lower()
 result = v in ("yes", "confirm", "ok")
 
-# スイッチノード: string を返す → 一致する source_handle にルーティング
+# スイッチ：stringを返す → 一致するsource_handleにルーティング
 score = int(ctx["score"]["output"])
 if score >= 90:  result = "A"
 elif score >= 60: result = "B"
 else:            result = "C"
 ```
 
-**汎用バッチ処理** — ForEach と Iterator は登録された任意の関数を呼び出す:
+## バッチ処理
+
+**for_each** は並列実行：
 ```json
 { "items_key": "split", "function": "llm", "args": { "model": "...", "prompt": "{{item.output}}" } }
 ```
-ForEach は並列実行、Iterator は順次実行（失敗をスキップ）。
 
-**実行ノード**はローカルシェルコマンドを実行、設定可能なタイムアウト（`0` = 制限なし）。
+**iterator** は逐次実行（失敗をスキップ）：
+```json
+{ "items_key": "split", "function": "llm", "args": { "model": "...", "prompt": "{{item.output}}" } }
+```
 
-**アプリエクスポート**はZIP形式（`app.json` + `meta.json`）を使用。
+## スキルノード
 
-## 通信プロトコル
+スキルノードはプロンプトを直接実行 — 外部スキル管理不要：
 
-### デスクトップモード (IPC)
-- Wails Events を使用したリアルタイム通信
-- イベントパターン: `chat:{sessionId}:{type}`（例: `chat:5:chunk`）
-- イベントタイプ: `chunk`, `tool_call`, `tool_result`, `error`, `session_created`
+```json
+{
+  "prompt": "以下のテキストを要約：\n\n{{llm.output}}",
+  "model": "1.default"
+}
+```
 
-### Webモード (WebSocket)
-- `ws://localhost:19009/ws/chat` に接続
-- メッセージタイプ:
-  - `chat` / `agent` — ChatRunner に送信
-  - `flow_start` / `flow_user_response` / `flow_stop` — フロー実行制御
-  - レスポンス: `chunk`, `tool_call`, `tool_result`, `error`, `session_created`
+スキルノードは本質的に簡略化されたLLMノードで、フロー内で素早くプロンプトを実行するために使用されます。
+
+## アプリエクスポート形式
+
+アプリはZIPパッケージとしてエクスポートされ、以下を含みます：
+- `meta.json`：アプリメタデータ（名前、アイコン、説明）
+- `app.json`：ノードとエッジを含むフロー定義
+- `resources/`：追加ファイル（あれば）
+
+```bash
+# エクスポート：アプリ → ZIPファイル
+# インポート：ZIPファイル → アプリ
+```
+
+## プロジェクト構造
+
+```
+go-ai-agent/
+├── main.go                  # デスクトップエントリー (Wails)
+├── cmd/server/main.go       # Webサーバーエントリー
+├── internal/
+│   ├── agent/               # エージェントループとツールレジストリ
+│   │   └── tool/            # ツール実装
+│   ├── ai/                  # AIサービス
+│   │   └── chat/            # 統合チャットサービス + 28以上のプロバイダー
+│   ├── app/                 # アプリケーション設定と構成
+│   ├── config/              # 設定管理
+│   ├── entity/              # データベースエンティティ（FlowDefinition, AIModelなど）
+│   ├── flow/                # フローエンジン
+│   │   ├── engine/          # DAG実行、タスクマネージャー、関数レジストリ
+│   │   ├── nodes/           # 17種類のノードタイプ実装
+│   │   └── export/          # アプリのエクスポート/インポート（ZIP形式）
+│   ├── model/               # データアクセス層
+│   ├── rest/                # REST APIエンドポイント
+│   ├── runner/              # ChatRunner, FlowRunner
+│   ├── service/             # ビジネスロジックサービス
+│   └── util/                # ユーティリティ
+├── view/                    # Reactフロントエンド
+│   └── src/
+│       ├── pages/           # ChatHome, FlowDesigner, FlowRunner, ModelManager, SetupWizard
+│       ├── components/      # 共有コンポーネント（ModelForm, IpcAdapterなど）
+│       ├── stores/          # Zustand状態ストア
+│       └── i18n/            # ロケールファイル（en, zh, zh-TW, ja）
+├── wails.json               # Wailsプロジェクト設定
+├── Makefile                 # ビルドターゲット
+└── dev.bat                  # ワンクリックデスクトップ開発ランチャー（Windows）
+```
 
 ## 技術スタック
 
-| レイヤー | 技術 |
-|---------|------|
-| デスクトップシェル | Wails v2 (システム WebView) |
-| バックエンド | Go + go-web-frame + CORS ミドルウェア |
+| 階層 | 技術 |
+|------|------|
+| デスクトップシェル | Wails v2（システムWebView） |
+| バックエンド | Go + go-web-frame + CORSミドルウェア |
 | フロントエンド | React 18 + TypeScript + Vite |
 | フローエディタ | reactflow + Zustand |
-| チャット UI | @assistant-ui/react |
+| チャットUI | @assistant-ui/react |
 | 国際化 | react-i18next |
-| データベース | SQLite (デスクトップ) / MySQL / PostgreSQL (Web) |
-| 通信方式 | IPC (デスクトップ) / WebSocket (Web) |
+| データベース | SQLite（デスクトップ）/ MySQL / PostgreSQL（Web） |
+| 通信 | IPC（デスクトップ）/ WebSocket（Web） |
 
-## License
+## ライセンス
 
 MIT

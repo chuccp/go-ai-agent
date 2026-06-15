@@ -1,8 +1,8 @@
 # Go AI Agent
 
-> 🚧 **开发中** — 项目正在活跃开发，欢迎使用 Claude Fable 5 来帮助完善功能，非常感谢！
+> 🚧 **开发中** — 项目正在活跃开发，欢迎贡献！
 
-跨平台桌面 AI 智能体平台。**通过聊天创建 AI 工作流** — 用自然语言描述你的需求，AI 智能体为你设计、构建并执行流水线。
+跨平台桌面 AI 智能体平台。**通过聊天创建应用** — 用自然语言描述你的需求，AI 智能体为你设计、构建并执行流程。
 
 基于 **Wails v2** + **React** + **Go** 构建。
 
@@ -10,34 +10,28 @@
 
 ![Screenshot](screenshot.webp)
 
-## 为什么用聊天创建工作流？
+## 核心概念：应用 = 流程
 
-传统的流程工具需要学习可视化编辑器 — 拖拽节点、连接边线、配置参数。使用 Go AI Agent，你只需要告诉它你想要什么：
+在 Go AI Agent 中，**应用就是流程**。没有独立的"包"或"技能"管理 — 你创建一个应用，通过聊天或可视化方式设计其流程，然后运行它。所有概念统一在单一概念下。
 
-> *"帮我创建一个流程：抓取最新的 AI 新闻，用 DeepSeek 进行摘要，把摘要翻译成日语，让我审核后再保存。"*
-
-智能体会**理解你的意图 → 提出节点结构方案 → 等待你确认 → 自动创建流程**。不需要手动连线，不需要猜测配置。你可以通过对话逐步优化 — "把模型换成 GPT-5"、"在摘要之前加一步情感分析" — 智能体立即更新流程。
-
-**相比手动编辑器的优势：**
-
-- **零学习成本** — 不需要学习节点类型、连线规则、配置参数
-- **自然迭代** — 通过对话优化流程，就像和同事讨论一样
-- **设计指导** — 智能体会建议最佳实践（如"这个流程在发送前应加一个用户确认步骤"）
-- **快速原型** — 从想法到可运行的流水线，不到一分钟
-- **完全可控** — 随时可以在可视化编辑器中手动微调
+- **应用 (App)**：一个完整的、自包含的工作流，包含节点、边和配置
+- **流程 (Flow)**：应用逻辑的可视化表示
+- **技能节点 (Skill Node)**：直接在流程中执行 prompt 的节点（无需外部技能管理）
 
 ## 功能特性
 
-- **聊天创建工作流** — 通过自然语言对话，使用 `manage_flows` 工具构建 AI 流水线
-- **可视化流程设计器** — Dify 风格拖拽式 DAG 编辑器，16 种节点类型，需要时可手动编辑
-- **脚本节点** — 条件和切换节点使用 Starlark（Python 方言）表达式，可访问所有上游数据
-- **通用批处理** — ForEach 和 Iterator 节点调用任意函数，不局限于 LLM
-- **桌面应用** — 基于 Wails v2 的原生 macOS/Windows/Linux 窗口，使用 IPC 通信
-- **一步配置** — 桌面版自动配置 SQLite + 管理员账号，仅需设置模型 API Key
-- **应用分享** — 将应用导出为 ZIP 包（app.json + meta.json），一键导入运行
+- **聊天创建应用** — 通过自然语言对话构建完整的工作流
+- **可视化流程设计器** — 拖拽式 DAG 编辑器，支持 17 种节点类型
+- **17 种节点类型**：start, end, llm, skill, user_input, condition, switch, transform, split, for_each, iterator, loop, script, execute, image_gen, audio_gen, video_gen
+- **技能节点** — 直接在流程中执行 prompt（无需外部技能管理）
+- **基于脚本的逻辑** — 条件和切换节点使用 Starlark（Python 方言）实现复杂分支
+- **批处理** — for_each（并行）和 iterator（顺序）节点用于数组处理
+- **桌面应用** — 通过 Wails v2 实现原生 Windows/macOS/Linux，使用 IPC 通信
+- **Web 模式** — 作为基于浏览器的服务器运行，使用 WebSocket 通信
+- **一步配置** — 桌面模式自动配置 SQLite + 管理员账号
+- **应用导出** — 将应用导出为 ZIP 包，一键导入
 - **多模型支持** — OpenAI、Claude、Gemini、DeepSeek 等 28+ 提供商统一接口
 - **Agent 工具调用** — 可扩展工具注册表：manage_flows、manage_models、execute_command、read_document、web_search
-- **Web 模式** — 通过 `cmd/server/main.go` 启动为浏览器服务器
 - **多语言** — English, 简体中文, 繁體中文, 日本語
 
 ## 快速开始
@@ -51,47 +45,155 @@ go install github.com/wailsapp/wails/v2/cmd/wails@latest
 git clone https://github.com/chuccp/go-ai-agent.git
 cd go-ai-agent
 
-# 一键开发模式
-wails dev
+# 开发模式（热重载）
+make desktop-dev  # macOS/Linux
+dev.bat           # Windows
 
-# 构建 macOS .app
-wails build
+# 构建生产应用
+make desktop-build  # macOS/Linux
+wails build         # 手动
 ```
 
-构建产物在 `build/bin/go-ai-agent.app`，双击启动。首次运行自动配置 SQLite 并创建默认管理员账号（admin/admin），仅需配置模型 API Key。
+首次运行自动配置 SQLite 并创建默认管理员账号（admin/admin）。你只需要配置模型 API 密钥。
 
 ### Web 服务器模式
 
 ```bash
-go build -o go-ai-agent-server ./cmd/server/
+make server-build  # macOS/Linux
+go build -o go-ai-agent-server.exe ./cmd/server/  # Windows
+
 ./go-ai-agent-server
 ```
 
-访问 `http://localhost:19009`，首次运行进入设置向导。
+打开 `http://localhost:19009` — 首次运行会打开设置向导。
 
 ## 系统架构
 
+### 桌面模式 (IPC)
 ```
-桌面模式                          Web 模式
-┌──────────────────────┐            ┌──────────────────────┐
-│  Native WebView      │            │  浏览器               │
-│  ┌────────────────┐  │            └─────────┬────────────┘
-│  │  React 前端     │  │                      │ HTTP/WS
-│  │  (嵌入式)       │  │                      │
-│  └───────┬────────┘  │            ┌─────────▼────────────┐
-└──────────┼───────────┘            │  Go HTTP 服务器       │
-           │ IPC                    │  ├─ REST API         │
-┌──────────▼──────────────────────┐ │  ├─ WebSocket        │
-│  Go HTTP 服务器 :19009          │ │  ├─ Agent + 工具      │
-│  ├─ REST API + CORS             │ │  └─ 流程引擎          │
-│  ├─ IPC 事件 (Wails)            │ └──────────────────────┘
+┌─────────────────────────────────┐
+│  Native WebView (Wails v2)      │
+│  ┌───────────────────────────┐  │
+│  │  React 前端               │  │
+│  │  - ChatHome               │  │
+│  │  - FlowDesigner           │  │
+│  │  - ModelManager           │  │
+│  └──────────┬────────────────┘  │
+└─────────────┼───────────────────┘
+              │ Wails IPC (Events)
+┌─────────────┼───────────────────┐
+│  Go 后端 :19009                 │
+│  ├─ REST API (/api/*)           │
+│  ├─ IPC 事件总线                │
 │  ├─ Agent + 工具                │
-│  └─ 流程引擎 (DAG)              │
+│  └─ 流程引擎 (DAG 执行器)       │
 └─────────────────────────────────┘
 ```
 
-**桌面模式**：使用 Wails IPC 进行通信（无需 WebSocket）  
-**Web 模式**：使用 WebSocket 进行实时通信
+### Web 模式 (WebSocket)
+```
+┌─────────────────────────────────┐
+│  浏览器                         │
+│  ┌───────────────────────────┐  │
+│  │  React 前端               │  │
+│  └──────────┬────────────────┘  │
+└─────────────┼───────────────────┘
+              │ WebSocket (/ws/chat)
+              │ HTTP (/api/*)
+┌─────────────┼───────────────────┐
+│  Go 后端 :19009                 │
+│  ├─ REST API                    │
+│  ├─ WebSocket 服务器            │
+│  ├─ Agent + 工具                │
+│  └─ 流程引擎                    │
+└─────────────────────────────────┘
+```
+
+**通信协议：**
+- 桌面：Wails IPC 事件（例如 `chat:{sessionId}:chunk`）
+- Web：WebSocket 消息（JSON 格式）
+
+## 节点类型
+
+### 基础节点
+- **start**：流程入口点
+- **end**：流程出口点
+- **user_input**：等待用户输入或确认
+
+### AI 节点
+- **llm**：使用 prompt 和系统消息调用 LLM
+- **skill**：直接执行 prompt（简化的 LLM 节点）
+- **image_gen**：通过 AI 模型生成图像
+- **audio_gen**：通过 AI 模型生成音频/语音
+- **video_gen**：通过 AI 模型生成视频
+
+### 逻辑节点
+- **condition**：if/else 分支（Starlark 布尔表达式）
+- **switch**：多路分支（Starlark 字符串表达式）
+- **loop**：重复执行直到满足条件
+
+### 数据处理节点
+- **transform**：基于 Go 模板的数据转换
+- **split**：按分隔符将文本拆分为 JSON 数组
+- **for_each**：并行处理数组项
+- **iterator**：顺序处理数组项
+
+### 执行节点
+- **script**：Starlark Python 自定义代码
+- **execute**：运行本地 shell 命令
+
+## 基于脚本的节点
+
+**条件**和**切换**节点使用 Starlark（Python 方言）：
+
+```python
+# 条件：返回 bool → "yes"/"no" 分支
+v = ctx["user_input"]["output"].lower()
+result = v in ("yes", "confirm", "ok")
+
+# 切换：返回 string → 路由到匹配的 source_handle
+score = int(ctx["score"]["output"])
+if score >= 90:  result = "A"
+elif score >= 60: result = "B"
+else:            result = "C"
+```
+
+## 批处理
+
+**for_each** 并行运行：
+```json
+{ "items_key": "split", "function": "llm", "args": { "model": "...", "prompt": "{{item.output}}" } }
+```
+
+**iterator** 顺序运行（跳过失败）：
+```json
+{ "items_key": "split", "function": "llm", "args": { "model": "...", "prompt": "{{item.output}}" } }
+```
+
+## 技能节点
+
+技能节点直接执行 prompt — 无需外部技能管理：
+
+```json
+{
+  "prompt": "总结以下文本：\n\n{{llm.output}}",
+  "model": "1.default"
+}
+```
+
+技能节点本质上是简化的 LLM 节点，用于在流程中快速执行 prompt。
+
+## 应用导出格式
+
+应用导出为 ZIP 包，包含：
+- `meta.json`：应用元数据（名称、图标、描述）
+- `app.json`：带有节点和边的流程定义
+- `resources/`：附加文件（如果有）
+
+```bash
+# 导出：应用 → ZIP 文件
+# 导入：ZIP 文件 → 应用
+```
 
 ## 项目结构
 
@@ -100,75 +202,32 @@ go-ai-agent/
 ├── main.go                  # 桌面入口 (Wails)
 ├── cmd/server/main.go       # Web 服务器入口
 ├── internal/
-│   ├── app/                 # 共享设置（配置、桌面初始化、CORS）
 │   ├── agent/               # Agent 循环和工具注册表
 │   │   └── tool/            # 工具实现
 │   ├── ai/                  # AI 服务
 │   │   └── chat/            # 统一聊天服务 + 28+ 提供商
+│   ├── app/                 # 应用设置和配置
+│   ├── config/              # 配置管理
 │   ├── entity/              # 数据库实体（FlowDefinition, AIModel 等）
+│   ├── flow/                # 流程引擎
+│   │   ├── engine/          # DAG 执行器、任务管理器、函数注册表
+│   │   ├── nodes/           # 17 种节点类型实现
+│   │   └── export/          # 应用导出/导入（ZIP 格式）
 │   ├── model/               # 数据访问层
-│   ├── rest/                # REST 接口
+│   ├── rest/                # REST API 端点
 │   ├── runner/              # ChatRunner, FlowRunner
-│   └── flow/                # 流程引擎
-│       ├── engine/          # DAG 执行器、任务管理器、函数注册表
-│       ├── nodes/           # 节点实现（16 种类型）
-│       └── export/          # ZIP 导入/导出
+│   ├── service/             # 业务逻辑服务
+│   └── util/                # 工具类
 ├── view/                    # React 前端
 │   └── src/
-│       ├── pages/           # ChatHome, FlowDesigner, ModelManager, SetupWizard
-│       ├── components/      # 共享组件（ModelForm, IpcAdapter）
-│       ├── stores/          # Zustand 状态管理
-│       └── i18n/            # 多语言文件（en, zh, zh-TW, ja）
+│       ├── pages/           # ChatHome, FlowDesigner, FlowRunner, ModelManager, SetupWizard
+│       ├── components/      # 共享组件（ModelForm, IpcAdapter 等）
+│       ├── stores/          # Zustand 状态存储
+│       └── i18n/            # 语言文件（en, zh, zh-TW, ja）
 ├── wails.json               # Wails 项目配置
-├── Makefile                 # 构建命令
-└── dev.bat                  # 一键桌面开发启动器 (Windows)
+├── Makefile                 # 构建目标
+└── dev.bat                  # 一键桌面开发启动器（Windows）
 ```
-
-## 流程引擎
-
-**16 种节点类型**：`start`, `end`, `llm`, `skill`, `user_input`, `condition`, `switch`, `transform`, `split`, `for_each`, `iterator`, `loop`, `script`, `execute`, `image_gen`, `audio_gen`, `video_gen`
-
-**技能节点**：直接执行 prompt，支持模型选择
-```json
-{ "prompt": "{{start.output}}", "model": "1.default" }
-```
-
-**脚本节点**使用 Starlark（Python 方言）：
-```python
-# 条件节点：返回 bool → "yes"/"no" 分支
-v = ctx["user_input"]["output"].lower()
-result = v in ("yes", "confirm", "ok")
-
-# 切换节点：返回 string → 路由到匹配的 source_handle
-score = int(ctx["score"]["output"])
-if score >= 90:  result = "A"
-elif score >= 60: result = "B"
-else:            result = "C"
-```
-
-**通用批处理** — ForEach 和 Iterator 调用任意注册的函数：
-```json
-{ "items_key": "split", "function": "llm", "args": { "model": "...", "prompt": "{{item.output}}" } }
-```
-ForEach 并行执行，Iterator 顺序执行（跳过失败项）。
-
-**执行节点**运行本地 shell 命令，可配置超时（`0` = 无限制）。
-
-**应用导出**使用 ZIP 格式（`app.json` + `meta.json`）。
-
-## 通信协议
-
-### 桌面模式 (IPC)
-- 使用 Wails Events 进行实时通信
-- 事件模式：`chat:{sessionId}:{type}`（如 `chat:5:chunk`）
-- 事件类型：`chunk`, `tool_call`, `tool_result`, `error`, `session_created`
-
-### Web 模式 (WebSocket)
-- 连接到 `ws://localhost:19009/ws/chat`
-- 消息类型：
-  - `chat` / `agent` — 发送到 ChatRunner
-  - `flow_start` / `flow_user_response` / `flow_stop` — 流程执行控制
-  - 响应：`chunk`, `tool_call`, `tool_result`, `error`, `session_created`
 
 ## 技术栈
 
@@ -180,9 +239,9 @@ ForEach 并行执行，Iterator 顺序执行（跳过失败项）。
 | 流程编辑器 | reactflow + Zustand |
 | 聊天 UI | @assistant-ui/react |
 | 国际化 | react-i18next |
-| 数据库 | SQLite (桌面版) / MySQL / PostgreSQL (Web 版) |
-| 通信方式 | IPC (桌面版) / WebSocket (Web 版) |
+| 数据库 | SQLite (桌面) / MySQL / PostgreSQL (Web) |
+| 通信 | IPC (桌面) / WebSocket (Web) |
 
-## License
+## 许可证
 
 MIT
