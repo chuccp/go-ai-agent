@@ -49,6 +49,7 @@ export function createIpcAdapter(opts: IpcAdapterOptions): ChatModelAdapter {
 
       const pending = opts.pendingFlow ? opts.pendingFlow() : null
       let activeExecutionId = pending?.executionId ?? 0
+      let activeSessionId = opts.sessionId() ?? 0
 
       if (pending?.executionId) {
         // Continue a paused flow via IPC bridge
@@ -83,16 +84,14 @@ export function createIpcAdapter(opts: IpcAdapterOptions): ChatModelAdapter {
         }
 
         const newSessionId: number = result.session_id
-        if (newSessionId && opts.onSessionCreated && !opts.sessionId()) {
+        if (newSessionId && opts.onSessionCreated && !sessionId) {
           opts.onSessionCreated(newSessionId)
         }
-      }
 
-      // Open a side WebSocket to receive flow events (desktop always runs local server on 19009)
-      const ws = new WebSocket(WS_URL)
-      let wsReady = false
-      ws.onopen = () => { wsReady = true }
-      ws.onerror = () => {}
+        // Use the actual session ID from the response for event listening
+        // Don't wait for React state update which is async
+        activeSessionId = newSessionId || sessionId
+      }
 
       // Streaming via async queue
       const queue: ChatModelRunResult[] = []
@@ -100,8 +99,8 @@ export function createIpcAdapter(opts: IpcAdapterOptions): ChatModelAdapter {
       let accumulatedText = ''
       const toolCalls: any[] = []
 
-      const newSessionId = opts.sessionId() ?? 0
-      const eventPrefix = `chat:${newSessionId}:`
+      // Use the actual session ID (may have been updated above for new sessions)
+      const eventPrefix = `chat:${activeSessionId}:`
 
       const flush = () => {
         const parts: any[] = []
@@ -154,6 +153,8 @@ export function createIpcAdapter(opts: IpcAdapterOptions): ChatModelAdapter {
         }
       })
 
+      // Only open WebSocket for flow execution, not for normal chat
+      let ws: WebSocket | null = null
       const wsHandler = (evt: MessageEvent) => {
         try {
           const msg = JSON.parse(evt.data)
@@ -195,11 +196,18 @@ export function createIpcAdapter(opts: IpcAdapterOptions): ChatModelAdapter {
           }
         } catch {}
       }
-      ws.addEventListener('message', wsHandler)
+
+      // Only create WebSocket connection if we have a pending flow
+      if (pending?.executionId) {
+        ws = new WebSocket(WS_URL)
+        ws.onopen = () => {}
+        ws.onerror = () => {}
+        ws.addEventListener('message', wsHandler)
+      }
 
       abortSignal.addEventListener('abort', () => {
         done = true
-        if (ws.readyState === WebSocket.OPEN) {
+        if (ws && ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: 'stop' }))
         }
       })
@@ -232,8 +240,10 @@ export function createIpcAdapter(opts: IpcAdapterOptions): ChatModelAdapter {
         `${eventPrefix}error`,
         `${eventPrefix}session_created`,
       )
-      ws.removeEventListener('message', wsHandler)
-      ws.close()
+      if (ws) {
+        ws.removeEventListener('message', wsHandler)
+        ws.close()
+      }
     },
   }
 }

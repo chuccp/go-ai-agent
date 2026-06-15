@@ -175,7 +175,7 @@ func (r *FlowRest) exportFlow(req *web.Request) (any, error) {
 	ns, _ := r.nodeModel.WithContext(req.Ctx()).FindByFlowId(id)
 	es, _ := r.edgeModel.WithContext(req.Ctx()).FindByFlowId(id)
 
-	data, err := export.BuildFlowPackage(f, ns, es)
+	data, err := export.BuildAppPackage(f, ns, es)
 	if err != nil {
 		return nil, fmt.Errorf("export failed: %w", err)
 	}
@@ -212,7 +212,7 @@ func (r *FlowRest) importFlow(req *web.Request) (any, error) {
 		return nil, fmt.Errorf("failed to read file data: %w", err)
 	}
 
-	fd, err := export.ParseFlowPackage(data)
+	fd, err := export.ParseAppPackage(data)
 	if err != nil {
 		return nil, err
 	}
@@ -277,7 +277,6 @@ func (r *FlowRest) listNodeTypes(req *web.Request) (any, error) {
 		{"type": "image_gen", "label": "Image Gen", "description": "Call image generation model"},
 		{"type": "audio_gen", "label": "Audio Gen", "description": "Call speech synthesis model"},
 		{"type": "video_gen", "label": "Video Gen", "description": "Call video generation model"},
-		{"type": "skill", "label": "Skill", "description": "Execute a reusable skill"},
 	}
 	return web.Data(types), nil
 }

@@ -4,8 +4,15 @@ import { useNavigate } from 'react-router-dom'
 import { useSetupStore } from '@/stores/setupStore'
 import ModelForm, { emptyModelForm, ModelFormData } from '@/components/ModelForm'
 
+const LANGUAGES = [
+  { code: 'en', label: 'English' },
+  { code: 'zh', label: '简体中文' },
+  { code: 'zh-TW', label: '繁體中文' },
+  { code: 'ja', label: '日本語' },
+]
+
 export default function SetupWizard() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const nav = useNavigate()
   const store = useSetupStore()
   const [step, setStep] = useState(0)
@@ -67,7 +74,7 @@ export default function SetupWizard() {
   }
 
   const handleModelComplete = async () => {
-    if (!modelForm.model_id) { setError(t('setup.validation.modelIdRequired')); return }
+    if (!modelForm.model) { setError(t('setup.validation.modelIdRequired')); return }
     if (!modelForm.api_key) { setError(t('setup.validation.apiKeyRequired')); return }
     if (!modelForm.base_url) { setError(t('setup.validation.baseUrlRequired')); return }
     setSaving(true); setError('')
@@ -113,22 +120,35 @@ export default function SetupWizard() {
       <div style={{ marginBottom: 24, textAlign: 'center' }}>
         <div style={{ fontSize: 24, fontWeight: 700 }}>⚡ {t('setup.title')}</div>
         <div style={{ fontSize: 14, color: '#676f83', marginTop: 4 }}>{t('setup.subtitle')}</div>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 12 }}>
+          {LANGUAGES.map(l => (
+            <button key={l.code} type="button" onClick={() => i18n.changeLanguage(l.code)} style={{
+              padding: '4px 12px', fontSize: 12, fontWeight: i18n.language === l.code ? 600 : 400, cursor: 'pointer',
+              borderRadius: 6, border: i18n.language === l.code ? '1.5px solid #155aef' : '1px solid #d0d5dd',
+              background: i18n.language === l.code ? '#eef4ff' : '#fff',
+              color: i18n.language === l.code ? '#155aef' : '#354052',
+              transition: 'all 0.15s',
+            }}>{l.label}</button>
+          ))}
+        </div>
       </div>
 
-      {/* Steps indicator */}
-      <div style={{ display: 'flex', gap: 32, marginBottom: 24, alignItems: 'center' }}>
-        {['database', 'admin', 'model'].map((s, i) => {
-          const done = (i === 0 && dbConfigured) || (i === 1 && adminConfigured)
-          const active = i === step
-          return (
-            <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={stepDot(active)}>{done ? '✓' : i + 1}</div>
-              <span style={done ? stepDone : stepLabel}>{t(`setup.steps.${s}`)}</span>
-              {i < 2 && <span style={{ color: '#d0d5dd' }}>—</span>}
-            </div>
-          )
-        })}
-      </div>
+      {/* Steps indicator — web mode only */}
+      {!isDesktop && (
+        <div style={{ display: 'flex', gap: 32, marginBottom: 24, alignItems: 'center' }}>
+          {['database', 'admin', 'model'].map((s, i) => {
+            const done = (i === 0 && dbConfigured) || (i === 1 && adminConfigured)
+            const active = i === step
+            return (
+              <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={stepDot(active)}>{done ? '✓' : i + 1}</div>
+                <span style={done ? stepDone : stepLabel}>{t(`setup.steps.${s}`)}</span>
+                {i < 2 && <span style={{ color: '#d0d5dd' }}>—</span>}
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       <div style={card}>
         {error && <div style={{ background: '#fef3f2', color: '#d92d20', padding: '8px 12px', borderRadius: 8, fontSize: 13, marginBottom: 12 }}>{error}</div>}
@@ -202,11 +222,6 @@ export default function SetupWizard() {
         {step === 2 && (
           <div>
             <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>{t('setup.model.configBase')}</div>
-            {isDesktop && (
-              <div style={{ fontSize: 12, color: '#155aef', background: '#e8f0fe', padding: '8px 12px', borderRadius: 8, marginBottom: 14 }}>
-                SQLite + {t('setup.admin.createAdmin')} {t('common.success')} — {t('setup.model.configBase')} {t('setup.subtitle')}
-              </div>
-            )}
             <ModelForm form={modelForm} onChange={setModelForm} compact />
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
               {!isDesktop && <button onClick={() => setStep(1)} style={btnStyle()}>{t('common.prev')}</button>}

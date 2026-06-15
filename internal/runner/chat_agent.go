@@ -32,7 +32,6 @@ When creating flows, every node type has REQUIRED config fields that MUST be fil
 - split: source_key + delimiter
 - image_gen / video_gen: prompt
 - audio_gen: text + model
-- skill: skill_id
 
 Ask the user for any required fields they haven't specified. In the DESIGN step, list the key config values for every node. Never create a node with empty required fields.
 

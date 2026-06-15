@@ -15,7 +15,6 @@ import (
 	"github.com/chuccp/go-ai-agent/internal/flow/engine"
 	flownodes "github.com/chuccp/go-ai-agent/internal/flow/nodes"
 	flowModel "github.com/chuccp/go-ai-agent/internal/model"
-	"github.com/chuccp/go-ai-agent/internal/skill"
 
 	"github.com/chuccp/go-web-frame/core"
 	"github.com/chuccp/go-web-frame/log"
@@ -32,9 +31,6 @@ type FlowRunner struct {
 	nodeModel       *flowModel.FlowNodeModel
 	edgeModel       *flowModel.FlowEdgeModel
 	executionModel     *flowModel.FlowExecutionModel
-	packageModel       *flowModel.PackageModel
-	packageConfigModel *flowModel.PackageConfigModel
-	skillSvc           *skill.Service
 	registry           *engine.Registry // Node type registry (initialized once)
 	taskMgr            *engine.TaskManager
 	functions          *engine.FunctionRegistry
@@ -66,9 +62,6 @@ func (r *FlowRunner) Init(ctx *core.Context) error {
 	r.nodeModel = core.GetModel[*flowModel.FlowNodeModel](ctx)
 	r.edgeModel = core.GetModel[*flowModel.FlowEdgeModel](ctx)
 	r.executionModel = core.GetModel[*flowModel.FlowExecutionModel](ctx)
-	r.packageModel = core.GetModel[*flowModel.PackageModel](ctx)
-	r.packageConfigModel = core.GetModel[*flowModel.PackageConfigModel](ctx)
-	r.skillSvc = core.GetService[*skill.Service](ctx)
 
 	// Node registry
 	r.registry = engine.NewRegistry()
@@ -249,27 +242,6 @@ func (r *FlowRunner) registerFunctions() {
 			"url":    url,
 		}, nil
 	})
-
-	// skill function
-	r.functions.Register("skill", func(ctx *engine.ExecutionContext, name string, args map[string]any) (map[string]any, error) {
-		if r.skillSvc == nil {
-			return nil, fmt.Errorf("skill service not initialized")
-		}
-		skillId, _ := args["skill_id"].(string)
-		if skillId == "" {
-			return nil, fmt.Errorf("skill_id is required")
-		}
-		var inputs map[string]any
-		if v, ok := args["inputs"].(map[string]any); ok {
-			inputs = v
-		}
-		modelPath, _ := args["model"].(string)
-		output, err := r.skillSvc.Execute(context.Background(), skillId, inputs, modelPath)
-		if err != nil {
-			return nil, err
-		}
-		return map[string]any{"output": output}, nil
-	})
 }
 
 // SetSendFunc sets the event sender (called by ChatRunner to inject WS capability)
@@ -332,9 +304,10 @@ func (r *FlowRunner) HandleFlowStart(flowId uint, executionId uint, sessionId ui
 	execCtx.Functions = r.functions
 	execCtx.Cache = r.cacheMgr
 
-	// Load package config if the flow belongs to a package.
-	if flowDef.PackageId > 0 {
-		if cfg, err := r.loadPackageConfig(flowDef.PackageId); err == nil {
+	// Load config from FlowDefinition.Config (JSON string).
+	if flowDef.Config != "" {
+		var cfg map[string]string
+		if err := json.Unmarshal([]byte(flowDef.Config), &cfg); err == nil {
 			execCtx.SetConfig(cfg)
 		}
 	}
@@ -448,19 +421,3 @@ func (r *FlowRunner) Emit(event engine.FlowEvent) {
 	r.sendFn(data)
 }
 
-// loadPackageConfig loads runtime config for a package from the database.
-func (r *FlowRunner) loadPackageConfig(packageId uint) (map[string]string, error) {
-	if r.packageConfigModel == nil {
-		return nil, fmt.Errorf("package config model not initialized")
-	}
-	// Using a simple query via the entry model; adjust if go-web-frame API differs.
-	items, err := r.packageConfigModel.Query().Where("package_id = ?", packageId).All()
-	if err != nil {
-		return nil, err
-	}
-	cfg := make(map[string]string, len(items))
-	for _, item := range items {
-		cfg[item.Key] = item.Value
-	}
-	return cfg, nil
-}

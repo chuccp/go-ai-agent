@@ -262,7 +262,6 @@ function FlowNodeComponent({ id, data, selected }: { id: string; data: any; sele
       case 'loop': return c.max_iterations ? `max: ${c.max_iterations}` : ''
       case 'for_each':
       case 'iterator': return c.items_key || ''
-      case 'skill': return c.skill_id || ''
       default: return ''
     }
   }, [data.config, data.nodeType])
@@ -517,7 +516,7 @@ function PropertyPanel({
   onChange: (updated: Node) => void
   onDelete: () => void
   onClose: () => void
-  llmModels: { id: number; name: string; model_id: string }[]
+  llmModels: { id: number; name: string; model: string }[]
 }) {
   const { t } = useTranslation()
   if (!node) return null
@@ -565,7 +564,7 @@ function PropertyPanel({
               >
                 <option value="">--</option>
                 {llmModels.map(m => (
-                  <option key={m.id} value={m.model_id}>{m.name} ({m.model_id})</option>
+                  <option key={m.id} value={m.model}>{m.name} ({m.model})</option>
                 ))}
               </select>
             </div>
@@ -982,45 +981,6 @@ function PropertyPanel({
           </div>
         )
 
-      case 'skill':
-        return (
-          <div style={sectionStyle}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: '#101828', marginBottom: 10 }}>{t('nodes.skill')}</div>
-            <div style={{ marginBottom: 10 }}>
-              <label style={labelStyle}>{t('nodeConfig.skillId') || 'Skill ID'}</label>
-              <input
-                value={cfg.skill_id || ''}
-                onChange={e => updateCfg('skill_id', e.target.value)}
-                style={inputStyle}
-                placeholder="summary-v1"
-              />
-            </div>
-            <div style={{ marginBottom: 10 }}>
-              <label style={labelStyle}>{t('nodeConfig.model')}</label>
-              <input
-                value={cfg.model || ''}
-                onChange={e => updateCfg('model', e.target.value)}
-                style={inputStyle}
-                placeholder="1.default"
-              />
-            </div>
-            <div style={{ marginBottom: 10 }}>
-              <label style={labelStyle}>{t('nodeConfig.inputMapping') || 'Input Mapping (JSON)'}</label>
-              <textarea
-                value={cfg.input_mapping ? JSON.stringify(cfg.input_mapping, null, 2) : ''}
-                onChange={e => {
-                  try {
-                    updateCfg('input_mapping', e.target.value ? JSON.parse(e.target.value) : {})
-                  } catch {}
-                }}
-                rows={5}
-                style={{ ...inputStyle, resize: 'vertical', fontFamily: 'monospace', fontSize: 12 }}
-                placeholder='{"topic": "{{start.output}}"}'
-              />
-            </div>
-          </div>
-        )
-
       default:
         // start, end: no extra config
         return null
@@ -1110,6 +1070,8 @@ function FlowListView() {
   const [creating, setCreating] = useState(false)
   const [showNewModal, setShowNewModal] = useState(false)
   const [newName, setNewName] = useState('')
+  const [newIcon, setNewIcon] = useState('')
+  const [newDescription, setNewDescription] = useState('')
   const [newCategory, setNewCategory] = useState('')
   const [filterCategory, setFilterCategory] = useState('')
   const [importing, setImporting] = useState(false)
@@ -1130,10 +1092,19 @@ function FlowListView() {
   const handleCreate = async () => {
     if (!newName.trim()) return
     setCreating(true)
-    const saved = await saveFlow({ name: newName.trim(), category: newCategory || 'uncategorized', nodes: [], edges: [] })
+    const saved = await saveFlow({
+      name: newName.trim(),
+      icon: newIcon.trim(),
+      description: newDescription.trim(),
+      category: newCategory || 'uncategorized',
+      nodes: [],
+      edges: []
+    })
     setCreating(false)
     setShowNewModal(false)
     setNewName('')
+    setNewIcon('')
+    setNewDescription('')
     setNewCategory('')
     if (saved?.id) nav(`/designer/${saved.id}`)
   }
@@ -1226,66 +1197,64 @@ function FlowListView() {
             {t('flow.noFlows')}
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 20 }}>
             {displayed.map(f => (
               <div key={f.id} style={{
-                background: '#fff', borderRadius: 12, border: '0.5px solid rgba(16,24,40,0.08)',
-                padding: 16, display: 'flex', flexDirection: 'column', gap: 8,
+                background: '#fff', borderRadius: 16, border: '0.5px solid rgba(16,24,40,0.08)',
+                padding: 20, display: 'flex', flexDirection: 'column', gap: 12,
                 boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
-                transition: 'box-shadow 0.15s',
+                transition: 'all 0.15s',
               }}
                 onMouseEnter={e => (e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.08)')}
                 onMouseLeave={e => (e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,0.04)')}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{ fontSize: 15, fontWeight: 600, color: '#101828', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {f.name}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{
+                    width: 48, height: 48, borderRadius: 12,
+                    background: '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 28, flexShrink: 0,
+                  }}>
+                    {f.icon || '📱'}
                   </div>
-                  {f.category && (
-                    <span style={{ fontSize: 10, color: '#155aef', background: '#eff4ff', padding: '2px 8px', borderRadius: 10, flexShrink: 0 }}>
-                      {f.category}
-                    </span>
-                  )}
+                  <div style={{ flex: 1, overflow: 'hidden' }}>
+                    <div style={{ fontSize: 16, fontWeight: 600, color: '#101828', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {f.name}
+                    </div>
+                    {f.category && (
+                      <span style={{ fontSize: 11, color: '#155aef', marginTop: 2, display: 'inline-block' }}>
+                        {f.category}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 {f.description && (
-                  <div style={{ fontSize: 12, color: '#676f83', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <div style={{ fontSize: 13, color: '#676f83', lineHeight: 1.5, minHeight: 40 }}>
                     {f.description}
                   </div>
                 )}
-                <div style={{ fontSize: 11, color: '#98a2b3' }}>
-                  {f.updated_at ? new Date(f.updated_at).toLocaleString() : ''}
-                </div>
-                <div style={{ display: 'flex', gap: 6, marginTop: 'auto' }}>
+                <div style={{ display: 'flex', gap: 8, marginTop: 'auto' }}>
                   <a
                     href={`#/run/${f.id}`}
-                    style={{ ...btnStyle(), flex: 1, justifyContent: 'center', textDecoration: 'none' }}
+                    style={{
+                      flex: 1, padding: '10px 16px', borderRadius: 8, border: 'none',
+                      background: '#155aef', color: '#fff',
+                      fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      textDecoration: 'none',
+                    }}
                   >
-                    ▶ {t('flow.run') || 'Run'}
+                    {t('flow.run')}
                   </a>
                   <button
                     onClick={() => nav(`/designer/${f.id}`)}
-                    style={{ ...btnStyle(), flex: 1, justifyContent: 'center' }}
+                    style={{
+                      padding: '10px 16px', borderRadius: 8,
+                      border: '1px solid #d0d5dd', background: '#fff',
+                      color: '#354052', fontSize: 14, fontWeight: 500,
+                      cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
+                    }}
                   >
-                    <Icon d={ICONS.edit} size={13} /> {t('common.edit')}
-                  </button>
-                  <button
-                    onClick={() => handleDuplicate(f.id)}
-                    style={{ ...btnStyle(), justifyContent: 'center' }}
-                  >
-                    <Icon d={ICONS.copy} size={13} />
-                  </button>
-                  <button
-                    onClick={() => handleExportCard(f.id, f.name)}
-                    style={{ ...btnStyle(), justifyContent: 'center' }}
-                    title={t('flow.exportHint')}
-                  >
-                    <Icon d={ICONS.export} size={13} />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(f.id)}
-                    style={{ ...btnStyle(), padding: '7px 10px', color: '#f04438', borderColor: '#f0443833' }}
-                  >
-                    <Icon d={ICONS.trash} size={13} color="#f04438" />
+                    <Icon d={ICONS.edit} size={14} />
                   </button>
                 </div>
               </div>
@@ -1301,12 +1270,14 @@ function FlowListView() {
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }} onClick={() => setShowNewModal(false)}>
           <div
-            style={{ background: '#fff', borderRadius: 16, padding: 24, width: 380, boxShadow: '0 12px 32px rgba(0,0,0,0.15)' }}
+            style={{ background: '#fff', borderRadius: 16, padding: 24, width: 420, boxShadow: '0 12px 32px rgba(0,0,0,0.15)' }}
             onClick={e => e.stopPropagation()}
           >
             <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>{t('flow.newFlow')}</div>
             <div style={{ marginBottom: 12 }}>
-              <label style={{ fontSize: 12, color: '#354052', fontWeight: 500, marginBottom: 4, display: 'block' }}>{t('flow.flowName')}</label>
+              <label style={{ fontSize: 12, color: '#354052', fontWeight: 500, marginBottom: 4, display: 'block' }}>
+                {t('flow.flowName')} <span style={{ color: '#f04438' }}>*</span>
+              </label>
               <input
                 autoFocus
                 value={newName}
@@ -1314,6 +1285,28 @@ function FlowListView() {
                 onKeyDown={e => e.key === 'Enter' && handleCreate()}
                 style={{ width: '100%', padding: '8px 10px', border: '1px solid #d0d5dd', borderRadius: 8, fontSize: 13, outline: 'none' }}
                 placeholder={t('flow.enterName')}
+              />
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ fontSize: 12, color: '#354052', fontWeight: 500, marginBottom: 4, display: 'block' }}>
+                {t('flow.flowIcon')}
+              </label>
+              <input
+                value={newIcon}
+                onChange={e => setNewIcon(e.target.value)}
+                style={{ width: '100%', padding: '8px 10px', border: '1px solid #d0d5dd', borderRadius: 8, fontSize: 13, outline: 'none' }}
+                placeholder="⚡"
+              />
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ fontSize: 12, color: '#354052', fontWeight: 500, marginBottom: 4, display: 'block' }}>
+                {t('flow.flowDesc')}
+              </label>
+              <textarea
+                value={newDescription}
+                onChange={e => setNewDescription(e.target.value)}
+                style={{ width: '100%', padding: '8px 10px', border: '1px solid #d0d5dd', borderRadius: 8, fontSize: 13, outline: 'none', resize: 'vertical', minHeight: 60 }}
+                placeholder={t('flow.enterDesc')}
               />
             </div>
             <div style={{ marginBottom: 16 }}>
@@ -1391,7 +1384,7 @@ function FlowEditor({ flowId }: { flowId: string }) {
   const [blockSelectorPos, setBlockSelectorPos] = useState({ top: 0, left: 0 })
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [interactionMode, setInteractionMode] = useState<'pointer' | 'hand'>('pointer')
-  const [llmModels, setLlmModels] = useState<{ id: number; name: string; model_id: string }[]>([])
+  const [llmModels, setLlmModels] = useState<{ id: number; name: string; model: string }[]>([])
   const [edgeInsertInfo, setEdgeInsertInfo] = useState<{ edgeId: string; sourceId: string; sourceHandle?: string; targetId: string; targetHandle?: string; pos: { x: number; y: number } } | null>(null)
 
   // node ID counter (for new nodes)
@@ -1456,7 +1449,7 @@ function FlowEditor({ flowId }: { flowId: string }) {
   useEffect(() => {
     fetch(`${API_BASE}/api/ai-models?category=llm`)
       .then(r => r.json())
-      .then(d => setLlmModels((d.data || []).map((m: any) => ({ id: m.id, name: m.name, model_id: m.model_id }))))
+      .then(d => setLlmModels((d.data || []).map((m: any) => ({ id: m.id, name: m.name, model: m.model }))))
       .catch(() => {})
   }, [])
 

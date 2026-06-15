@@ -39,7 +39,7 @@ export default function ModelManager() {
   const openEdit = (m: AIModel) => {
     setEditId(m.id)
     setForm({
-      name: m.name, provider: m.provider, model_id: m.model_id, category: m.category,
+      name: m.name, provider: m.provider, model: m.model, category: m.category,
       api_key: m.api_key, base_url: m.base_url, description: m.description,
       think_level: m.think_level || 'off', multimodal: m.multimodal,
       is_default: m.is_default, is_base: m.is_base,
@@ -48,7 +48,7 @@ export default function ModelManager() {
   }
 
   const handleSave = async () => {
-    if (!form.name.trim() || !form.model_id.trim()) return
+    if (!form.name.trim() || !form.model.trim()) return
     setSaving(true)
     const payload: Partial<AIModel> = { ...form }
     let ok: boolean
@@ -197,7 +197,7 @@ export default function ModelManager() {
               <div key={m.id} style={tableRow}>
                 <div style={{ fontWeight: 500 }}>{m.name}</div>
                 <div style={{ color: '#676f83' }}>{m.provider}</div>
-                <div style={{ fontFamily: 'monospace', fontSize: 12, color: '#354052' }}>{m.model_id}</div>
+                <div style={{ fontFamily: 'monospace', fontSize: 12, color: '#354052' }}>{m.model}</div>
                 <div>
                   <span style={badge('#155aef', 'rgba(21,90,239,0.08)')}>
                     {t(`model.categories.${m.category}`)}
@@ -243,8 +243,8 @@ export default function ModelManager() {
               <button onClick={() => setDialogOpen(false)} style={secondaryBtn}>{t('common.cancel')}</button>
               <button
                 onClick={handleSave}
-                disabled={saving || !form.name.trim() || !form.model_id.trim()}
-                style={{ ...primaryBtn, opacity: saving || !form.name.trim() || !form.model_id.trim() ? 0.6 : 1 }}
+                disabled={saving || !form.name.trim() || !form.model.trim()}
+                style={{ ...primaryBtn, opacity: saving || !form.name.trim() || !form.model.trim() ? 0.6 : 1 }}
               >
                 {saving ? t('common.loading') : t('common.save')}
               </button>

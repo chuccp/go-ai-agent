@@ -1,4 +1,4 @@
-export type NodeType = 'start' | 'end' | 'llm' | 'user_input' | 'for_each' | 'split' | 'transform' | 'condition' | 'switch' | 'execute' | 'script' | 'iterator' | 'loop' | 'image_gen' | 'audio_gen' | 'video_gen' | 'skill'
+export type NodeType = 'start' | 'end' | 'llm' | 'user_input' | 'for_each' | 'split' | 'transform' | 'condition' | 'switch' | 'execute' | 'script' | 'iterator' | 'loop' | 'image_gen' | 'audio_gen' | 'video_gen'
 
 export interface NodeDef {
   type: NodeType
@@ -32,7 +32,6 @@ export const ALL_NODE_TYPES: NodeDef[] = [
   { type: 'transform', labelKey: 'nodes.transform', icon: '⚙', color: '#15b79e', category: 'process' },
   { type: 'execute', labelKey: 'nodes.execute', icon: '💻', color: '#0ea5e9', category: 'process' },
   { type: 'script', labelKey: 'nodes.script', icon: '🐍', color: '#6172f3', category: 'process' },
-  { type: 'skill', labelKey: 'nodes.skill', icon: '🧩', color: '#7c3aed', category: 'process' },
 ]
 
 export interface FlowDefinition {

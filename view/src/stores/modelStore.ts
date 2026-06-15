@@ -5,7 +5,7 @@ export interface AIModel {
   id: number
   name: string
   provider: string
-  model_id: string
+  model: string
   category: string
   api_key: string
   base_url: string

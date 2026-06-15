@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find /Users/cao/Documents/GitHub/go-ai-agent/view/src -name \"*.json\" | xargs grep -l \"setup\" 2>/dev/null | head -5)",
+      "Bash(grep -A 20 '\"setup\"' /Users/cao/Documents/GitHub/go-ai-agent/view/src/i18n/locales/en.json | head -40)"
+    ]
+  }
+}

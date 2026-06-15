@@ -6,7 +6,7 @@ import { useModelStore } from '@/stores/modelStore'
 export interface ModelFormData {
   name: string
   provider: string
-  model_id: string
+  model: string
   category: string
   api_key: string
   base_url: string
@@ -19,7 +19,7 @@ export interface ModelFormData {
 
 export function emptyModelForm(): ModelFormData {
   return {
-    name: '', provider: '', model_id: '', category: 'llm',
+    name: '', provider: '', model: '', category: 'llm',
     api_key: '', base_url: '', description: '',
     think_level: 'off', multimodal: false,
     is_default: true, is_base: true,
@@ -54,12 +54,13 @@ export default function ModelForm({ form, onChange, readOnly, compact }: Props) 
   const fillProvider = (p: string) => {
     const d = store.providerDefaults[apiType]?.[p]
     if (d) {
+      // Always fill with provider defaults when selecting a provider
       onChange({
         ...form,
         provider: p,
-        name: form.name || d.model || '',
-        model_id: form.model_id || d.model || '',
-        base_url: form.base_url || d.baseUrl || '',
+        name: d.model || form.name || '',
+        model: d.model || '',
+        base_url: d.baseUrl || '',
       })
     } else {
       onChange({ ...form, provider: p })
@@ -76,6 +77,17 @@ export default function ModelForm({ form, onChange, readOnly, compact }: Props) 
     width: '100%', padding: '8px 10px', borderRadius: 8, fontSize: 13,
     border: '0.5px solid rgba(16,24,40,0.15)', outline: 'none', background: '#fcfcfd', color: '#101828',
   }
+  const apiTypeBtnGroup: React.CSSProperties = {
+    display: 'flex', gap: 10,
+  }
+  const apiTypeBtn = (active: boolean): React.CSSProperties => ({
+    flex: 1, padding: '10px 0', fontSize: 14, fontWeight: active ? 600 : 500, cursor: 'pointer',
+    borderRadius: 8, border: active ? '2px solid #155aef' : '0.5px solid rgba(16,24,40,0.15)',
+    outline: 'none',
+    background: active ? '#eef4ff' : '#fcfcfd',
+    color: active ? '#155aef' : '#354052',
+    transition: 'all 0.15s',
+  })
   const labelStyle: React.CSSProperties = { fontSize: 12, color: '#354052', fontWeight: 500, marginBottom: 4, display: 'block' }
   const fieldGap: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: 2 }
   const formGrid: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: compact ? 10 : 14 }
@@ -86,9 +98,13 @@ export default function ModelForm({ form, onChange, readOnly, compact }: Props) 
       <div style={formGrid}>
         <div style={fieldGap}>
           <label style={labelStyle}>{t('model.apiType')}</label>
-          <select value={apiType} onChange={e => { setApiType(e.target.value); onChange({ ...form, provider: '' }) }} style={inputStyle}>
-            {API_TYPES.map(at => <option key={at} value={at}>{apiTypeLabel(at)}</option>)}
-          </select>
+          <div style={apiTypeBtnGroup}>
+            {API_TYPES.map(at => (
+              <button key={at} type="button" onClick={() => { setApiType(at); onChange({ ...form, provider: '' }) }} style={apiTypeBtn(at === apiType)}>
+                {apiTypeLabel(at)}
+              </button>
+            ))}
+          </div>
         </div>
         <div style={fieldGap}>
           <label style={labelStyle}>{t('model.provider')}</label>
@@ -99,7 +115,7 @@ export default function ModelForm({ form, onChange, readOnly, compact }: Props) 
         </div>
         <div style={fieldGap}>
           <label style={labelStyle}>{t('model.modelId')}</label>
-          <input value={form.model_id} onChange={e => onChange({ ...form, model_id: e.target.value })} style={inputStyle} placeholder="gpt-4o" />
+          <input value={form.model} onChange={e => onChange({ ...form, model: e.target.value })} style={inputStyle} placeholder="gpt-4o" />
         </div>
         <div style={fieldGap}>
           <label style={labelStyle}>{t('model.apiKey')}</label>
@@ -128,9 +144,13 @@ export default function ModelForm({ form, onChange, readOnly, compact }: Props) 
         <div style={formGrid}>
           <div style={fieldGap}>
             <label style={labelStyle}>{t('model.apiType')}</label>
-            <select value={apiType} onChange={e => { setApiType(e.target.value); onChange({ ...form, provider: '' }) }} style={inputStyle}>
-              {API_TYPES.map(at => <option key={at} value={at}>{apiTypeLabel(at)}</option>)}
-            </select>
+            <div style={apiTypeBtnGroup}>
+              {API_TYPES.map(at => (
+                <button key={at} type="button" onClick={() => { setApiType(at); onChange({ ...form, provider: '' }) }} style={apiTypeBtn(at === apiType)}>
+                  {apiTypeLabel(at)}
+                </button>
+              ))}
+            </div>
           </div>
           <div style={fieldGap}>
             <label style={labelStyle}>{t('model.provider')}</label>
@@ -154,7 +174,7 @@ export default function ModelForm({ form, onChange, readOnly, compact }: Props) 
           </div>
           <div style={fieldGap}>
             <label style={labelStyle}>{t('model.modelId')}</label>
-            <input value={form.model_id} onChange={e => onChange({ ...form, model_id: e.target.value })} style={inputStyle} placeholder="gpt-4o" />
+            <input value={form.model} onChange={e => onChange({ ...form, model: e.target.value })} style={inputStyle} placeholder="gpt-4o" />
           </div>
           <div style={fieldGap}>
             <label style={labelStyle}>{t('model.apiKey')}</label>

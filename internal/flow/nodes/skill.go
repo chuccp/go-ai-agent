@@ -1,17 +1,17 @@
 package nodes
 
 import (
-	"fmt"
-
 	"github.com/chuccp/go-ai-agent/internal/flow/engine"
 )
 
+// SkillNodeConfig holds the configuration for a skill node.
+// A skill is simply a prompt template + model selection.
 type SkillNodeConfig struct {
-	SkillId      string         `json:"skill_id"`
-	Model        string         `json:"model"`
-	InputMapping map[string]any `json:"input_mapping"`
+	Prompt string `json:"prompt"`
+	Model  string `json:"model"` // optional, falls back to default model
 }
 
+// SkillNode executes a prompt with the specified model.
 type SkillNode struct{}
 
 func NewSkillNode() *SkillNode { return &SkillNode{} }
@@ -23,41 +23,29 @@ func (n *SkillNode) Execute(ctx *engine.ExecutionContext, config string) (*engin
 	if err != nil {
 		return nil, err
 	}
-	if cfg.SkillId == "" {
-		return nil, fmt.Errorf("skill node: skill_id is required")
+
+	if cfg.Model == "" {
+		cfg.Model = DefaultModel
 	}
 
-	inputs := make(map[string]any)
-	// Apply explicit input mappings (values support template rendering).
-	for k, v := range cfg.InputMapping {
-		switch s := v.(type) {
-		case string:
-			inputs[k] = renderPrompt(s, ctx)
-		default:
-			inputs[k] = v
-		}
-	}
-	// Fallback: expose common upstream outputs as inputs.
-	if len(inputs) == 0 {
-		inputs = ctx.Data
-	}
+	prompt := renderPrompt(cfg.Prompt, ctx)
 
+	// Call LLM via function registry
 	args := map[string]any{
-		"skill_id": cfg.SkillId,
-		"inputs":   inputs,
-	}
-	if cfg.Model != "" {
-		args["model"] = cfg.Model
+		"model":      cfg.Model,
+		"prompt":     prompt,
+		"max_tokens": 4096,
+		"stream":     true,
 	}
 
-	result, err := ctx.InvokeFunction("skill", args)
+	result, err := ctx.InvokeFunction("llm", args)
 	if err != nil {
 		return nil, err
 	}
 
 	output, _ := result[KeyOutput].(string)
 	return &engine.NodeOutput{
-		Data:   map[string]any{KeyOutput: output},
+		Data:   map[string]any{KeyOutput: output, KeyPrompt: prompt},
 		Status: engine.StatusSuccess,
 	}, nil
 }

@@ -2,10 +2,9 @@ package entity
 
 import "time"
 
-// FlowDefinition Flow definition
+// FlowDefinition Flow definition - an app is a flow
 type FlowDefinition struct {
 	Id          uint      `gorm:"primaryKey" json:"id"`
-	PackageId   uint      `gorm:"index" json:"package_id,omitempty"`
 	Name        string    `gorm:"size:256" json:"name"`
 	Description string    `gorm:"type:text" json:"description"`
 	Category    string    `gorm:"size:128" json:"category"` // "picture_book", "story_video" etc

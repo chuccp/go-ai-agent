@@ -13,7 +13,6 @@ type Registry struct {
 	registry             map[string]Executor
 	flowHandler          FlowActionHandler
 	flowExecutionHandler FlowExecutionHandler
-	skillSvc             any
 	modelHandler         ModelActionHandler
 }
 
@@ -55,24 +54,12 @@ func (r *Registry) SetFlowExecutionHandler(h FlowExecutionHandler) {
 	}
 }
 
-// SetSkillService sets the skill service and pushes it to any tool
-// that implements SkillHandlerSetter.
-func (r *Registry) SetSkillService(svc any) {
-	r.skillSvc = svc
-	for _, e := range r.registry {
-		if s, ok := e.(SkillHandlerSetter); ok {
-			s.SetSkillService(svc)
-		}
-	}
-}
-
 func (r *Registry) Init(ctx *core.Context) error {
 	r.Register(&ExecuteCommand{})
 	r.Register(&ReadDocument{})
 	r.Register(&WebSearch{})
 	r.Register(&ManageFlows{})
 	r.Register(&RunFlow{})
-	r.Register(&UseSkill{})
 	r.Register(&ManageModels{})
 	return nil
 }
@@ -90,11 +77,6 @@ func (r *Registry) Register(e Executor) {
 	if r.flowExecutionHandler != nil {
 		if s, ok := e.(FlowExecutionHandlerSetter); ok {
 			s.SetFlowExecutionHandler(r.flowExecutionHandler)
-		}
-	}
-	if r.skillSvc != nil {
-		if s, ok := e.(SkillHandlerSetter); ok {
-			s.SetSkillService(r.skillSvc)
 		}
 	}
 	if r.modelHandler != nil {

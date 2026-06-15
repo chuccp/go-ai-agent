@@ -1,17 +1,16 @@
 package app
 
 import (
-	"context"
+	"os"
+	"path/filepath"
 
 	"github.com/chuccp/go-ai-agent/internal/agent/tool"
 	"github.com/chuccp/go-ai-agent/internal/ai"
 	"github.com/chuccp/go-ai-agent/internal/ai/chat"
-	"github.com/chuccp/go-ai-agent/internal/ai/chat/common"
 	"github.com/chuccp/go-ai-agent/internal/model"
 	"github.com/chuccp/go-ai-agent/internal/rest"
 	"github.com/chuccp/go-ai-agent/internal/runner"
 	"github.com/chuccp/go-ai-agent/internal/service"
-	"github.com/chuccp/go-ai-agent/internal/skill"
 	wf "github.com/chuccp/go-web-frame"
 	"github.com/chuccp/go-web-frame/component/cache"
 	"github.com/chuccp/go-web-frame/component/cors"
@@ -22,6 +21,25 @@ import (
 )
 
 const configFilePath = "application.yml"
+
+// getDataDir returns the absolute path to the data directory.
+// For desktop mode, it uses the executable's directory.
+// For web mode, it uses the current working directory.
+func getDataDir(webMode bool) string {
+	if webMode {
+		// Web mode: use current working directory
+		return "./data"
+	}
+	
+	// Desktop mode: use executable's directory
+	execPath, err := os.Executable()
+	if err != nil {
+		log.Warn("Failed to get executable path, using current directory", zap.Error(err))
+		return "./data"
+	}
+	
+	return filepath.Join(filepath.Dir(execPath), "data")
+}
 
 // Create builds the web framework with all services and REST endpoints.
 // webMode=true skips desktop-specific services.
@@ -36,8 +54,6 @@ func Create(webMode bool) *wf.WebFrame {
 		ai.NewGenService(),
 		tool.NewRegistry(),
 		&service.FlowService{},
-		skill.NewService(),
-		&skillExecutorWire{},
 	}
 
 	builder.Service(services...)
@@ -58,8 +74,6 @@ func Create(webMode bool) *wf.WebFrame {
 	rests = append(rests,
 		rest.NewFlowRest(),
 		rest.NewModelRest(),
-		rest.NewSkillRest(),
-		rest.NewPackageRest(),
 	)
 
 	builder.Rest(rests...)
@@ -73,12 +87,6 @@ func Create(webMode bool) *wf.WebFrame {
 		&model.FlowEdgeModel{},
 		&model.FlowExecutionModel{},
 		&model.AdminUserModel{},
-		&model.PackageModel{},
-		&model.PackageResourceModel{},
-		&model.PackageConfigModel{},
-		&model.SkillModel{},
-		&model.SkillPromptModel{},
-		&model.SkillResourceModel{},
 	)
 	builder.Filter(cors.NewCrosFilter())
 	return builder.Build()
@@ -98,8 +106,6 @@ func CreateDesktop() (*wf.WebFrame, *runner.ChatRunner) {
 		tool.NewRegistry(),
 		&DesktopInitService{},
 		&service.FlowService{},
-		skill.NewService(),
-		&skillExecutorWire{},
 	}
 
 	builder.Service(services...)
@@ -116,14 +122,11 @@ func CreateDesktop() (*wf.WebFrame, *runner.ChatRunner) {
 	if isFirstRun {
 		log.Info("First run detected, enabling setup wizard", zap.String("configPath", configFilePath))
 		rests = append(rests, rest.NewSetupRest(configFilePath))
-	} else {
-		rests = append(rests,
-			rest.NewFlowRest(),
-			rest.NewModelRest(),
-			rest.NewSkillRest(),
-			rest.NewPackageRest(),
-		)
 	}
+	rests = append(rests,
+		rest.NewFlowRest(),
+		rest.NewModelRest(),
+	)
 
 	builder.Rest(rests...)
 
@@ -136,37 +139,9 @@ func CreateDesktop() (*wf.WebFrame, *runner.ChatRunner) {
 		&model.FlowEdgeModel{},
 		&model.FlowExecutionModel{},
 		&model.AdminUserModel{},
-		&model.PackageModel{},
-		&model.PackageResourceModel{},
-		&model.PackageConfigModel{},
-		&model.SkillModel{},
-		&model.SkillPromptModel{},
-		&model.SkillResourceModel{},
 	)
 	builder.Filter(cors.NewCrosFilter())
 	return builder.Build(), chatRunner
-}
-
-// skillExecutorWire injects the chat service as the skill executor after both
-// skill.Service and chat.UnifiedChatService have been initialized.
-type skillExecutorWire struct{}
-
-func (w *skillExecutorWire) Init(ctx *core.Context) error {
-	svc := core.GetService[*skill.Service](ctx)
-	chatSvc := core.GetService[*chat.UnifiedChatService](ctx)
-	if svc != nil && chatSvc != nil {
-		svc.SetExecutor(&skillChatExecutor{chat: chatSvc})
-		svc.SetDefaultModelPath(chatSvc.GetDefaultPath())
-	}
-	return nil
-}
-
-type skillChatExecutor struct {
-	chat *chat.UnifiedChatService
-}
-
-func (e *skillChatExecutor) Execute(ctx context.Context, modelPath, prompt string) (string, error) {
-	return e.chat.ChatWithContext(ctx, modelPath, prompt, &common.LLMOptions{})
 }
 
 func loadOrCreateConfig(webMode bool) (*config.Config, bool) {
@@ -192,8 +167,17 @@ func loadOrCreateConfig(webMode bool) (*config.Config, bool) {
 
 	// Desktop mode: pre-configure SQLite for auto-initialization
 	if !webMode {
+		// Get absolute data directory path based on executable location
+		dataDir := getDataDir(webMode)
+		
+		// Create data directory if it doesn't exist
+		if err := os.MkdirAll(dataDir, 0755); err != nil {
+			log.Warn("Failed to create data directory", zap.Error(err))
+		}
+		
+		dbPath := filepath.Join(dataDir, "go-ai-agent.db")
 		cfg.Put("web.db.type", "sqlite")
-		cfg.Put("web.db.path", "./data/go-ai-agent.db")
+		cfg.Put("web.db.path", dbPath)
 		cfg.Put("system.desktop", true)
 	}
 

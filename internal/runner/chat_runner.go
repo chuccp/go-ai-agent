@@ -13,10 +13,10 @@ import (
 	"github.com/chuccp/go-ai-agent/internal/ai/chat/common"
 	aiTypes "github.com/chuccp/go-ai-agent/internal/ai/types"
 	"github.com/chuccp/go-ai-agent/internal/model"
-	"github.com/chuccp/go-ai-agent/internal/skill"
 	"github.com/chuccp/go-web-frame/core"
 	"github.com/chuccp/go-web-frame/log"
 	"github.com/gorilla/websocket"
+	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 	"go.uber.org/zap"
 )
 
@@ -34,6 +34,7 @@ type ChatRunner struct {
 	activeConns      map[*websocket.Conn]bool
 	defaultModelPath string
 	providersLoaded  bool
+	isDesktop        bool
 	mu               sync.Mutex
 }
 
@@ -51,14 +52,14 @@ func (r *ChatRunner) Init(ctx *core.Context) error {
 	r.nodeModel = core.GetModel[*model.FlowNodeModel](ctx)
 	r.edgeModel = core.GetModel[*model.FlowEdgeModel](ctx)
 
+	// Check if running in desktop mode
+	r.isDesktop = ctx.GetConfig().GetBoolOrDefault("system.desktop", false)
+
 	toolRegistry := core.GetService[*tool.Registry](ctx)
 	if toolRegistry != nil {
 		toolRegistry.SetFlowHandler(r.handleFlowAction)
 		toolRegistry.SetFlowExecutionHandler(r.handleFlowExecutionAction)
 		toolRegistry.SetModelHandler(r.handleModelAction)
-		if skillSvc := core.GetService[*skill.Service](ctx); skillSvc != nil {
-			toolRegistry.SetSkillService(skillSvc)
-		}
 	}
 
 	r.flowRunner = core.GetRunner[*FlowRunner](ctx)
@@ -66,9 +67,27 @@ func (r *ChatRunner) Init(ctx *core.Context) error {
 		r.flowRunner.SetSendFunc(func(data []byte) {
 			r.mu.Lock()
 			defer r.mu.Unlock()
-			for conn := range r.activeConns {
-				if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
-					log.Warn("flow event write failed", zap.Error(err))
+			
+			// Parse the event to get execution ID
+			var event map[string]any
+			if err := json.Unmarshal(data, &event); err != nil {
+				log.Warn("failed to parse flow event", zap.Error(err))
+				return
+			}
+			
+			executionId, _ := event["execution_id"].(float64)
+			eventType, _ := event["type"].(string)
+			
+			if r.isDesktop {
+				// Desktop mode: emit via Wails Events
+				eventName := fmt.Sprintf("flow:%d:%s", uint(executionId), eventType)
+				wailsRuntime.EventsEmit(r.ctx, eventName, event)
+			} else {
+				// Web mode: send via WebSocket
+				for conn := range r.activeConns {
+					if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
+						log.Warn("flow event write failed", zap.Error(err))
+					}
 				}
 			}
 		})
@@ -129,9 +148,6 @@ func (r *ChatRunner) loadProvidersFromDB() {
 		path := strconv.FormatUint(uint64(def.Id), 10) + ".default"
 		r.defaultModelPath = path
 		r.chatService.SetDefaultPath(path)
-		if skillSvc := core.GetService[*skill.Service](r.ctx); skillSvc != nil {
-			skillSvc.SetDefaultModelPath(path)
-		}
 	}
 	r.providersLoaded = true
 	log.Info("providers loaded from DB", zap.Int("count", len(models)))

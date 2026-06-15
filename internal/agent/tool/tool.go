@@ -47,11 +47,6 @@ type FlowExecutionHandlerSetter interface {
 	SetFlowExecutionHandler(handler FlowExecutionHandler)
 }
 
-// SkillHandlerSetter is implemented by tools that need the skill service.
-type SkillHandlerSetter interface {
-	SetSkillService(svc any)
-}
-
 // ModelHandlerSetter is implemented by tools that need a model action handler.
 // Registry.Register auto-injects the handler via this interface.
 type ModelHandlerSetter interface {
