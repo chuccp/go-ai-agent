@@ -1,12 +1,17 @@
 package app
 
 import (
+	"context"
+
 	"github.com/chuccp/go-ai-agent/internal/agent/tool"
+	"github.com/chuccp/go-ai-agent/internal/ai"
 	"github.com/chuccp/go-ai-agent/internal/ai/chat"
+	"github.com/chuccp/go-ai-agent/internal/ai/chat/common"
 	"github.com/chuccp/go-ai-agent/internal/model"
 	"github.com/chuccp/go-ai-agent/internal/rest"
 	"github.com/chuccp/go-ai-agent/internal/runner"
 	"github.com/chuccp/go-ai-agent/internal/service"
+	"github.com/chuccp/go-ai-agent/internal/skill"
 	wf "github.com/chuccp/go-web-frame"
 	"github.com/chuccp/go-web-frame/component/cache"
 	"github.com/chuccp/go-web-frame/component/cors"
@@ -28,8 +33,11 @@ func Create(webMode bool) *wf.WebFrame {
 	services := []core.IService{
 		&cache.Cache{},
 		chat.NewDefaultChatService(),
+		ai.NewGenService(),
 		tool.NewRegistry(),
 		&service.FlowService{},
+		skill.NewService(),
+		&skillExecutorWire{},
 	}
 
 	builder.Service(services...)
@@ -50,6 +58,8 @@ func Create(webMode bool) *wf.WebFrame {
 	rests = append(rests,
 		rest.NewFlowRest(),
 		rest.NewModelRest(),
+		rest.NewSkillRest(),
+		rest.NewPackageRest(),
 	)
 
 	builder.Rest(rests...)
@@ -63,6 +73,12 @@ func Create(webMode bool) *wf.WebFrame {
 		&model.FlowEdgeModel{},
 		&model.FlowExecutionModel{},
 		&model.AdminUserModel{},
+		&model.PackageModel{},
+		&model.PackageResourceModel{},
+		&model.PackageConfigModel{},
+		&model.SkillModel{},
+		&model.SkillPromptModel{},
+		&model.SkillResourceModel{},
 	)
 	builder.Filter(cors.NewCrosFilter())
 	return builder.Build()
@@ -78,9 +94,12 @@ func CreateDesktop() (*wf.WebFrame, *runner.ChatRunner) {
 	services := []core.IService{
 		&cache.Cache{},
 		chat.NewDefaultChatService(),
+		ai.NewGenService(),
 		tool.NewRegistry(),
 		&DesktopInitService{},
 		&service.FlowService{},
+		skill.NewService(),
+		&skillExecutorWire{},
 	}
 
 	builder.Service(services...)
@@ -101,6 +120,8 @@ func CreateDesktop() (*wf.WebFrame, *runner.ChatRunner) {
 		rests = append(rests,
 			rest.NewFlowRest(),
 			rest.NewModelRest(),
+			rest.NewSkillRest(),
+			rest.NewPackageRest(),
 		)
 	}
 
@@ -115,9 +136,37 @@ func CreateDesktop() (*wf.WebFrame, *runner.ChatRunner) {
 		&model.FlowEdgeModel{},
 		&model.FlowExecutionModel{},
 		&model.AdminUserModel{},
+		&model.PackageModel{},
+		&model.PackageResourceModel{},
+		&model.PackageConfigModel{},
+		&model.SkillModel{},
+		&model.SkillPromptModel{},
+		&model.SkillResourceModel{},
 	)
 	builder.Filter(cors.NewCrosFilter())
 	return builder.Build(), chatRunner
+}
+
+// skillExecutorWire injects the chat service as the skill executor after both
+// skill.Service and chat.UnifiedChatService have been initialized.
+type skillExecutorWire struct{}
+
+func (w *skillExecutorWire) Init(ctx *core.Context) error {
+	svc := core.GetService[*skill.Service](ctx)
+	chatSvc := core.GetService[*chat.UnifiedChatService](ctx)
+	if svc != nil && chatSvc != nil {
+		svc.SetExecutor(&skillChatExecutor{chat: chatSvc})
+		svc.SetDefaultModelPath(chatSvc.GetDefaultPath())
+	}
+	return nil
+}
+
+type skillChatExecutor struct {
+	chat *chat.UnifiedChatService
+}
+
+func (e *skillChatExecutor) Execute(ctx context.Context, modelPath, prompt string) (string, error) {
+	return e.chat.ChatWithContext(ctx, modelPath, prompt, &common.LLMOptions{})
 }
 
 func loadOrCreateConfig(webMode bool) (*config.Config, bool) {

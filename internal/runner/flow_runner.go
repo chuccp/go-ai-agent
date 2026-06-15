@@ -7,13 +7,15 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/chuccp/go-ai-agent/internal/ai"
 	"github.com/chuccp/go-ai-agent/internal/ai/chat"
 	"github.com/chuccp/go-ai-agent/internal/ai/chat/common"
+	"github.com/chuccp/go-ai-agent/internal/entity"
 	"github.com/chuccp/go-ai-agent/internal/flow/cache"
 	"github.com/chuccp/go-ai-agent/internal/flow/engine"
-	"github.com/chuccp/go-ai-agent/internal/entity"
-	flowModel "github.com/chuccp/go-ai-agent/internal/model"
 	flownodes "github.com/chuccp/go-ai-agent/internal/flow/nodes"
+	flowModel "github.com/chuccp/go-ai-agent/internal/model"
+	"github.com/chuccp/go-ai-agent/internal/skill"
 
 	"github.com/chuccp/go-web-frame/core"
 	"github.com/chuccp/go-web-frame/log"
@@ -23,16 +25,20 @@ import (
 // FlowRunner manages flow execution via WebSocket interaction
 type FlowRunner struct {
 	core.IRunner
-	ctx            *core.Context
-	chatService    *chat.UnifiedChatService
-	flowModel      *flowModel.FlowModel
-	nodeModel      *flowModel.FlowNodeModel
-	edgeModel      *flowModel.FlowEdgeModel
-	executionModel *flowModel.FlowExecutionModel
-	registry       *engine.Registry // Node type registry (initialized once)
-	taskMgr        *engine.TaskManager
-	functions      *engine.FunctionRegistry
-	cacheMgr       *cache.CacheManager
+	ctx             *core.Context
+	chatService     *chat.UnifiedChatService
+	genService      *ai.GenService
+	flowModel       *flowModel.FlowModel
+	nodeModel       *flowModel.FlowNodeModel
+	edgeModel       *flowModel.FlowEdgeModel
+	executionModel     *flowModel.FlowExecutionModel
+	packageModel       *flowModel.PackageModel
+	packageConfigModel *flowModel.PackageConfigModel
+	skillSvc           *skill.Service
+	registry           *engine.Registry // Node type registry (initialized once)
+	taskMgr            *engine.TaskManager
+	functions          *engine.FunctionRegistry
+	cacheMgr           *cache.CacheManager
 
 	running map[uint]*runningExecution
 	mu      sync.Mutex
@@ -55,10 +61,14 @@ func NewFlowRunner() *FlowRunner {
 func (r *FlowRunner) Init(ctx *core.Context) error {
 	r.ctx = ctx
 	r.chatService = core.GetService[*chat.UnifiedChatService](ctx)
+	r.genService = core.GetService[*ai.GenService](ctx)
 	r.flowModel = core.GetModel[*flowModel.FlowModel](ctx)
 	r.nodeModel = core.GetModel[*flowModel.FlowNodeModel](ctx)
 	r.edgeModel = core.GetModel[*flowModel.FlowEdgeModel](ctx)
 	r.executionModel = core.GetModel[*flowModel.FlowExecutionModel](ctx)
+	r.packageModel = core.GetModel[*flowModel.PackageModel](ctx)
+	r.packageConfigModel = core.GetModel[*flowModel.PackageConfigModel](ctx)
+	r.skillSvc = core.GetService[*skill.Service](ctx)
 
 	// Node registry
 	r.registry = engine.NewRegistry()
@@ -78,6 +88,7 @@ func (r *FlowRunner) Init(ctx *core.Context) error {
 	r.registry.Register(flownodes.NewImageGenNode())
 	r.registry.Register(flownodes.NewAudioGenNode())
 	r.registry.Register(flownodes.NewVideoGenNode())
+	r.registry.Register(flownodes.NewSkillNode())
 
 	// Task manager
 	r.taskMgr = engine.NewTaskManager(4)
@@ -166,30 +177,98 @@ func (r *FlowRunner) registerFunctions() {
 
 	// image_generation function
 	r.functions.Register("image_generation", func(ctx *engine.ExecutionContext, name string, args map[string]any) (map[string]any, error) {
-		// TODO: integrate image generation provider
+		model, _ := args["model"].(string)
+		if model == "" {
+			model = r.chatService.GetDefaultPath()
+		}
+		prompt, _ := args["prompt"].(string)
+		if prompt == "" {
+			return nil, fmt.Errorf("image_generation: prompt is required")
+		}
+		count := 1
+		if c, ok := args["count"].(float64); ok && c > 0 {
+			count = int(c)
+		}
+		aspectRatio, _ := args["aspect_ratio"].(string)
+		output, urls, err := r.genService.GenerateImage(context.Background(), model, prompt, count, aspectRatio)
+		if err != nil {
+			return nil, err
+		}
 		return map[string]any{
-			"output": "",
-			"urls":   []string{},
-			"count":  0,
-		}, fmt.Errorf("image generation not implemented yet")
+			"output": output,
+			"urls":   urls,
+			"count":  len(urls),
+		}, nil
 	})
 
 	// audio_generation function
 	r.functions.Register("audio_generation", func(ctx *engine.ExecutionContext, name string, args map[string]any) (map[string]any, error) {
-		// TODO: integrate audio generation provider
+		model, _ := args["model"].(string)
+		if model == "" {
+			model = r.chatService.GetDefaultPath()
+		}
+		text, _ := args["text"].(string)
+		if text == "" {
+			return nil, fmt.Errorf("audio_generation: text is required")
+		}
+		voice, _ := args["voice"].(string)
+		url, err := r.genService.GenerateAudio(context.Background(), model, text, voice)
+		if err != nil {
+			return nil, err
+		}
 		return map[string]any{
-			"output": "",
-			"url":    "",
-		}, fmt.Errorf("audio generation not implemented yet")
+			"output": url,
+			"url":    url,
+		}, nil
 	})
 
 	// video_generation function
 	r.functions.Register("video_generation", func(ctx *engine.ExecutionContext, name string, args map[string]any) (map[string]any, error) {
-		// TODO: integrate video generation provider
+		model, _ := args["model"].(string)
+		if model == "" {
+			model = r.chatService.GetDefaultPath()
+		}
+		prompt, _ := args["prompt"].(string)
+		if prompt == "" {
+			return nil, fmt.Errorf("video_generation: prompt is required")
+		}
+		duration := 0
+		if d, ok := args["duration"].(float64); ok {
+			duration = int(d)
+		}
+		aspectRatio, _ := args["aspect_ratio"].(string)
+		if aspectRatio == "" {
+			aspectRatio, _ = args["aspect_ratio"].(string)
+		}
+		url, err := r.genService.GenerateVideo(context.Background(), model, prompt, duration, aspectRatio)
+		if err != nil {
+			return nil, err
+		}
 		return map[string]any{
-			"output": "",
-			"url":    "",
-		}, fmt.Errorf("video generation not implemented yet")
+			"output": url,
+			"url":    url,
+		}, nil
+	})
+
+	// skill function
+	r.functions.Register("skill", func(ctx *engine.ExecutionContext, name string, args map[string]any) (map[string]any, error) {
+		if r.skillSvc == nil {
+			return nil, fmt.Errorf("skill service not initialized")
+		}
+		skillId, _ := args["skill_id"].(string)
+		if skillId == "" {
+			return nil, fmt.Errorf("skill_id is required")
+		}
+		var inputs map[string]any
+		if v, ok := args["inputs"].(map[string]any); ok {
+			inputs = v
+		}
+		modelPath, _ := args["model"].(string)
+		output, err := r.skillSvc.Execute(context.Background(), skillId, inputs, modelPath)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"output": output}, nil
 	})
 }
 
@@ -198,27 +277,34 @@ func (r *FlowRunner) SetSendFunc(fn func(data []byte)) {
 	r.sendFn = fn
 }
 
-func (r *FlowRunner) HandleFlowStart(flowId uint, executionId uint, sessionId uint, initialInput string) error {
-	_, err := r.flowModel.FindById(flowId)
+// FlowStartOptions holds optional runtime overrides for a flow execution.
+type FlowStartOptions struct {
+	InitialInput    string
+	FormValues      map[string]any
+	ConfigOverrides map[string]string
+}
+
+func (r *FlowRunner) HandleFlowStart(flowId uint, executionId uint, sessionId uint, opts FlowStartOptions) (uint, error) {
+	flowDef, err := r.flowModel.FindById(flowId)
 	if err != nil {
-		return fmt.Errorf("flow not found: %w", err)
+		return 0, fmt.Errorf("flow not found: %w", err)
 	}
 
 	flowNodes, err := r.nodeModel.FindByFlowId(flowId)
 	if err != nil {
-		return fmt.Errorf("failed to load nodes: %w", err)
+		return 0, fmt.Errorf("failed to load nodes: %w", err)
 	}
 
 	flowEdges, err := r.edgeModel.FindByFlowId(flowId)
 	if err != nil {
-		return fmt.Errorf("failed to load edges: %w", err)
+		return 0, fmt.Errorf("failed to load edges: %w", err)
 	}
 
 	var exec *entity.FlowExecution
 	if executionId > 0 {
 		exec, err = r.executionModel.FindById(executionId)
 		if err != nil {
-			return fmt.Errorf("execution not found: %w", err)
+			return 0, fmt.Errorf("execution not found: %w", err)
 		}
 	} else {
 		exec = &entity.FlowExecution{
@@ -228,7 +314,7 @@ func (r *FlowRunner) HandleFlowStart(flowId uint, executionId uint, sessionId ui
 			Context:   "{}",
 		}
 		if err := r.executionModel.Create(exec); err != nil {
-			return fmt.Errorf("failed to create execution: %w", err)
+			return 0, fmt.Errorf("failed to create execution: %w", err)
 		}
 		executionId = exec.Id
 	}
@@ -239,15 +325,33 @@ func (r *FlowRunner) HandleFlowStart(flowId uint, executionId uint, sessionId ui
 
 	startId, err := eng.FindStartNode()
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	execCtx := engine.NewExecutionContext(flowId, executionId, sessionId, r)
 	execCtx.Functions = r.functions
 	execCtx.Cache = r.cacheMgr
 
-	if initialInput != "" {
-		execCtx.SeedInput(initialInput)
+	// Load package config if the flow belongs to a package.
+	if flowDef.PackageId > 0 {
+		if cfg, err := r.loadPackageConfig(flowDef.PackageId); err == nil {
+			execCtx.SetConfig(cfg)
+		}
+	}
+	// Apply runtime config overrides.
+	if len(opts.ConfigOverrides) > 0 {
+		for k, v := range opts.ConfigOverrides {
+			execCtx.Config[k] = v
+		}
+		execCtx.SetConfig(execCtx.Config)
+	}
+
+	// Seed form values and initial input.
+	if len(opts.FormValues) > 0 {
+		execCtx.SetFormValues(opts.FormValues)
+	}
+	if opts.InitialInput != "" {
+		execCtx.SeedInput(opts.InitialInput)
 	}
 
 	r.mu.Lock()
@@ -288,7 +392,7 @@ func (r *FlowRunner) HandleFlowStart(flowId uint, executionId uint, sessionId ui
 			zap.String("status", exec.Status))
 	}()
 
-	return nil
+	return executionId, nil
 }
 
 func (r *FlowRunner) HandleUserResponse(executionId uint, response string) error {
@@ -327,6 +431,10 @@ func (r *FlowRunner) HandleFlowStop(executionId uint) error {
 	return nil
 }
 
+func (r *FlowRunner) GetExecutionStatus(executionId uint) (*entity.FlowExecution, error) {
+	return r.executionModel.FindById(executionId)
+}
+
 // Emit implements the engine.EventEmitter interface
 func (r *FlowRunner) Emit(event engine.FlowEvent) {
 	if r.sendFn == nil {
@@ -338,4 +446,21 @@ func (r *FlowRunner) Emit(event engine.FlowEvent) {
 		return
 	}
 	r.sendFn(data)
+}
+
+// loadPackageConfig loads runtime config for a package from the database.
+func (r *FlowRunner) loadPackageConfig(packageId uint) (map[string]string, error) {
+	if r.packageConfigModel == nil {
+		return nil, fmt.Errorf("package config model not initialized")
+	}
+	// Using a simple query via the entry model; adjust if go-web-frame API differs.
+	items, err := r.packageConfigModel.Query().Where("package_id = ?", packageId).All()
+	if err != nil {
+		return nil, err
+	}
+	cfg := make(map[string]string, len(items))
+	for _, item := range items {
+		cfg[item.Key] = item.Value
+	}
+	return cfg, nil
 }

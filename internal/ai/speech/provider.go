@@ -31,6 +31,7 @@ type SynthesizeOptions struct {
 type SynthesizeResult struct {
 	AudioData []byte `json:"audio_data"`
 	Format    string `json:"format"`
+	URL       string `json:"url"`      // local file URL
 	Duration  int    `json:"duration"` // milliseconds
 }
 

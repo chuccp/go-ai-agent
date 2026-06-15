@@ -2,15 +2,18 @@ package runner
 
 import (
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"sync"
 	"time"
 
 	"github.com/chuccp/go-ai-agent/internal/agent/tool"
+	"github.com/chuccp/go-ai-agent/internal/ai"
 	"github.com/chuccp/go-ai-agent/internal/ai/chat"
 	"github.com/chuccp/go-ai-agent/internal/ai/chat/common"
 	aiTypes "github.com/chuccp/go-ai-agent/internal/ai/types"
 	"github.com/chuccp/go-ai-agent/internal/model"
+	"github.com/chuccp/go-ai-agent/internal/skill"
 	"github.com/chuccp/go-web-frame/core"
 	"github.com/chuccp/go-web-frame/log"
 	"github.com/gorilla/websocket"
@@ -21,6 +24,7 @@ type ChatRunner struct {
 	core.IRunner
 	ctx              *core.Context
 	chatService      *chat.UnifiedChatService
+	genService       *ai.GenService
 	sessionModel     *model.ChatSessionModel
 	messageModel     *model.ChatMessageModel
 	flowModel        *model.FlowModel
@@ -40,6 +44,7 @@ func NewChatRunner() *ChatRunner {
 func (r *ChatRunner) Init(ctx *core.Context) error {
 	r.ctx = ctx
 	r.chatService = core.GetService[*chat.UnifiedChatService](ctx)
+	r.genService = core.GetService[*ai.GenService](ctx)
 	r.sessionModel = core.GetModel[*model.ChatSessionModel](ctx)
 	r.messageModel = core.GetModel[*model.ChatMessageModel](ctx)
 	r.flowModel = core.GetModel[*model.FlowModel](ctx)
@@ -49,7 +54,11 @@ func (r *ChatRunner) Init(ctx *core.Context) error {
 	toolRegistry := core.GetService[*tool.Registry](ctx)
 	if toolRegistry != nil {
 		toolRegistry.SetFlowHandler(r.handleFlowAction)
+		toolRegistry.SetFlowExecutionHandler(r.handleFlowExecutionAction)
 		toolRegistry.SetModelHandler(r.handleModelAction)
+		if skillSvc := core.GetService[*skill.Service](ctx); skillSvc != nil {
+			toolRegistry.SetSkillService(skillSvc)
+		}
 	}
 
 	r.flowRunner = core.GetRunner[*FlowRunner](ctx)
@@ -85,6 +94,7 @@ func (r *ChatRunner) loadProvidersFromDB() {
 		return
 	}
 	for _, m := range models {
+		// Register chat provider
 		provider, err := chat.NewProvider(m.Provider)
 		if err != nil {
 			log.Warn("unknown provider type, skipping",
@@ -100,12 +110,28 @@ func (r *ChatRunner) loadProvidersFromDB() {
 				zap.String("provider", m.Provider),
 				zap.Error(err))
 		}
+
+		// Register generation providers (image, speech, video) - they share the same API credentials
+		if r.genService != nil {
+			r.genService.RegisterImageProvider(m.Id, ai.NewOpenAIImageProvider(m.Provider))
+			r.genService.RegisterSpeechProvider(m.Id, ai.NewOpenAISpeechProvider(m.Provider))
+			r.genService.RegisterVideoProvider(m.Id, ai.NewOpenAIVideoProvider(m.Provider))
+			if err := r.genService.ConfigureProvider(m.Id, m.APIKey, m.BaseURL); err != nil {
+				log.Warn("gen provider configure failed",
+					zap.Uint("id", m.Id),
+					zap.String("provider", m.Provider),
+					zap.Error(err))
+			}
+		}
 	}
 	// Resolve default model path for fallback when client sends no model
 	if def, err := aiModel.FindDefault(aiTypes.CategoryLLM); err == nil && def != nil {
 		path := strconv.FormatUint(uint64(def.Id), 10) + ".default"
 		r.defaultModelPath = path
 		r.chatService.SetDefaultPath(path)
+		if skillSvc := core.GetService[*skill.Service](r.ctx); skillSvc != nil {
+			skillSvc.SetDefaultModelPath(path)
+		}
 	}
 	r.providersLoaded = true
 	log.Info("providers loaded from DB", zap.Int("count", len(models)))
@@ -160,6 +186,13 @@ type WSResponse struct {
 }
 
 // ==================== WebSocket entry point ====================
+
+func (r *ChatRunner) HandleFlowUserResponse(executionId uint, response string) error {
+	if r.flowRunner == nil {
+		return fmt.Errorf("FlowRunner not initialized")
+	}
+	return r.flowRunner.HandleUserResponse(executionId, response)
+}
 
 func (r *ChatRunner) HandleWebSocket(conn *websocket.Conn) error {
 	r.mu.Lock()
