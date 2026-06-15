@@ -1,9 +1,9 @@
 package app
 
 import (
-	"github.com/chuccp/go-ai-agent/entity"
-	"github.com/chuccp/go-ai-agent/model"
-	"github.com/chuccp/go-ai-agent/util"
+	"github.com/chuccp/go-ai-agent/internal/entity"
+	"github.com/chuccp/go-ai-agent/internal/model"
+	"github.com/chuccp/go-ai-agent/internal/util"
 	"github.com/chuccp/go-web-frame/core"
 	"github.com/chuccp/go-web-frame/log"
 	"go.uber.org/zap"

@@ -1,7 +1,0 @@
-{"name":"split-iter-v2","nodes":[
-  {"type":"start","label":"S","config":"{}","position_x":100,"position_y":50},
-  {"type":"llm","label":"生成故事","config":"{\"model\":\"deepseek.default\",\"prompt\":\"写一个2段故事，段间用空行分隔:\\n\\n{{user_input.output}}\",\"max_tokens\":800}","position_x":100,"position_y":130},
-  {"type":"split","label":"拆分","config":"{\"source_key\":\"生成故事\",\"delimiter\":\"paragraph\"}","position_x":100,"position_y":210},
-  {"type":"iterator","label":"扩写","config":"{\"items_key\":\"拆分\",\"prompt\":\"扩写为50字: {{item.output}}\"}","position_x":100,"position_y":290},
-  {"type":"end","label":"E","config":"{}","position_x":100,"position_y":370}
-]}

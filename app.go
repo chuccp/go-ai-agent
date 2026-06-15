@@ -11,7 +11,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 
-	"github.com/chuccp/go-ai-agent/runner"
+	"github.com/chuccp/go-ai-agent/internal/runner"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 

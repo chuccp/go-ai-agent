@@ -1,12 +1,12 @@
 package app
 
 import (
-	"github.com/chuccp/go-ai-agent/agent/tool"
-	"github.com/chuccp/go-ai-agent/ai/chat"
-	"github.com/chuccp/go-ai-agent/model"
-	"github.com/chuccp/go-ai-agent/rest"
-	"github.com/chuccp/go-ai-agent/runner"
-	"github.com/chuccp/go-ai-agent/service"
+	"github.com/chuccp/go-ai-agent/internal/agent/tool"
+	"github.com/chuccp/go-ai-agent/internal/ai/chat"
+	"github.com/chuccp/go-ai-agent/internal/model"
+	"github.com/chuccp/go-ai-agent/internal/rest"
+	"github.com/chuccp/go-ai-agent/internal/runner"
+	"github.com/chuccp/go-ai-agent/internal/service"
 	wf "github.com/chuccp/go-web-frame"
 	"github.com/chuccp/go-web-frame/component/cache"
 	"github.com/chuccp/go-web-frame/component/cors"
