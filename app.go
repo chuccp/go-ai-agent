@@ -58,6 +58,17 @@ func (a *App) AgentChat(sessionID uint, modelPath string, message string, thinkL
 	return fmt.Sprintf(`{"session_id":%d}`, newSessionID)
 }
 
+// FlowRespond sends a user response to a paused flow execution (desktop IPC bridge).
+func (a *App) FlowRespond(executionID uint, response string) string {
+	if a.chatRunner == nil {
+		return `{"error":"ChatRunner not initialized"}`
+	}
+	if err := a.chatRunner.HandleFlowUserResponse(executionID, response); err != nil {
+		return fmt.Sprintf(`{"error":"%s"}`, err.Error())
+	}
+	return `{"ok":true}`
+}
+
 // assetFS returns the embedded frontend assets.
 func assetFS() fs.FS {
 	sub, err := fs.Sub(embeddedAssets, "view/dist")

@@ -22,8 +22,16 @@ func (s *FlowService) Init(ctx *core.Context) error {
 	return nil
 }
 
-func (s *FlowService) CreateFlow(name, description, category, config string, nodes []*entity.FlowNode, edges []*entity.FlowEdge) (*entity.FlowDefinition, error) {
-	f := &entity.FlowDefinition{Name: name, Description: description, Category: category, Config: config}
+func (s *FlowService) CreateFlow(name, description, category, config, formSchema, settings, icon string, nodes []*entity.FlowNode, edges []*entity.FlowEdge) (*entity.FlowDefinition, error) {
+	f := &entity.FlowDefinition{
+		Name:        name,
+		Description: description,
+		Category:    category,
+		Config:      config,
+		FormSchema:  formSchema,
+		Settings:    settings,
+		Icon:        icon,
+	}
 	err := s.context.GetTransaction().Exec(func(tx *db.DB) error {
 		flowModel := core.GetReNewModel[*model.FlowModel](tx, s.context)
 		if err := flowModel.Create(f); err != nil {
@@ -37,7 +45,7 @@ func (s *FlowService) CreateFlow(name, description, category, config string, nod
 	return f, nil
 }
 
-func (s *FlowService) UpdateFlow(id uint, name, description, category, config string, nodes []*entity.FlowNode, edges []*entity.FlowEdge) error {
+func (s *FlowService) UpdateFlow(id uint, name, description, category, config, formSchema, settings, icon string, nodes []*entity.FlowNode, edges []*entity.FlowEdge) error {
 	return s.context.GetTransaction().Exec(func(tx *db.DB) error {
 		flowModel := core.GetReNewModel[*model.FlowModel](tx, s.context)
 		f, err := flowModel.FindById(id)
@@ -55,6 +63,15 @@ func (s *FlowService) UpdateFlow(id uint, name, description, category, config st
 		}
 		if config != "" {
 			f.Config = config
+		}
+		if formSchema != "" {
+			f.FormSchema = formSchema
+		}
+		if settings != "" {
+			f.Settings = settings
+		}
+		if icon != "" {
+			f.Icon = icon
 		}
 		if err := flowModel.Update(f); err != nil {
 			return err
@@ -74,7 +91,15 @@ func (s *FlowService) DuplicateFlow(id uint) (*entity.FlowDefinition, error) {
 		if err != nil {
 			return err
 		}
-		clone = &entity.FlowDefinition{Name: src.Name + " (copy)", Description: src.Description, Category: src.Category, Config: src.Config}
+		clone = &entity.FlowDefinition{
+			Name:        src.Name + " (copy)",
+			Description: src.Description,
+			Category:    src.Category,
+			Config:      src.Config,
+			FormSchema:  src.FormSchema,
+			Settings:    src.Settings,
+			Icon:        src.Icon,
+		}
 		if err := flowModel.Create(clone); err != nil {
 			return err
 		}

@@ -4,10 +4,6 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
-overrides:
-  '@assistant-ui/core': 0.2.12
-  '@assistant-ui/store': 0.2.14
-
 importers:
 
   .:
@@ -67,7 +63,7 @@ packages:
   '@assistant-ui/core@0.2.12':
     resolution: {integrity: sha512-sIF8hgjyc54HxEV63qV2ryhw5hveWACp5QXawjdSPrWUTtXqPtUbhKmI7rvOVzrXPPm4BKTpJBEFT5AjXedzfA==}
     peerDependencies:
-      '@assistant-ui/store': 0.2.14
+      '@assistant-ui/store': ^0.2.13
       '@assistant-ui/tap': ^0.6.1
       '@types/react': '*'
       assistant-cloud: ^0.1.31

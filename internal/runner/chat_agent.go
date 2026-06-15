@@ -12,7 +12,12 @@ import (
 )
 
 // agentSystemPrompt is the system prompt for the agent in both WebSocket and IPC modes.
-const agentSystemPrompt = `You are an AI assistant that helps users create and manage workflows (flows) and AI models.
+const agentSystemPrompt = `You are an AI assistant that helps users create, manage, and run workflows (flows) and AI models.
+
+Tools:
+- manage_flows: create / update / list / search / delete flows
+- manage_models: create / list AI model credentials
+- run_flow: search, run, respond to, status, or stop a flow execution
 
 When creating flows, every node type has REQUIRED config fields that MUST be filled in:
 - llm: prompt + model (use manage_models list first)
@@ -27,8 +32,16 @@ When creating flows, every node type has REQUIRED config fields that MUST be fil
 - split: source_key + delimiter
 - image_gen / video_gen: prompt
 - audio_gen: text + model
+- skill: skill_id
 
-Ask the user for any required fields they haven't specified. In the DESIGN step, list the key config values for every node. Never create a node with empty required fields.`
+Ask the user for any required fields they haven't specified. In the DESIGN step, list the key config values for every node. Never create a node with empty required fields.
+
+To run a flow:
+1. If you know the flow_id, call run_flow with action="run" and flow_id.
+2. If you only have a name, call run_flow with action="search" and query first.
+3. If the flow requires user input, the tool will say it is waiting. Ask the user and call action="respond" with execution_id.
+4. Use action="status" to get results.
+5. Use action="stop" to cancel.`
 
 // ── wsSender (agent → WebSocket bridge) ──
 

@@ -1,12 +1,32 @@
 package nodes
 
 import (
+	"encoding/json"
+
 	"github.com/chuccp/go-ai-agent/internal/flow/engine"
 )
 
 type UserInputNodeConfig struct {
 	Prompt      string `json:"prompt"`
 	ConfirmOnly bool   `json:"confirm_only"`
+}
+
+func (c *UserInputNodeConfig) UnmarshalJSON(data []byte) error {
+	type Alias UserInputNodeConfig
+	aux := &struct{ *Alias }{Alias: (*Alias)(c)}
+	if err := json.Unmarshal(data, aux); err != nil {
+		return err
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	if c.Prompt == "" {
+		if v, ok := raw["prompt_text"].(string); ok {
+			c.Prompt = v
+		}
+	}
+	return nil
 }
 
 type UserInputNode struct{}

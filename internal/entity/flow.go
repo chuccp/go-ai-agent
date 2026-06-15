@@ -5,10 +5,14 @@ import "time"
 // FlowDefinition Flow definition
 type FlowDefinition struct {
 	Id          uint      `gorm:"primaryKey" json:"id"`
+	PackageId   uint      `gorm:"index" json:"package_id,omitempty"`
 	Name        string    `gorm:"size:256" json:"name"`
 	Description string    `gorm:"type:text" json:"description"`
 	Category    string    `gorm:"size:128" json:"category"` // "picture_book", "story_video" etc
 	Config      string    `gorm:"type:text" json:"config"`  // JSON: global config
+	FormSchema  string    `gorm:"type:text" json:"form_schema,omitempty"`  // JSON: form schema for app mode
+	Settings    string    `gorm:"type:text" json:"settings,omitempty"`     // JSON: flow-level settings (icon, default_model, ...)
+	Icon        string    `gorm:"size:512" json:"icon,omitempty"`          // emoji or resource path
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }

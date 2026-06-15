@@ -9,7 +9,14 @@
     "success": "Success", "error": "Error", "warning": "Warning"
   },
   "nav": {
-    "chat": "Chat", "flowDesigner": "Flow Designer", "flowList": "Flow List", "modelManager": "Model Manager"
+    "chat": "Chat", "flowDesigner": "Flow Designer", "flowList": "Flow List", "modelManager": "Model Manager", "skillManager": "Skills", "packageManager": "Packages"
+  },
+  "package": {
+    "confirmDelete": "Delete this package?"
+  },
+  "skill": {
+    "newSkill": "New Skill", "editSkill": "Edit Skill", "prompts": "Prompts", "addPrompt": "Add Prompt",
+    "defaultModel": "Default Model", "confirmDelete": "Delete this skill?"
   },
   "chat": {
     "newChat": "New Chat", "startNew": "Start a new conversation", "selectModelHint": "Select a model and send a message, AI will reply here",
@@ -87,7 +94,7 @@
     "start": "Start", "end": "End", "llm": "LLM", "userInput": "User Input",
     "condition": "Condition", "switch": "Switch", "transform": "Transform", "split": "Text Split",
     "forEach": "Parallel Batch", "iterator": "Sequential Iterator", "loop": "Loop",
-    "execute": "Execute", "script": "Script", "imageGen": "Image Generation", "audioGen": "Audio Generation", "videoGen": "Video Generation"
+    "execute": "Execute", "script": "Script", "imageGen": "Image Generation", "audioGen": "Audio Generation", "videoGen": "Video Generation", "skill": "Skill"
   },
   "nodeCategories": { "basic": "Basic", "ai": "AI", "logic": "Logic", "process": "Process" },
   "nodeConfig": {
@@ -113,6 +120,7 @@
     "template": "Template", "templateHint": "Reference upstream data via .nodeName.output",
     "promptText": "Prompt Text", "confirmOnly": "Confirm Only (no text input needed)",
     "waitingInput": "Waiting for user input", "conditionJudge": "Condition", "switchExpr": "Switch Expression", "loopBody": "Loop Body",
-    "switchHint": "Assign a string to 'result'. Routes to matching source_handle on outgoing edges. Falls back to 'default'."
+    "switchHint": "Assign a string to 'result'. Routes to matching source_handle on outgoing edges. Falls back to 'default'.",
+    "skillId": "Skill ID", "inputMapping": "Input Mapping"
   }
 }

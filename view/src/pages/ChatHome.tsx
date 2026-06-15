@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import i18n from '@/i18n'
 import { API_BASE, IS_DESKTOP } from '@/constants'
 import { useFlowStore } from '@/stores/flowStore'
-import { MyRuntimeProvider, type ThreadMessageLike } from '@/components/assistant-ui/MyRuntimeProvider'
+import { MyRuntimeProvider, type ThreadMessageLike, type PendingFlow } from '@/components/assistant-ui/MyRuntimeProvider'
 import { Thread } from '@/components/assistant-ui/Thread'
 
 interface Session { id: number; title: string; flow_id?: number | null; created_at: string }
@@ -26,6 +26,7 @@ export default function ChatHome() {
   const [newSessionFlowId, setNewSessionFlowId] = useState<number | null>(null)
   const [sessionToDelete, setSessionToDelete] = useState<number | null>(null)
   const [showSettings, setShowSettings] = useState(false)
+  const [pendingFlow, setPendingFlow] = useState<PendingFlow | null>(null)
 
   // WebSocket
   const wsRef = useRef<WebSocket | null>(null)
@@ -133,6 +134,7 @@ export default function ChatHome() {
   const getModelId = useCallback(() => selectedModelId, [selectedModelId])
   const getThinkLevel = useCallback(() => thinkLevel, [thinkLevel])
   const getFlowId = useCallback(() => selectedFlowId, [selectedFlowId])
+  const getPendingFlow = useCallback(() => pendingFlow, [pendingFlow])
 
   const handleSessionCreated = useCallback((sessionId: number) => {
     setActiveSessionId(sessionId)
@@ -140,6 +142,18 @@ export default function ChatHome() {
       if (prev.some(s => s.id === sessionId)) return prev
       return [{ id: sessionId, title: 'New Chat', created_at: new Date().toISOString() }, ...prev]
     })
+  }, [])
+
+  const handleFlowWaiting = useCallback((executionId: number, question: string) => {
+    setPendingFlow({ executionId, question })
+  }, [])
+
+  const handleFlowResponseSent = useCallback(() => {
+    setPendingFlow(null)
+  }, [])
+
+  const handleFlowEnded = useCallback(() => {
+    setPendingFlow(null)
   }, [])
 
   return (
@@ -151,6 +165,10 @@ export default function ChatHome() {
       thinkLevel={getThinkLevel}
       flowId={getFlowId}
       onSessionCreated={handleSessionCreated}
+      pendingFlow={getPendingFlow}
+      onFlowResponseSent={handleFlowResponseSent}
+      onFlowWaiting={handleFlowWaiting}
+      onFlowEnded={handleFlowEnded}
       initialMessages={sessionMessages}
     >
       <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: '#fff' }}>
@@ -184,6 +202,20 @@ export default function ChatHome() {
                 <path d="M6 9v3a3 3 0 003 3h6a3 3 0 003-3V9M12 12v3"/>
               </svg>
               {t('nav.flowDesigner')}
+            </a>
+            <a href="#/skills" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 20, color: '#3c4043', fontSize: 14, textDecoration: 'none' }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+              </svg>
+              {t('nav.skillManager') || 'Skills'}
+            </a>
+            <a href="#/packages" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 20, color: '#3c4043', fontSize: 14, textDecoration: 'none' }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+                <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                <line x1="12" y1="22.08" x2="12" y2="12"/>
+              </svg>
+              {t('nav.packageManager') || 'Packages'}
             </a>
             <button onClick={() => setShowSettings(true)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 20, color: '#3c4043', fontSize: 14, background: 'none', border: 'none', cursor: 'pointer', width: '100%', textAlign: 'left' }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

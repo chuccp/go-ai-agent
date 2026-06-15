@@ -1,4 +1,5 @@
 import type { ChatModelAdapter, ChatModelRunResult } from '@assistant-ui/react'
+import type { PendingFlow } from './MyRuntimeProvider'
 
 // Wails runtime globals — injected into the webview by Wails, not available in web mode.
 const wailsRuntime = (window as any).runtime
@@ -12,7 +13,13 @@ interface IpcAdapterOptions {
   thinkLevel: () => string
   flowId: () => number | null
   onSessionCreated?: (sessionId: number) => void
+  pendingFlow?: () => PendingFlow | null
+  onFlowResponseSent?: () => void
+  onFlowWaiting?: (executionId: number, question: string) => void
+  onFlowEnded?: () => void
 }
+
+const WS_URL = 'ws://localhost:19009/ws/chat'
 
 export function createIpcAdapter(opts: IpcAdapterOptions): ChatModelAdapter {
   return {
@@ -40,30 +47,52 @@ export function createIpcAdapter(opts: IpcAdapterOptions): ChatModelAdapter {
         return
       }
 
-      // Call Go backend via Wails IPC
-      const sessionId = opts.sessionId() ?? 0
-      const modelId = opts.modelId()
-      const thinkLevel = opts.thinkLevel()
-      const flowId = opts.flowId() ?? 0
+      const pending = opts.pendingFlow ? opts.pendingFlow() : null
+      let activeExecutionId = pending?.executionId ?? 0
 
-      const rawResult: string = await app.AgentChat(sessionId, modelId, textContent.trim(), thinkLevel, flowId)
-      let result: any = {}
-      try {
-        result = JSON.parse(rawResult)
-      } catch {
-        yield { content: [{ type: 'text', text: String(rawResult) }] }
-        return
+      if (pending?.executionId) {
+        // Continue a paused flow via IPC bridge
+        const raw: string = await app.FlowRespond(pending.executionId, textContent.trim())
+        let resp: any = {}
+        try { resp = JSON.parse(raw) } catch {}
+        if (resp.error) {
+          yield { content: [{ type: 'text', text: `Flow error: ${resp.error}` }] }
+          if (opts.onFlowEnded) opts.onFlowEnded()
+          return
+        }
+        if (opts.onFlowResponseSent) opts.onFlowResponseSent()
+      } else {
+        // Normal agent chat via Wails IPC
+        const sessionId = opts.sessionId() ?? 0
+        const modelId = opts.modelId()
+        const thinkLevel = opts.thinkLevel()
+        const flowId = opts.flowId() ?? 0
+
+        const rawResult: string = await app.AgentChat(sessionId, modelId, textContent.trim(), thinkLevel, flowId)
+        let result: any = {}
+        try {
+          result = JSON.parse(rawResult)
+        } catch {
+          yield { content: [{ type: 'text', text: String(rawResult) }] }
+          return
+        }
+
+        if (result.error) {
+          yield { content: [{ type: 'text', text: `Error: ${result.error}` }] }
+          return
+        }
+
+        const newSessionId: number = result.session_id
+        if (newSessionId && opts.onSessionCreated && !opts.sessionId()) {
+          opts.onSessionCreated(newSessionId)
+        }
       }
 
-      if (result.error) {
-        yield { content: [{ type: 'text', text: `Error: ${result.error}` }] }
-        return
-      }
-
-      const newSessionId: number = result.session_id
-      if (newSessionId && opts.onSessionCreated && !opts.sessionId()) {
-        opts.onSessionCreated(newSessionId)
-      }
+      // Open a side WebSocket to receive flow events (desktop always runs local server on 19009)
+      const ws = new WebSocket(WS_URL)
+      let wsReady = false
+      ws.onopen = () => { wsReady = true }
+      ws.onerror = () => {}
 
       // Streaming via async queue
       const queue: ChatModelRunResult[] = []
@@ -71,6 +100,7 @@ export function createIpcAdapter(opts: IpcAdapterOptions): ChatModelAdapter {
       let accumulatedText = ''
       const toolCalls: any[] = []
 
+      const newSessionId = opts.sessionId() ?? 0
       const eventPrefix = `chat:${newSessionId}:`
 
       const flush = () => {
@@ -124,8 +154,54 @@ export function createIpcAdapter(opts: IpcAdapterOptions): ChatModelAdapter {
         }
       })
 
+      const wsHandler = (evt: MessageEvent) => {
+        try {
+          const msg = JSON.parse(evt.data)
+          if (msg.type === 'flow_started' && activeExecutionId === 0 && msg.execution_id) {
+            activeExecutionId = Number(msg.execution_id)
+          }
+          if (activeExecutionId && msg.execution_id && Number(msg.execution_id) !== activeExecutionId) {
+            return
+          }
+          switch (msg.type) {
+            case 'flow_started':
+              accumulatedText += `▶️ ${msg.message || 'Flow started'}\n`
+              flush()
+              break
+            case 'flow_waiting_user':
+              if (msg.message) {
+                accumulatedText += `\n${msg.message}`
+              }
+              flush()
+              if (msg.execution_id && opts.onFlowWaiting) {
+                opts.onFlowWaiting(Number(msg.execution_id), msg.message || '')
+              }
+              done = true
+              break
+            case 'flow_complete':
+              if (msg.message || msg.content) {
+                accumulatedText += `\n✅ ${msg.message || msg.content}`
+                flush()
+              }
+              if (opts.onFlowEnded) opts.onFlowEnded()
+              done = true
+              break
+            case 'flow_error':
+              accumulatedText += `\n❌ ${msg.message || msg.content || 'Flow error'}`
+              flush()
+              if (opts.onFlowEnded) opts.onFlowEnded()
+              done = true
+              break
+          }
+        } catch {}
+      }
+      ws.addEventListener('message', wsHandler)
+
       abortSignal.addEventListener('abort', () => {
         done = true
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'stop' }))
+        }
       })
 
       // Yield loop
@@ -156,6 +232,8 @@ export function createIpcAdapter(opts: IpcAdapterOptions): ChatModelAdapter {
         `${eventPrefix}error`,
         `${eventPrefix}session_created`,
       )
+      ws.removeEventListener('message', wsHandler)
+      ws.close()
     },
   }
 }

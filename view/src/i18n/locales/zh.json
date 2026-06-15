@@ -9,7 +9,14 @@
     "success": "成功", "error": "错误", "warning": "警告"
   },
   "nav": {
-    "chat": "聊天", "flowDesigner": "流程设计器", "flowList": "流程列表", "modelManager": "模型管理"
+    "chat": "聊天", "flowDesigner": "流程设计器", "flowList": "流程列表", "modelManager": "模型管理", "skillManager": "技能", "packageManager": "包"
+  },
+  "package": {
+    "confirmDelete": "确定删除此包？"
+  },
+  "skill": {
+    "newSkill": "新建技能", "editSkill": "编辑技能", "prompts": "提示词", "addPrompt": "添加提示词",
+    "defaultModel": "默认模型", "confirmDelete": "确定删除此技能？"
   },
   "chat": {
     "newChat": "新对话", "startNew": "开始新的对话", "selectModelHint": "选择模型后发送消息，AI 将在这里回复",
@@ -87,7 +94,7 @@
     "start": "开始", "end": "结束", "llm": "LLM 调用", "userInput": "用户输入",
     "condition": "条件分支", "switch": "分支选择", "transform": "数据变换", "split": "文本拆分",
     "forEach": "并发批量", "iterator": "按序迭代", "loop": "循环执行",
-    "execute": "执行命令", "script": "脚本", "imageGen": "图片生成", "audioGen": "音频生成", "videoGen": "视频生成"
+    "execute": "执行命令", "script": "脚本", "imageGen": "图片生成", "audioGen": "音频生成", "videoGen": "视频生成", "skill": "技能"
   },
   "nodeCategories": { "basic": "基础", "ai": "AI", "logic": "逻辑", "process": "处理" },
   "nodeConfig": {
@@ -112,6 +119,7 @@
     "template": "模板", "templateHint": "通过 .节点名.output 引用上游数据",
     "promptText": "提示文本", "confirmOnly": "仅确认（无需输入文本）",
     "waitingInput": "等待用户输入", "conditionJudge": "条件判断", "switchExpr": "分支表达式", "loopBody": "循环体",
-    "switchHint": "将字符串赋值给 'result'，根据值路由到对应 source_handle 的连线，空值使用 'default'"
+    "switchHint": "将字符串赋值给 'result'，根据值路由到对应 source_handle 的连线，空值使用 'default'",
+    "skillId": "技能 ID", "inputMapping": "输入映射"
   }
 }

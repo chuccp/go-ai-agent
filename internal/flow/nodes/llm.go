@@ -21,6 +21,29 @@ type LLMNodeConfig struct {
 	CacheEnabled  *bool   `json:"cache_enabled"`
 }
 
+func (c *LLMNodeConfig) UnmarshalJSON(data []byte) error {
+	type Alias LLMNodeConfig
+	aux := &struct{ *Alias }{Alias: (*Alias)(c)}
+	if err := json.Unmarshal(data, aux); err != nil {
+		return err
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	if c.Prompt == "" {
+		if v, ok := raw["prompt_template"].(string); ok {
+			c.Prompt = v
+		}
+	}
+	if c.System == "" {
+		if v, ok := raw["system_prompt"].(string); ok {
+			c.System = v
+		}
+	}
+	return nil
+}
+
 type LLMNode struct{}
 
 func NewLLMNode() *LLMNode { return &LLMNode{} }

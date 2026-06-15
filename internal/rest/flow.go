@@ -69,7 +69,16 @@ func (r *FlowRest) createFlow(req *web.Request) (any, error) {
 	name := j.GetString("name")
 	if name == "" { name = "Untitled Flow" }
 	nodes, edges := extractNodesAndEdges(map[string]any(*j))
-	f, err := r.flowService.CreateFlow(name, j.GetString("description"), j.GetString("category"), j.GetString("config"), nodes, edges)
+	f, err := r.flowService.CreateFlow(
+		name,
+		j.GetString("description"),
+		j.GetString("category"),
+		j.GetString("config"),
+		j.GetString("form_schema"),
+		j.GetString("settings"),
+		j.GetString("icon"),
+		nodes, edges,
+	)
 	if err != nil { return nil, err }
 	return web.Data(f), nil
 }
@@ -87,7 +96,17 @@ func (r *FlowRest) updateFlow(req *web.Request) (any, error) {
 	id := req.ParamUint("id")
 	j, _ := req.Json()
 	nodes, edges := extractNodesAndEdges(map[string]any(*j))
-	if err := r.flowService.UpdateFlow(id, j.GetString("name"), j.GetString("description"), j.GetString("category"), j.GetString("config"), nodes, edges); err != nil {
+	if err := r.flowService.UpdateFlow(
+		id,
+		j.GetString("name"),
+		j.GetString("description"),
+		j.GetString("category"),
+		j.GetString("config"),
+		j.GetString("form_schema"),
+		j.GetString("settings"),
+		j.GetString("icon"),
+		nodes, edges,
+	); err != nil {
 		return nil, err
 	}
 	f, _ := r.flowModel.WithContext(req.Ctx()).FindById(id)
@@ -156,7 +175,7 @@ func (r *FlowRest) exportFlow(req *web.Request) (any, error) {
 	ns, _ := r.nodeModel.WithContext(req.Ctx()).FindByFlowId(id)
 	es, _ := r.edgeModel.WithContext(req.Ctx()).FindByFlowId(id)
 
-	data, err := export.BuildFlowPackage(f.Name, ns, es, f.Description, f.Category)
+	data, err := export.BuildFlowPackage(f, ns, es)
 	if err != nil {
 		return nil, fmt.Errorf("export failed: %w", err)
 	}
@@ -202,6 +221,10 @@ func (r *FlowRest) importFlow(req *web.Request) (any, error) {
 		Name:        fd.Name,
 		Description: fd.Description,
 		Category:    fd.Category,
+		Config:      fd.Config,
+		FormSchema:  fd.FormSchema,
+		Settings:    fd.Settings,
+		Icon:        fd.Icon,
 	}
 	if err := r.flowModel.WithContext(req.Ctx()).Create(flow); err != nil {
 		return nil, fmt.Errorf("failed to create flow: %w", err)
@@ -254,6 +277,7 @@ func (r *FlowRest) listNodeTypes(req *web.Request) (any, error) {
 		{"type": "image_gen", "label": "Image Gen", "description": "Call image generation model"},
 		{"type": "audio_gen", "label": "Audio Gen", "description": "Call speech synthesis model"},
 		{"type": "video_gen", "label": "Video Gen", "description": "Call video generation model"},
+		{"type": "skill", "label": "Skill", "description": "Execute a reusable skill"},
 	}
 	return web.Data(types), nil
 }

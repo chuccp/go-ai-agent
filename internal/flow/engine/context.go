@@ -15,6 +15,8 @@ type ExecutionContext struct {
 	SessionId       uint
 	Data            map[string]any         // Global data (with flat label.field keys)
 	NodeOutputs     map[string]*NodeOutput // key = node label
+	Config          map[string]string      // Package-level runtime config
+	FormValues      map[string]any         // Flow form values (app mode)
 	UserInput       chan string            // User input channel
 	Emitter         EventEmitter           // Event emitter
 	Aborted         bool
@@ -29,6 +31,8 @@ func NewExecutionContext(flowId, executionId, sessionId uint, emitter EventEmitt
 		SessionId:   sessionId,
 		Data:        make(map[string]any),
 		NodeOutputs: make(map[string]*NodeOutput),
+		Config:      make(map[string]string),
+		FormValues:  make(map[string]any),
 		UserInput:   make(chan string, 1),
 		Emitter:     emitter,
 	}
@@ -82,6 +86,28 @@ func (c *ExecutionContext) SeedInput(input string) {
 		Status: StatusSuccess,
 	}
 	c.Data["user_input.output"] = input
+}
+
+// SetConfig replaces the runtime config map.
+func (c *ExecutionContext) SetConfig(cfg map[string]string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.Config = cfg
+	c.Data["config"] = cfg
+	for k, v := range cfg {
+		c.Data["config."+k] = v
+	}
+}
+
+// SetFormValues replaces the form values and exposes them as Data.
+func (c *ExecutionContext) SetFormValues(values map[string]any) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.FormValues = values
+	c.Data["form"] = values
+	for k, v := range values {
+		c.Data["form."+k] = v
+	}
 }
 
 func (c *ExecutionContext) SendUserInput(input string) {

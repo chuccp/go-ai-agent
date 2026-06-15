@@ -84,6 +84,9 @@ func (c *ChatRest) createSession(request *web.Request) (any, error) {
 	}
 
 	session := &entity.ChatSession{Title: title}
+	if fid := jsonObj.GetInt("flow_id"); fid > 0 {
+		session.FlowId = uint(fid)
+	}
 	if err := c.sessionModel.WithContext(request.Ctx()).Create(session); err != nil {
 		return nil, err
 	}

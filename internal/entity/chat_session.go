@@ -5,6 +5,7 @@ import "time"
 // ChatSession Chat session
 type ChatSession struct {
 	Id        uint      `gorm:"primaryKey" json:"id"`
+	FlowId    uint      `gorm:"index" json:"flow_id,omitempty"`
 	Title     string    `gorm:"size:256" json:"title"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`

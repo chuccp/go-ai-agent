@@ -1,4 +1,4 @@
-export type NodeType = 'start' | 'end' | 'llm' | 'user_input' | 'for_each' | 'split' | 'transform' | 'condition' | 'switch' | 'execute' | 'script' | 'iterator' | 'loop' | 'image_gen' | 'audio_gen' | 'video_gen'
+export type NodeType = 'start' | 'end' | 'llm' | 'user_input' | 'for_each' | 'split' | 'transform' | 'condition' | 'switch' | 'execute' | 'script' | 'iterator' | 'loop' | 'image_gen' | 'audio_gen' | 'video_gen' | 'skill'
 
 export interface NodeDef {
   type: NodeType
@@ -32,6 +32,7 @@ export const ALL_NODE_TYPES: NodeDef[] = [
   { type: 'transform', labelKey: 'nodes.transform', icon: '⚙', color: '#15b79e', category: 'process' },
   { type: 'execute', labelKey: 'nodes.execute', icon: '💻', color: '#0ea5e9', category: 'process' },
   { type: 'script', labelKey: 'nodes.script', icon: '🐍', color: '#6172f3', category: 'process' },
+  { type: 'skill', labelKey: 'nodes.skill', icon: '🧩', color: '#7c3aed', category: 'process' },
 ]
 
 export interface FlowDefinition {
@@ -40,8 +41,32 @@ export interface FlowDefinition {
   description: string
   category: string
   config: Record<string, any>
+  form_schema?: FormSchema | null
+  settings?: FlowSettings | null
+  icon?: string
   created_at: string
   updated_at: string
+}
+
+export interface FormSchema {
+  fields: FormField[]
+}
+
+export interface FormField {
+  name: string
+  label: string
+  type: 'text' | 'number' | 'textarea' | 'select' | 'radio' | 'checkbox' | 'file'
+  required?: boolean
+  default?: any
+  options?: string[]
+}
+
+export interface FlowSettings {
+  icon?: string
+  default_model?: string
+  timeout?: number
+  allow_chat?: boolean
+  [key: string]: any
 }
 
 export interface FlowDetail extends FlowDefinition {

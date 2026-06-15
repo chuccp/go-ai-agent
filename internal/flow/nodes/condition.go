@@ -9,13 +9,17 @@ import (
 )
 
 // ConditionNodeConfig is the configuration for a condition node.
+// It supports either a raw Starlark script OR a simple field/operator/value rule.
 // The script has access to ctx["node_label"]["field"] for all upstream node outputs.
 // It must assign a boolean to the 'result' variable: True => "true" branch, False => "false" branch.
 type ConditionNodeConfig struct {
-	Script string `json:"script"` // Starlark expression returning bool
+	Script   string `json:"script"`    // Starlark expression returning bool
+	Field    string `json:"field"`     // e.g. "node_name.output"
+	Operator string `json:"operator"`  // contains/equals/not_empty
+	Value    string `json:"value"`     // compare value
 }
 
-// ConditionNode evaluates a Starlark script to choose the next path.
+// ConditionNode evaluates a rule or Starlark script to choose the next path.
 // result=True => source_handle="true", result=False => "false"
 type ConditionNode struct{}
 
@@ -28,13 +32,27 @@ func (n *ConditionNode) Execute(ctx *engine.ExecutionContext, config string) (*e
 	if err != nil {
 		return nil, err
 	}
-	if cfg.Script == "" {
-		return nil, fmt.Errorf("condition: script is required")
-	}
 
-	result, err := evalCondition(ctx, cfg.Script)
-	if err != nil {
-		return nil, fmt.Errorf("condition: %w", err)
+	var result bool
+	if cfg.Script != "" {
+		result, err = evalCondition(ctx, cfg.Script)
+		if err != nil {
+			return nil, fmt.Errorf("condition: %w", err)
+		}
+	} else if cfg.Field != "" {
+		raw, ok := ctx.Get(cfg.Field)
+		if !ok {
+			for label, output := range ctx.AllNodeOutputs() {
+				if label+"."+KeyOutput == cfg.Field {
+					raw = output.Data[KeyOutput]
+					ok = true
+					break
+				}
+			}
+		}
+		result = Evaluate(cfg.Operator, fmt.Sprintf("%v", raw), cfg.Value)
+	} else {
+		return nil, fmt.Errorf("condition: script or field/operator/value is required")
 	}
 
 	nextNode := "false"

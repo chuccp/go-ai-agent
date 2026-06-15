@@ -1,5 +1,7 @@
 import type { ChatModelAdapter, ChatModelRunResult } from '@assistant-ui/react'
 
+import type { PendingFlow } from './MyRuntimeProvider'
+
 interface WebSocketAdapterOptions {
   getWs: () => WebSocket | null
   sessionId: () => number | null
@@ -7,6 +9,10 @@ interface WebSocketAdapterOptions {
   thinkLevel: () => string
   flowId: () => number | null
   onSessionCreated?: (sessionId: number) => void
+  pendingFlow?: () => PendingFlow | null
+  onFlowResponseSent?: () => void
+  onFlowWaiting?: (executionId: number, question: string) => void
+  onFlowEnded?: () => void
 }
 
 export function createStreamingWebSocketAdapter(opts: WebSocketAdapterOptions): ChatModelAdapter {
@@ -68,20 +74,30 @@ export function createStreamingWebSocketAdapter(opts: WebSocketAdapterOptions): 
         return
       }
 
-      // Build payload — backend expects "messages" array, not standalone "content"
-      const payload: any = {
-        type: 'agent',
-        session_id: opts.sessionId(),
-        messages: [{ role: 'user', content: textContent.trim() }],
-        model: opts.modelId(),
-        stream: true,
-        options: { think_level: opts.thinkLevel() },
-      }
-
+      const pending = opts.pendingFlow ? opts.pendingFlow() : null
       const flowId = opts.flowId()
-      if (flowId) {
-        payload.options.flow_id = flowId
-        payload.type = 'flow_start'
+
+      // Build payload — backend expects "messages" array, not standalone "content"
+      let payload: any
+      if (pending?.executionId) {
+        payload = {
+          type: 'flow_user_response',
+          session_id: opts.sessionId(),
+          options: { execution_id: pending.executionId, response: textContent.trim() },
+        }
+        if (opts.onFlowResponseSent) opts.onFlowResponseSent()
+      } else {
+        payload = {
+          type: flowId ? 'flow_start' : 'agent',
+          session_id: opts.sessionId(),
+          messages: [{ role: 'user', content: textContent.trim() }],
+          model: opts.modelId(),
+          stream: true,
+          options: { think_level: opts.thinkLevel() },
+        }
+        if (flowId) {
+          payload.options.flow_id = flowId
+        }
       }
 
       console.log('[WS] ✅ Sending payload:', JSON.stringify(payload))
@@ -91,6 +107,17 @@ export function createStreamingWebSocketAdapter(opts: WebSocketAdapterOptions): 
       let done = false
       let accumulatedText = ''
       let toolCalls: any[] = []
+
+      const flush = () => {
+        const content: any[] = []
+        if (accumulatedText) {
+          content.push({ type: 'text', text: accumulatedText })
+        }
+        content.push(...toolCalls)
+        if (content.length > 0) {
+          queue.push({ content: [...content] })
+        }
+      }
 
       const handler = (evt: MessageEvent) => {
         try {
@@ -102,6 +129,43 @@ export function createStreamingWebSocketAdapter(opts: WebSocketAdapterOptions): 
                 opts.onSessionCreated(msg.session_id)
               }
               break
+
+            case 'flow_started':
+              accumulatedText += `▶️ ${msg.message || 'Flow started'}\n`
+              flush()
+              break
+
+            case 'flow_node_start':
+            case 'flow_node_done':
+              // Optional low-noise progress; skip by default.
+              break
+
+            case 'flow_waiting_user':
+              if (msg.message) {
+                accumulatedText += `\n${msg.message}`
+              }
+              flush()
+              if (msg.execution_id && opts.onFlowWaiting) {
+                opts.onFlowWaiting(Number(msg.execution_id), msg.message || '')
+              }
+              done = true
+              return
+
+            case 'flow_complete':
+              if (msg.message || msg.content) {
+                accumulatedText += `\n✅ ${msg.message || msg.content}`
+                flush()
+              }
+              if (opts.onFlowEnded) opts.onFlowEnded()
+              done = true
+              return
+
+            case 'flow_error':
+              accumulatedText += `\n❌ ${msg.message || msg.content || 'Flow error'}`
+              flush()
+              if (opts.onFlowEnded) opts.onFlowEnded()
+              done = true
+              return
 
             case 'chunk':
               if (msg.done) {
@@ -135,15 +199,7 @@ export function createStreamingWebSocketAdapter(opts: WebSocketAdapterOptions): 
               return
           }
 
-          const content: any[] = []
-          if (accumulatedText) {
-            content.push({ type: 'text', text: accumulatedText })
-          }
-          content.push(...toolCalls)
-
-          if (content.length > 0) {
-            queue.push({ content: [...content] })
-          }
+          flush()
         } catch {}
       }
 

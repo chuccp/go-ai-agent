@@ -50,10 +50,10 @@ function flowNodeToRF(n: FlowNode): Node {
 function flowEdgeToRF(e: FlowEdge, nodes?: FlowNode[]): Edge {
   // Determine label for condition branches
   let label = e.label || undefined
-  if (!label && nodes) {
+    if (!label && nodes) {
     const sourceNode = nodes.find(n => n.id === e.source_node_id)
     if (sourceNode?.type === 'condition') {
-      label = e.source_handle === 'yes' ? 'TRUE' : e.source_handle === 'no' ? 'FALSE' : undefined
+      label = e.source_handle === 'true' ? 'TRUE' : e.source_handle === 'false' ? 'FALSE' : undefined
     }
   }
   return {
@@ -262,6 +262,7 @@ function FlowNodeComponent({ id, data, selected }: { id: string; data: any; sele
       case 'loop': return c.max_iterations ? `max: ${c.max_iterations}` : ''
       case 'for_each':
       case 'iterator': return c.items_key || ''
+      case 'skill': return c.skill_id || ''
       default: return ''
     }
   }, [data.config, data.nodeType])
@@ -360,17 +361,17 @@ function FlowNodeComponent({ id, data, selected }: { id: string; data: any; sele
           <Handle
             type="source"
             position={Position.Right}
-            id="yes"
+            id="true"
             style={{ width: 10, height: 10, background: '#17b26a', border: '2px solid #fff', top: '35%', cursor: 'crosshair' }}
-            onClick={handleSourceClick('yes')}
+            onClick={handleSourceClick('true')}
           />
           <div style={{ position: 'absolute', right: -8, top: '65%', transform: 'translateY(-50%) translateX(100%)', fontSize: 9, fontWeight: 700, color: '#f04438', paddingLeft: 4 }}>FALSE</div>
           <Handle
             type="source"
             position={Position.Right}
-            id="no"
+            id="false"
             style={{ width: 10, height: 10, background: '#f04438', border: '2px solid #fff', top: '65%', cursor: 'crosshair' }}
-            onClick={handleSourceClick('no')}
+            onClick={handleSourceClick('false')}
           />
         </>
       )}
@@ -964,6 +965,59 @@ function PropertyPanel({
                 style={inputStyle}
               />
             </div>
+            <div style={{ marginBottom: 10 }}>
+              <label style={labelStyle}>{t('nodeConfig.aspectRatio')}</label>
+              <select
+                value={cfg.aspect_ratio || '1:1'}
+                onChange={e => updateCfg('aspect_ratio', e.target.value)}
+                style={inputStyle}
+              >
+                <option value="1:1">1:1</option>
+                <option value="16:9">16:9</option>
+                <option value="9:16">9:16</option>
+                <option value="4:3">4:3</option>
+                <option value="3:4">3:4</option>
+              </select>
+            </div>
+          </div>
+        )
+
+      case 'skill':
+        return (
+          <div style={sectionStyle}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#101828', marginBottom: 10 }}>{t('nodes.skill')}</div>
+            <div style={{ marginBottom: 10 }}>
+              <label style={labelStyle}>{t('nodeConfig.skillId') || 'Skill ID'}</label>
+              <input
+                value={cfg.skill_id || ''}
+                onChange={e => updateCfg('skill_id', e.target.value)}
+                style={inputStyle}
+                placeholder="summary-v1"
+              />
+            </div>
+            <div style={{ marginBottom: 10 }}>
+              <label style={labelStyle}>{t('nodeConfig.model')}</label>
+              <input
+                value={cfg.model || ''}
+                onChange={e => updateCfg('model', e.target.value)}
+                style={inputStyle}
+                placeholder="1.default"
+              />
+            </div>
+            <div style={{ marginBottom: 10 }}>
+              <label style={labelStyle}>{t('nodeConfig.inputMapping') || 'Input Mapping (JSON)'}</label>
+              <textarea
+                value={cfg.input_mapping ? JSON.stringify(cfg.input_mapping, null, 2) : ''}
+                onChange={e => {
+                  try {
+                    updateCfg('input_mapping', e.target.value ? JSON.parse(e.target.value) : {})
+                  } catch {}
+                }}
+                rows={5}
+                style={{ ...inputStyle, resize: 'vertical', fontFamily: 'monospace', fontSize: 12 }}
+                placeholder='{"topic": "{{start.output}}"}'
+              />
+            </div>
           </div>
         )
 
@@ -1202,6 +1256,12 @@ function FlowListView() {
                   {f.updated_at ? new Date(f.updated_at).toLocaleString() : ''}
                 </div>
                 <div style={{ display: 'flex', gap: 6, marginTop: 'auto' }}>
+                  <a
+                    href={`#/run/${f.id}`}
+                    style={{ ...btnStyle(), flex: 1, justifyContent: 'center', textDecoration: 'none' }}
+                  >
+                    ▶ {t('flow.run') || 'Run'}
+                  </a>
                   <button
                     onClick={() => nav(`/designer/${f.id}`)}
                     style={{ ...btnStyle(), flex: 1, justifyContent: 'center' }}
@@ -1311,11 +1371,15 @@ function FlowEditor({ flowId }: { flowId: string }) {
   // editor state
   const [flowName, setFlowName] = useState('')
   const [flowCategory, setFlowCategory] = useState('')
+  const [flowIcon, setFlowIcon] = useState('')
+  const [formSchemaJson, setFormSchemaJson] = useState('')
+  const [settingsJson, setSettingsJson] = useState('')
   const [dbFlowId, setDbFlowId] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
   const [error, setError] = useState('')
+  const [showSettings, setShowSettings] = useState(false)
 
   // reactflow state
   const [nodes, setNodes, onNodesChange] = useNodesState([])
@@ -1360,6 +1424,9 @@ function FlowEditor({ flowId }: { flowId: string }) {
       setEdges([])
       setFlowName('')
       setFlowCategory('')
+      setFlowIcon('')
+      setFormSchemaJson('')
+      setSettingsJson('')
       setDbFlowId(null)
       setNextNodeId(3)
       setLoading(false)
@@ -1369,6 +1436,9 @@ function FlowEditor({ flowId }: { flowId: string }) {
         if (!detail) { setError('Flow not found'); setLoading(false); return }
         setFlowName(detail.name)
         setFlowCategory(detail.category || '')
+        setFlowIcon(detail.icon || '')
+        setFormSchemaJson(detail.form_schema ? JSON.stringify(detail.form_schema, null, 2) : '')
+        setSettingsJson(detail.settings ? JSON.stringify(detail.settings, null, 2) : '')
         setDbFlowId(detail.id)
         const rfn = (detail.nodes || []).map(flowNodeToRF)
         const rfe = (detail.edges || []).map(e => flowEdgeToRF(e, detail.nodes))
@@ -1396,7 +1466,7 @@ function FlowEditor({ flowId }: { flowId: string }) {
     if (!dirty) return
     autoSaveTimerRef.set(setTimeout(() => { handleSave(true) }, 800))
     return () => { const t = autoSaveTimerRef.get(); if (t) clearTimeout(t) }
-  }, [dirty, nodes, edges, flowName, flowCategory])
+  }, [dirty, nodes, edges, flowName, flowCategory, flowIcon, formSchemaJson, settingsJson])
 
   const markDirty = useCallback(() => setDirty(true), [])
 
@@ -1648,9 +1718,34 @@ function FlowEditor({ flowId }: { flowId: string }) {
     }
     setError('')
     setSaving(true)
+    let formSchemaValue = ''
+    if (formSchemaJson.trim()) {
+      try {
+        const parsed = JSON.parse(formSchemaJson)
+        formSchemaValue = JSON.stringify(parsed)
+      } catch {
+        setError('Invalid form schema JSON')
+        setSaving(false)
+        return
+      }
+    }
+    let settingsValue = ''
+    if (settingsJson.trim()) {
+      try {
+        const parsed = JSON.parse(settingsJson)
+        settingsValue = JSON.stringify(parsed)
+      } catch {
+        setError('Invalid settings JSON')
+        setSaving(false)
+        return
+      }
+    }
     const payload = {
       name: flowName.trim() || 'Untitled',
       category: flowCategory || 'uncategorized',
+      icon: flowIcon,
+      form_schema: formSchemaValue,
+      settings: settingsValue,
       nodes: nodes.map(n => rfNodeToFlowNode(n, dbFlowId || 0)),
       edges: edges.map(e => rfEdgeToFlowEdge(e, dbFlowId || 0)),
     }
@@ -1677,6 +1772,9 @@ function FlowEditor({ flowId }: { flowId: string }) {
     // Save first, then download via backend ZIP endpoint
     const saved = await saveFlow({
       name: flowName, description: '', category: flowCategory,
+      icon: flowIcon,
+      form_schema: formSchemaJson,
+      settings: settingsJson,
       nodes: nodes.map(n => rfNodeToFlowNode(n, 0)),
       edges: edges.map(e => rfEdgeToFlowEdge(e, 0)),
     })
@@ -1721,6 +1819,9 @@ function FlowEditor({ flowId }: { flowId: string }) {
           setEdges(rfe)
           if (flow.name) setFlowName(flow.name)
           if (flow.category) setFlowCategory(flow.category)
+          if (flow.icon) setFlowIcon(flow.icon)
+          if (flow.form_schema) setFormSchemaJson(JSON.stringify(flow.form_schema, null, 2))
+          if (flow.settings) setSettingsJson(JSON.stringify(flow.settings, null, 2))
           const maxId = Math.max(0, ...rfn.map((n: Node) => parseInt(n.id, 10)).filter((n: number) => !isNaN(n)))
           setNextNodeId(maxId + 1)
           markDirty()
@@ -2081,6 +2182,9 @@ function FlowEditor({ flowId }: { flowId: string }) {
           <Icon d={ICONS.save} size={14} color="#fff" />
           {saving ? t('common.loading') : t('common.save')}
         </button>
+        <button onClick={() => setShowSettings(true)} style={mainBtn()}>
+          ⚙ Settings
+        </button>
         <button onClick={handleExport} style={mainBtn()}>
           <Icon d={ICONS.export} size={14} /> {t('common.export')}
         </button>
@@ -2236,6 +2340,57 @@ function FlowEditor({ flowId }: { flowId: string }) {
                   {action.shortcut && <span style={{ fontSize: 11, color: '#98a2b3', marginLeft: 20 }}>{action.shortcut}</span>}
                 </div>
               ))}
+            </div>
+          </>
+        )}
+
+        {/* Flow settings modal */}
+        {showSettings && (
+          <>
+            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', zIndex: 1002 }} onClick={() => setShowSettings(false)} />
+            <div style={{
+              position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+              width: 520, maxWidth: '90vw', maxHeight: '80vh', background: '#fff', borderRadius: 16,
+              boxShadow: '0 12px 32px rgba(0,0,0,0.15)', zIndex: 1003, display: 'flex', flexDirection: 'column', overflow: 'hidden',
+            }} onClick={e => e.stopPropagation()}>
+              <div style={{ padding: '16px 20px', borderBottom: '1px solid #f2f4f7', fontSize: 16, fontWeight: 600, color: '#101828' }}>
+                Flow Settings
+              </div>
+              <div style={{ padding: 20, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div>
+                  <label style={{ fontSize: 12, color: '#354052', fontWeight: 500, marginBottom: 4, display: 'block' }}>Icon</label>
+                  <input
+                    value={flowIcon}
+                    onChange={e => { setFlowIcon(e.target.value); markDirty() }}
+                    placeholder="emoji or image path"
+                    style={{ width: '100%', padding: '8px 10px', border: '1px solid #d0d5dd', borderRadius: 8, fontSize: 13, outline: 'none' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: 12, color: '#354052', fontWeight: 500, marginBottom: 4, display: 'block' }}>Form Schema (JSON)</label>
+                  <textarea
+                    value={formSchemaJson}
+                    onChange={e => { setFormSchemaJson(e.target.value); markDirty() }}
+                    rows={8}
+                    style={{ width: '100%', padding: '8px 10px', border: '1px solid #d0d5dd', borderRadius: 8, fontSize: 12, fontFamily: 'monospace', outline: 'none', resize: 'vertical' }}
+                    placeholder='{"fields":[{"name":"topic","label":"Topic","type":"text","required":true}]}'
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: 12, color: '#354052', fontWeight: 500, marginBottom: 4, display: 'block' }}>Settings (JSON)</label>
+                  <textarea
+                    value={settingsJson}
+                    onChange={e => { setSettingsJson(e.target.value); markDirty() }}
+                    rows={6}
+                    style={{ width: '100%', padding: '8px 10px', border: '1px solid #d0d5dd', borderRadius: 8, fontSize: 12, fontFamily: 'monospace', outline: 'none', resize: 'vertical' }}
+                    placeholder='{"default_model":"1.gpt-4o","allow_chat":true}'
+                  />
+                </div>
+              </div>
+              <div style={{ padding: '12px 20px', borderTop: '1px solid #f2f4f7', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                <button onClick={() => setShowSettings(false)} style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #d0d5dd', background: '#fff', color: '#354052', fontSize: 13, cursor: 'pointer' }}>Close</button>
+                <button onClick={() => { handleSave(); setShowSettings(false) }} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#155aef', color: '#fff', fontSize: 13, cursor: 'pointer' }}>Save</button>
+              </div>
             </div>
           </>
         )}

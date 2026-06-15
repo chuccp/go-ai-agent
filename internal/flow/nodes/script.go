@@ -15,6 +15,24 @@ type ScriptNodeConfig struct {
 	Script string `json:"script"`
 }
 
+func (c *ScriptNodeConfig) UnmarshalJSON(data []byte) error {
+	type Alias ScriptNodeConfig
+	aux := &struct{ *Alias }{Alias: (*Alias)(c)}
+	if err := json.Unmarshal(data, aux); err != nil {
+		return err
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	if c.Script == "" {
+		if v, ok := raw["code"].(string); ok {
+			c.Script = v
+		}
+	}
+	return nil
+}
+
 // ScriptNode Starlark (Python dialect) dynamic script node
 // Predefined:
 //   ctx["node_name"]["output"] — upstream node output

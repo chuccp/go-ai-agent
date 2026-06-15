@@ -10,9 +10,11 @@ import (
 // It replaces the package-level singleton pattern, allowing multiple isolated
 // tool registries (e.g., per context or per application instance).
 type Registry struct {
-	registry     map[string]Executor
-	flowHandler  FlowActionHandler
-	modelHandler ModelActionHandler
+	registry             map[string]Executor
+	flowHandler          FlowActionHandler
+	flowExecutionHandler FlowExecutionHandler
+	skillSvc             any
+	modelHandler         ModelActionHandler
 }
 
 // NewRegistry creates a new tool registry.
@@ -42,23 +44,57 @@ func (r *Registry) SetModelHandler(h ModelActionHandler) {
 	}
 }
 
+// SetFlowExecutionHandler sets the flow execution handler and pushes it to any tool
+// that implements FlowExecutionHandlerSetter.
+func (r *Registry) SetFlowExecutionHandler(h FlowExecutionHandler) {
+	r.flowExecutionHandler = h
+	for _, e := range r.registry {
+		if s, ok := e.(FlowExecutionHandlerSetter); ok {
+			s.SetFlowExecutionHandler(h)
+		}
+	}
+}
+
+// SetSkillService sets the skill service and pushes it to any tool
+// that implements SkillHandlerSetter.
+func (r *Registry) SetSkillService(svc any) {
+	r.skillSvc = svc
+	for _, e := range r.registry {
+		if s, ok := e.(SkillHandlerSetter); ok {
+			s.SetSkillService(svc)
+		}
+	}
+}
+
 func (r *Registry) Init(ctx *core.Context) error {
 	r.Register(&ExecuteCommand{})
 	r.Register(&ReadDocument{})
 	r.Register(&WebSearch{})
 	r.Register(&ManageFlows{})
+	r.Register(&RunFlow{})
+	r.Register(&UseSkill{})
 	r.Register(&ManageModels{})
 	return nil
 }
 
 // Register adds an executor to the registry and auto-injects handlers
-// if the executor implements FlowHandlerSetter / ModelHandlerSetter.
+// if the executor implements FlowHandlerSetter / ModelHandlerSetter / FlowExecutionHandlerSetter.
 func (r *Registry) Register(e Executor) {
 	def := e.Definition()
 	r.registry[def.Name] = e
 	if r.flowHandler != nil {
 		if s, ok := e.(FlowHandlerSetter); ok {
 			s.SetFlowHandler(r.flowHandler)
+		}
+	}
+	if r.flowExecutionHandler != nil {
+		if s, ok := e.(FlowExecutionHandlerSetter); ok {
+			s.SetFlowExecutionHandler(r.flowExecutionHandler)
+		}
+	}
+	if r.skillSvc != nil {
+		if s, ok := e.(SkillHandlerSetter); ok {
+			s.SetSkillService(r.skillSvc)
 		}
 	}
 	if r.modelHandler != nil {

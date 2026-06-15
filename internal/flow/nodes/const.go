@@ -18,6 +18,7 @@ const (
 	TypeImageGen  = "image_gen"
 	TypeAudioGen  = "audio_gen"
 	TypeVideoGen  = "video_gen"
+	TypeSkill     = "skill"
 )
 
 // Node output data keys

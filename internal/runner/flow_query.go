@@ -124,6 +124,10 @@ func (r *ChatRunner) flowCreate(args map[string]any) (string, error) {
 		Name:        name,
 		Description: desc,
 		Category:    cat,
+		Config:      getStringArg(args, "config"),
+		FormSchema:  getStringArg(args, "form_schema"),
+		Settings:    getStringArg(args, "settings"),
+		Icon:        getStringArg(args, "icon"),
 	}
 	if err := r.flowModel.Create(f); err != nil {
 		return "", fmt.Errorf("create flow failed: %w", err)
@@ -190,6 +194,18 @@ func (r *ChatRunner) flowUpdate(args map[string]any) (string, error) {
 	if v, ok := args["category"].(string); ok && v != "" {
 		f.Category = v
 	}
+	if v := getStringArg(args, "config"); v != "" {
+		f.Config = v
+	}
+	if v := getStringArg(args, "form_schema"); v != "" {
+		f.FormSchema = v
+	}
+	if v := getStringArg(args, "settings"); v != "" {
+		f.Settings = v
+	}
+	if v := getStringArg(args, "icon"); v != "" {
+		f.Icon = v
+	}
 
 	nodeCount := 0
 	edgeCount := 0
@@ -248,6 +264,19 @@ func getUintArg(args map[string]any, key string) (uint, error) {
 		return uint(n), nil
 	default:
 		return 0, fmt.Errorf("parameter %s type error", key)
+	}
+}
+
+func getStringArg(args map[string]any, key string) string {
+	v, ok := args[key]
+	if !ok {
+		return ""
+	}
+	switch s := v.(type) {
+	case string:
+		return s
+	default:
+		return fmt.Sprintf("%v", s)
 	}
 }
 

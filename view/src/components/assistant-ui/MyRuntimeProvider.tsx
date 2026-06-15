@@ -9,6 +9,11 @@ export interface ThreadMessageLike {
   content: string | { type: 'text'; text: string }[]
 }
 
+export interface PendingFlow {
+  executionId: number
+  question?: string
+}
+
 interface RuntimeProviderProps {
   children: ReactNode
   getWs?: () => WebSocket | null
@@ -17,6 +22,10 @@ interface RuntimeProviderProps {
   thinkLevel: () => string
   flowId: () => number | null
   onSessionCreated?: (sessionId: number) => void
+  pendingFlow?: () => PendingFlow | null
+  onFlowResponseSent?: () => void
+  onFlowWaiting?: (executionId: number, question: string) => void
+  onFlowEnded?: () => void
   initialMessages?: readonly ThreadMessageLike[]
 }
 
@@ -28,16 +37,21 @@ export function MyRuntimeProvider({
   thinkLevel,
   flowId,
   onSessionCreated,
+  pendingFlow,
+  onFlowResponseSent,
+  onFlowWaiting,
+  onFlowEnded,
   initialMessages,
 }: RuntimeProviderProps) {
   const adapter = useMemo(
     () => {
+      const base = { sessionId, modelId, thinkLevel, flowId, onSessionCreated, pendingFlow, onFlowResponseSent, onFlowWaiting, onFlowEnded }
       if (IS_DESKTOP) {
-        return createIpcAdapter({ sessionId, modelId, thinkLevel, flowId, onSessionCreated })
+        return createIpcAdapter(base)
       }
-      return createStreamingWebSocketAdapter({ getWs: getWs!, sessionId, modelId, thinkLevel, flowId, onSessionCreated })
+      return createStreamingWebSocketAdapter({ getWs: getWs!, ...base })
     },
-    [getWs, sessionId, modelId, thinkLevel, flowId, onSessionCreated]
+    [getWs, sessionId, modelId, thinkLevel, flowId, onSessionCreated, pendingFlow, onFlowResponseSent, onFlowWaiting, onFlowEnded]
   )
 
   const runtime = useLocalRuntime(adapter, { initialMessages })

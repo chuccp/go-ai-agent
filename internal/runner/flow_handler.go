@@ -35,8 +35,20 @@ func (r *ChatRunner) handleFlowStart(conn *websocket.Conn, req WSRequest) {
 		initialInput = req.Messages[len(req.Messages)-1].Content
 	}
 
-	if err := r.flowRunner.HandleFlowStart(flowId, executionId, req.SessionID, initialInput); err != nil {
+	opts := FlowStartOptions{InitialInput: initialInput}
+	if req.Options != nil {
+		if fv, ok := req.Options["form_values"].(map[string]any); ok {
+			opts.FormValues = fv
+		}
+		if co, ok := req.Options["config_overrides"].(map[string]string); ok {
+			opts.ConfigOverrides = co
+		}
+	}
+	newExecId, err := r.flowRunner.HandleFlowStart(flowId, executionId, req.SessionID, opts)
+	if err != nil {
 		r.sendJSON(conn, WSResponse{Type: "error", Message: err.Error()})
+	} else if newExecId > 0 {
+		r.sendJSON(conn, WSResponse{Type: "flow_started", Message: fmt.Sprintf("flow started: %d", newExecId)})
 	}
 }
 

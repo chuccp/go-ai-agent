@@ -25,6 +25,7 @@ func (l *Api) Init(context *core.Context) error {
 	l.context.Get("/", l.index)
 	l.context.Get("/api/health", l.health)
 	l.context.Get("/api/setup/status", l.getSetupStatus)
+	l.context.Static("/api/files/gen", "./data/gen")
 	return nil
 }
 

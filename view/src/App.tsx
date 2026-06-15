@@ -3,7 +3,10 @@ import { useEffect, useState } from 'react'
 import { useSetupStore } from '@/stores/setupStore'
 import ChatHome from '@/pages/ChatHome'
 import FlowDesigner from '@/pages/FlowDesigner'
+import FlowRunner from '@/pages/FlowRunner'
 import ModelManager from '@/pages/ModelManager'
+import SkillManager from '@/pages/SkillManager'
+import PackageManager from '@/pages/PackageManager'
 import SetupWizard from '@/pages/SetupWizard'
 
 export default function App() {
@@ -32,7 +35,10 @@ export default function App() {
             <Route path="/" element={<ChatHome />} />
             <Route path="/designer" element={<FlowDesigner />} />
             <Route path="/designer/:id" element={<FlowDesigner />} />
+            <Route path="/run/:id" element={<FlowRunner />} />
             <Route path="/models" element={<ModelManager />} />
+            <Route path="/skills" element={<SkillManager />} />
+            <Route path="/packages" element={<PackageManager />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </>
         )}
