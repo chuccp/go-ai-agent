@@ -24,9 +24,9 @@ The agent will **understand your intent → propose a node structure → confirm
 - **Visual Flow Designer** — Drag-and-drop DAG editor with 16 node types including condition, switch, execute, script
 - **Script-Based Nodes** — Condition and switch nodes use Starlark (Python dialect) expressions with access to all upstream data
 - **Generic Batch Processing** — ForEach and Iterator nodes invoke any function with args, not hardcoded to LLM
-- **Desktop App** — Native Windows/macOS/Linux window via Wails v2
+- **Desktop App** — Native Windows/macOS/Linux window via Wails v2 with IPC communication
 - **One-Step Setup** — Desktop mode auto-configures SQLite + admin account, only model API key needed
-- **Shareable Flows** — Export flows as ZIP packages (flow.json + meta.json), import with one click
+- **Shareable Apps** — Export apps as ZIP packages (app.json + meta.json), import with one click
 - **Multi-Model** — OpenAI, Claude, Gemini, DeepSeek, and 28+ providers via unified interface
 - **Agent Tool Use** — Extensible tool registry with manage_flows, manage_models, execute_command, read_document, web_search
 - **Web Mode** — Run as a browser-based server via `cmd/server/main.go`
@@ -34,7 +34,7 @@ The agent will **understand your intent → propose a node structure → confirm
 
 ## Quick Start
 
-### Desktop App (Windows)
+### Desktop App (Windows/macOS/Linux)
 
 ```bash
 # Prerequisites: Go 1.25+, Node 18+, pnpm
@@ -44,7 +44,8 @@ git clone https://github.com/chuccp/go-ai-agent.git
 cd go-ai-agent
 
 # One-click dev mode
-dev.bat
+dev.bat  # Windows
+make desktop-dev  # macOS/Linux
 
 # Or manually
 wails dev
@@ -72,15 +73,18 @@ Desktop Mode                        Web Mode
 │  │  (embedded)     │  │                      │
 │  └───────┬────────┘  │            ┌─────────▼────────────┐
 └──────────┼───────────┘            │  Go HTTP Server      │
-           │                        │  ├─ REST API         │
+           │ IPC                    │  ├─ REST API         │
 ┌──────────▼──────────────────────┐ │  ├─ WebSocket        │
 │  Go HTTP Server :19009          │ │  ├─ Agent + Tools    │
 │  ├─ REST API + CORS             │ │  └─ Flow Engine      │
-│  ├─ WebSocket                   │ └──────────────────────┘
+│  ├─ IPC Events (Wails)          │ └──────────────────────┘
 │  ├─ Agent + Tools               │
 │  └─ Flow Engine (DAG)           │
 └─────────────────────────────────┘
 ```
+
+**Desktop Mode**: Uses Wails IPC for communication (no WebSocket required)  
+**Web Mode**: Uses WebSocket for real-time communication
 
 ## Project Structure
 
@@ -88,31 +92,41 @@ Desktop Mode                        Web Mode
 go-ai-agent/
 ├── main.go                  # Desktop entry (Wails)
 ├── cmd/server/main.go       # Web server entry
-├── internal/app/            # Shared setup (config, desktop init, CORS)
+├── internal/
+│   ├── app/                 # Shared setup (config, desktop init, CORS)
+│   ├── agent/               # Agent loop and tool registry
+│   │   └── tool/            # Tool implementations
+│   ├── ai/                  # AI services
+│   │   └── chat/            # Unified chat service + 28+ providers
+│   ├── entity/              # Database entities (FlowDefinition, AIModel, etc.)
+│   ├── model/               # Data access layer
+│   ├── rest/                # REST endpoints
+│   ├── runner/              # ChatRunner, FlowRunner
+│   └── flow/                # Flow engine
+│       ├── engine/          # DAG executor, task manager, function registry
+│       ├── nodes/           # Node implementations (16 types)
+│       └── export/          # ZIP import/export
+├── view/                    # React frontend
+│   └── src/
+│       ├── pages/           # ChatHome, FlowDesigner, ModelManager, SetupWizard
+│       ├── components/      # Shared components (ModelForm, IpcAdapter)
+│       ├── stores/          # Zustand state stores
+│       └── i18n/            # Locale files (en, zh, zh-TW, ja)
 ├── wails.json               # Wails project config
-├── dev.bat                  # One-click desktop dev launcher
 ├── Makefile                 # Build targets
-├── agent/                   # Agent loop, tool registry
-├── ai/chat/                 # Unified chat service + 28+ providers
-├── runner/                  # ChatRunner, FlowRunner
-├── rest/                    # REST endpoints
-├── flow/                    # Flow engine + 16 node types
-│   ├── engine/              # DAG executor, task manager, function registry
-│   ├── nodes/               # Node implementations
-│   └── export/              # ZIP import/export
-└── view/                    # React frontend
-    └── src/
-        ├── pages/           # ChatHome, FlowDesigner, ModelManager, SetupWizard
-        ├── components/      # Shared components (ModelForm, WebSocketAdapter)
-        ├── stores/          # Zustand state stores
-        └── i18n/            # Locale files (en, zh, zh-TW, ja)
+└── dev.bat                  # One-click desktop dev launcher (Windows)
 ```
 
 ## Flow Engine
 
-**16 node types**: `start`, `end`, `llm`, `user_input`, `condition`, `switch`, `transform`, `split`, `for_each`, `iterator`, `loop`, `script`, `execute`, `image_gen`, `audio_gen`, `video_gen`
+**16 node types**: `start`, `end`, `llm`, `skill`, `user_input`, `condition`, `switch`, `transform`, `split`, `for_each`, `iterator`, `loop`, `script`, `execute`, `image_gen`, `audio_gen`, `video_gen`
 
-**Script-based nodes** use Starlark (Python dialect):
+**Skill Node**: Direct prompt execution with model selection
+```json
+{ "prompt": "{{start.output}}", "model": "1.default" }
+```
+
+**Script-Based Nodes** use Starlark (Python dialect):
 ```python
 # Condition: returns bool → "yes"/"no" branch
 v = ctx["user_input"]["output"].lower()
@@ -125,22 +139,29 @@ elif score >= 60: result = "B"
 else:            result = "C"
 ```
 
-**Generic batch processing** — ForEach and Iterator invoke any registered function:
+**Generic Batch Processing** — ForEach and Iterator invoke any registered function:
 ```json
 { "items_key": "split", "function": "llm", "args": { "model": "...", "prompt": "{{item.output}}" } }
 ```
 ForEach runs in parallel, Iterator runs sequentially (skips failures).
 
-**Execute node** runs local shell commands with configurable timeout (`0` = no limit).
+**Execute Node** runs local shell commands with configurable timeout (`0` = no limit).
 
-**Flow export** uses ZIP format (`flow.json` + `meta.json`) with future slots for `skills/` and `resources/`.
+**App Export** uses ZIP format (`app.json` + `meta.json`).
 
-## WebSocket Protocol
+## Communication Protocol
 
-Connect to `ws://localhost:19009/ws`. Message types:
-- `chat` / `agent` — sends to ChatRunner
-- `flow_start` / `flow_user_response` / `flow_stop` — flow execution control
-- Responses: `chunk`, `tool_call`, `tool_result`, `error`, `session_created`
+### Desktop Mode (IPC)
+- Uses Wails Events for real-time communication
+- Event pattern: `chat:{sessionId}:{type}` (e.g., `chat:5:chunk`)
+- Event types: `chunk`, `tool_call`, `tool_result`, `error`, `session_created`
+
+### Web Mode (WebSocket)
+- Connect to `ws://localhost:19009/ws/chat`
+- Message types:
+  - `chat` / `agent` — sends to ChatRunner
+  - `flow_start` / `flow_user_response` / `flow_stop` — flow execution control
+  - Responses: `chunk`, `tool_call`, `tool_result`, `error`, `session_created`
 
 ## Tech Stack
 
@@ -153,6 +174,7 @@ Connect to `ws://localhost:19009/ws`. Message types:
 | Chat UI | @assistant-ui/react |
 | i18n | react-i18next |
 | Database | SQLite (desktop) / MySQL / PostgreSQL (web) |
+| Communication | IPC (desktop) / WebSocket (web) |
 
 ## License
 

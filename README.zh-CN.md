@@ -8,6 +8,8 @@
 
 [English](README.md) | [繁體中文](README.zh-TW.md) | [日本語](README.ja.md)
 
+![Screenshot](screenshot.webp)
+
 ## 为什么用聊天创建工作流？
 
 传统的流程工具需要学习可视化编辑器 — 拖拽节点、连接边线、配置参数。使用 Go AI Agent，你只需要告诉它你想要什么：
@@ -27,19 +29,20 @@
 ## 功能特性
 
 - **聊天创建工作流** — 通过自然语言对话，使用 `manage_flows` 工具构建 AI 流水线
-- **一键分享** — 将任意流水线导出为 JSON 文件，团队成员一键导入，构建经过实战检验的共享 AI 工作流库
-- **可视化流程设计器** — Dify 风格拖拽式 DAG 编辑器，14 种节点类型，需要时可手动编辑
-- **桌面应用** — 基于 Wails v2 的原生 macOS/Windows/Linux 窗口，双击即用
+- **可视化流程设计器** — Dify 风格拖拽式 DAG 编辑器，16 种节点类型，需要时可手动编辑
+- **脚本节点** — 条件和切换节点使用 Starlark（Python 方言）表达式，可访问所有上游数据
+- **通用批处理** — ForEach 和 Iterator 节点调用任意函数，不局限于 LLM
+- **桌面应用** — 基于 Wails v2 的原生 macOS/Windows/Linux 窗口，使用 IPC 通信
 - **一步配置** — 桌面版自动配置 SQLite + 管理员账号，仅需设置模型 API Key
+- **应用分享** — 将应用导出为 ZIP 包（app.json + meta.json），一键导入运行
 - **多模型支持** — OpenAI、Claude、Gemini、DeepSeek 等 28+ 提供商统一接口
-- **Agent 工具调用** — 内置工具执行循环，可扩展工具注册表
-- **流式聊天** — 基于 WebSocket 的实时流式输出，支持思考过程展示
-- **Web 模式** — `--web` 参数启动为浏览器服务器（SQLite/MySQL/PostgreSQL）
+- **Agent 工具调用** — 可扩展工具注册表：manage_flows、manage_models、execute_command、read_document、web_search
+- **Web 模式** — 通过 `cmd/server/main.go` 启动为浏览器服务器
 - **多语言** — English, 简体中文, 繁體中文, 日本語
 
 ## 快速开始
 
-### 桌面版
+### 桌面应用
 
 ```bash
 # 前置条件: Go 1.25+, Node 18+, pnpm
@@ -48,160 +51,137 @@ go install github.com/wailsapp/wails/v2/cmd/wails@latest
 git clone https://github.com/chuccp/go-ai-agent.git
 cd go-ai-agent
 
-# 开发模式（热重载）
+# 一键开发模式
 wails dev
 
 # 构建 macOS .app
 wails build
 ```
 
-构建产物在 `build/bin/go-ai-agent.app`，双击启动。首次运行仅需配置模型 API Key。
+构建产物在 `build/bin/go-ai-agent.app`，双击启动。首次运行自动配置 SQLite 并创建默认管理员账号（admin/admin），仅需配置模型 API Key。
 
 ### Web 服务器模式
 
 ```bash
-go build -o go-ai-agent . && ./go-ai-agent --web
-cd view && pnpm dev
+go build -o go-ai-agent-server ./cmd/server/
+./go-ai-agent-server
 ```
 
-访问 `http://localhost:5173`，首次运行进入设置向导。
+访问 `http://localhost:19009`，首次运行进入设置向导。
 
-## 工作原理
+## 系统架构
 
 ```
-你: "创建一个内容审核流程"
-         │
-         ▼
-┌─────────────────────────────────┐
-│  AI 智能体 (manage_flows 工具)   │
-│                                 │
-│  1. 理解 — 询问关于流程的       │
-│     细节问题                    │
-│  2. 设计 — 用自然语言提出       │
-│     节点结构方案                │
-│  3. 确认 — 等待你的明确批准     │
-│  4. 创建 — 自动构建包含正确     │
-│     节点和连线的流程            │
-└─────────────────────────────────┘
-         │
-         ▼
-┌─────────────────────────────────┐
-│  自动创建的可视化流程            │
-│  ┌───┐   ┌──────┐   ┌───┐     │
-│  │开始│──▶│ LLM  │──▶│结束│     │
-│  └───┘   └──────┘   └───┘     │
-│                                 │
-│  随时可在拖拽式编辑器中手动修改  │
+桌面模式                          Web 模式
+┌──────────────────────┐            ┌──────────────────────┐
+│  Native WebView      │            │  浏览器               │
+│  ┌────────────────┐  │            └─────────┬────────────┘
+│  │  React 前端     │  │                      │ HTTP/WS
+│  │  (嵌入式)       │  │                      │
+│  └───────┬────────┘  │            ┌─────────▼────────────┐
+└──────────┼───────────┘            │  Go HTTP 服务器       │
+           │ IPC                    │  ├─ REST API         │
+┌──────────▼──────────────────────┐ │  ├─ WebSocket        │
+│  Go HTTP 服务器 :19009          │ │  ├─ Agent + 工具      │
+│  ├─ REST API + CORS             │ │  └─ 流程引擎          │
+│  ├─ IPC 事件 (Wails)            │ └──────────────────────┘
+│  ├─ Agent + 工具                │
+│  └─ 流程引擎 (DAG)              │
 └─────────────────────────────────┘
 ```
 
-## 对话中运行流水线
+**桌面模式**：使用 Wails IPC 进行通信（无需 WebSocket）  
+**Web 模式**：使用 WebSocket 进行实时通信
 
-流水线不只是独立运行的脚本——你可以在对话中直接调用它们。智能体成为运行时：加载流程、逐步执行、在聊天中实时汇报进度。
-
-```
-你: "用新闻审核流程分析这篇文章：[粘贴]"
-         │
-         ▼
-┌───────────────────────────────────────┐
-│  智能体在对话中逐步执行流水线         │
-│                                       │
-│  智能体: "步骤1/4 - 正在摘要..."      │
-│  智能体: "步骤2/4 - 情感：负面"       │
-│  ┌──────────────────────────┐        │
-│  │  user_input 节点触发      │        │
-│  │  "内容偏负面，仍发布        │        │
-│  │   还是跳过？"              │        │
-│  └──────────────────────────┘        │
-│                                       │
-│  你: "跳过"                           │
-│  智能体: "已跳过。流程完成。"         │
-└───────────────────────────────────────┘
-```
-
-流水线**处理结构化工作**，对话**处理决策判断**。流程驱动执行，关键时刻你始终在决策圈内。你可以在对话中随时运行已有流水线，也可以现场创建新的——聊天和执行的边界是无缝的。
-
-## 流水线 vs 技能
-
-AI 技能（单个 prompt 或工具调用）是单招，流水线是整套组合拳。
-
-| | 技能 | 流水线 |
-|---|------|-------|
-| **结构** | 单步执行，一段 prompt + 一个动作 | 多步骤 DAG，14 种节点任意组合 |
-| **分支逻辑** | 无，仅线性 | 条件分支、文本拆分、并行批处理 |
-| **人机协作** | 中途无法暂停 | `user_input` 节点可随时暂停等待审核/输入 |
-| **状态传递** | 无状态 | `{{节点名.output}}` 模板语法在节点间传递数据 |
-| **可观测性** | 只知道最终结果 | 每个节点的输入、输出、状态都被追踪记录 |
-| **多模型协同** | 只能用一个模型 | 不同节点可用不同模型（GPT 翻译 → Claude 润色 → Gemini 审核） |
-| **并发处理** | 不支持 | `for_each` 并行、`iterator` 迭代、`loop` 循环 |
-
-**实例对比** — *"监控新闻 → DeepSeek 摘要 → 情感分析 → 负面标记人工审核 → 正面直接发布"*
-
-- **用技能**：写 5 个 prompt，手动依次执行，肉眼判断正负面，分别处理
-- **用流水线**：一条流水线自动跑通，condition 节点自动分流，负面走人工确认，正面直接到结束
-
-流水线把人的判断和 AI 的能力编排在一起，而不是把 AI 当作孤立的一次性工具。
-
-### 为什么流水线更稳定
-
-单个 skill 就像一个"万能函数"——一次 LLM 调用要同时完成理解、推理、判断、输出。流水线把它拆成确定性步骤：
-
-- **单一职责** — 每个节点只做一件事。LLM 节点生成内容，condition 节点路由分支，transform 节点重塑数据。不存在单一混淆点。
-- **状态显式传递** — `{{节点.output}}` 模板语法在节点间传数据。LLM 不需要"记住"什么——下游节点每次拿到的是精确输入。
-- **分支逻辑外置** — condition 节点用简单的 contains/equals 规则判断，不依赖 LLM 自己推理。LLM 不决定数据走向，DAG 决定。
-- **人工检查点** — `user_input` 节点暂停执行，人可以在流程继续前检查中间结果并纠正方向。
-- **降低上下文长度，提高注意力** — skill 把所有东西塞进一个巨大 prompt，模型注意力被稀释。流水线每个节点只拿到聚焦的短上下文，LLM 一次只需关注一件事——上下文越短，注意力越集中，输出越可靠。
-
-把一个大而不可靠的 prompt，拆成小步可靠执行 + 确定性编排 + 人工兜底。
-
-## 分享与复用
-
-流水线以 JSON 文件存储——一键导出，分享文件，一键导入即可运行。
-
-- **团队库** — 将经过验证的流水线沉淀为团队共享资产，新人导入即用
-- **社区模板** — 通过 GitHub、Discord 等渠道公开分享流水线，任何人都能导入运行
-- **无锁定** — JSON 格式透明可读，流水线不依赖单一平台
-- **即时上手** — 新成员导入共享流水线后即可投入生产
+## 项目结构
 
 ```
-创建 → 导出 JSON → 分享 → 导入 → 运行
-  │                              │
-  └──── 迭代优化 & 再次分享 ←────┘
+go-ai-agent/
+├── main.go                  # 桌面入口 (Wails)
+├── cmd/server/main.go       # Web 服务器入口
+├── internal/
+│   ├── app/                 # 共享设置（配置、桌面初始化、CORS）
+│   ├── agent/               # Agent 循环和工具注册表
+│   │   └── tool/            # 工具实现
+│   ├── ai/                  # AI 服务
+│   │   └── chat/            # 统一聊天服务 + 28+ 提供商
+│   ├── entity/              # 数据库实体（FlowDefinition, AIModel 等）
+│   ├── model/               # 数据访问层
+│   ├── rest/                # REST 接口
+│   ├── runner/              # ChatRunner, FlowRunner
+│   └── flow/                # 流程引擎
+│       ├── engine/          # DAG 执行器、任务管理器、函数注册表
+│       ├── nodes/           # 节点实现（16 种类型）
+│       └── export/          # ZIP 导入/导出
+├── view/                    # React 前端
+│   └── src/
+│       ├── pages/           # ChatHome, FlowDesigner, ModelManager, SetupWizard
+│       ├── components/      # 共享组件（ModelForm, IpcAdapter）
+│       ├── stores/          # Zustand 状态管理
+│       └── i18n/            # 多语言文件（en, zh, zh-TW, ja）
+├── wails.json               # Wails 项目配置
+├── Makefile                 # 构建命令
+└── dev.bat                  # 一键桌面开发启动器 (Windows)
 ```
+
+## 流程引擎
+
+**16 种节点类型**：`start`, `end`, `llm`, `skill`, `user_input`, `condition`, `switch`, `transform`, `split`, `for_each`, `iterator`, `loop`, `script`, `execute`, `image_gen`, `audio_gen`, `video_gen`
+
+**技能节点**：直接执行 prompt，支持模型选择
+```json
+{ "prompt": "{{start.output}}", "model": "1.default" }
+```
+
+**脚本节点**使用 Starlark（Python 方言）：
+```python
+# 条件节点：返回 bool → "yes"/"no" 分支
+v = ctx["user_input"]["output"].lower()
+result = v in ("yes", "confirm", "ok")
+
+# 切换节点：返回 string → 路由到匹配的 source_handle
+score = int(ctx["score"]["output"])
+if score >= 90:  result = "A"
+elif score >= 60: result = "B"
+else:            result = "C"
+```
+
+**通用批处理** — ForEach 和 Iterator 调用任意注册的函数：
+```json
+{ "items_key": "split", "function": "llm", "args": { "model": "...", "prompt": "{{item.output}}" } }
+```
+ForEach 并行执行，Iterator 顺序执行（跳过失败项）。
+
+**执行节点**运行本地 shell 命令，可配置超时（`0` = 无限制）。
+
+**应用导出**使用 ZIP 格式（`app.json` + `meta.json`）。
+
+## 通信协议
+
+### 桌面模式 (IPC)
+- 使用 Wails Events 进行实时通信
+- 事件模式：`chat:{sessionId}:{type}`（如 `chat:5:chunk`）
+- 事件类型：`chunk`, `tool_call`, `tool_result`, `error`, `session_created`
+
+### Web 模式 (WebSocket)
+- 连接到 `ws://localhost:19009/ws/chat`
+- 消息类型：
+  - `chat` / `agent` — 发送到 ChatRunner
+  - `flow_start` / `flow_user_response` / `flow_stop` — 流程执行控制
+  - 响应：`chunk`, `tool_call`, `tool_result`, `error`, `session_created`
 
 ## 技术栈
 
 | 层级 | 技术 |
 |------|------|
 | 桌面外壳 | Wails v2 (系统 WebView) |
-| 后端 | Go + go-web-frame + Gorilla WebSocket |
+| 后端 | Go + go-web-frame + CORS 中间件 |
 | 前端 | React 18 + TypeScript + Vite |
 | 流程编辑器 | reactflow + Zustand |
 | 聊天 UI | @assistant-ui/react |
 | 国际化 | react-i18next |
 | 数据库 | SQLite (桌面版) / MySQL / PostgreSQL (Web 版) |
-
-## 项目结构
-
-```
-go-ai-agent/
-├── main.go              # 入口，--web 参数，桌面/Web 路由
-├── app.go               # Wails App 结构体，资源嵌入
-├── desktop_init.go      # 桌面版自动初始化 SQLite + 管理员
-├── wails.json           # Wails 项目配置
-├── Makefile             # 构建命令
-├── agent/               # Agent 循环，工具注册表
-├── ai/chat/             # 统一聊天服务 + 28+ 提供商
-├── runner/              # ChatRunner, FlowRunner
-├── rest/                # REST 接口
-├── flow/                # 流程引擎 (DAG 执行器, 14 种节点)
-└── view/                # React 前端
-    └── src/
-        ├── pages/       # 聊天首页, 流程设计器, 模型管理, 设置向导
-        ├── components/  # 聊天 UI, 流程编辑器, 通用组件
-        ├── stores/      # Zustand 状态管理
-        └── i18n/        # 多语言文件
-```
+| 通信方式 | IPC (桌面版) / WebSocket (Web 版) |
 
 ## License
 
