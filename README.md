@@ -34,6 +34,42 @@ In Go AI Agent, **an App is a Flow**. There's no separate "package" or "skill" m
 - **Agent Tool Use** — Extensible tool registry: manage_flows, manage_models, execute_command, read_document, web_search
 - **i18n** — English, 简体中文, 繁體中文, 日本語
 
+## Why Go AI Agent?
+
+1. **Chat to Build** — No coding required. Describe what you want in natural language, and the AI agent designs, builds, and runs the workflow for you. From idea to working app in a single conversation.
+
+2. **Zero Setup** — Download and run. No database to configure, no server to deploy. Desktop mode auto-initializes everything on first launch — just add your API key and start.
+
+3. **Local & Private** — All data stays on your device. Conversations, flow configs, and API keys are stored locally. No cloud dependency, no data leaves your machine.
+
+4. **Visual Flow Orchestration** — Drag-and-drop to design complex workflows with conditional branching, loops, batch processing, and parallel execution. 17 node types cover everything from simple Q&A to complex automation.
+
+5. **Multi-Model Flexibility** — Supports 28+ providers including OpenAI, Claude, Gemini, and DeepSeek. Each node can use a different model, letting you mix and match AI capabilities freely.
+
+6. **Multimodal AI** — Beyond text: image generation, audio generation, and video generation nodes can be chained together in a single workflow.
+
+7. **One-Click Sharing** — Export apps as ZIP packages and import them with one click. Share workflow templates with the community, ready to use out of the box.
+
+8. **Native Desktop Experience** — Runs as a native app on Windows, macOS, and Linux. Fast startup, small footprint, low resource usage. Also accessible via web browser.
+
+## How Is It Different?
+
+### vs ChatGPT, Claude, and Other AI Chat Tools
+
+ChatGPT, Claude, and similar products are incredibly powerful general-purpose AI tools.
+
+But pure conversation has an inherent problem: **the longer the conversation, the more bloated the context, and the more the model's attention gets diluted**. When you try to complete multiple steps in a single long chat, earlier content interferes with later reasoning, and output quality degrades as the conversation grows.
+
+Go AI Agent solves this with **flow nodes**:
+
+- Each node receives only its upstream node's output as context, not the entire conversation history
+- Every LLM call is **focused and clean**, free from irrelevant noise
+- Different nodes can use different models, each for its strength
+
+This means for the same task, each step in a flow is **more focused and more accurate** than executing it within a long conversation.
+
+Additionally, completed flows can be exported and shared — others can import and run them without rebuilding from scratch.
+
 ## Quick Start
 
 ### Desktop App
