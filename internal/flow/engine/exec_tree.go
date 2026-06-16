@@ -12,8 +12,9 @@ type ExecLayer struct {
 }
 
 // BuildExecutionLayers Build layered execution plan from nodes and edges
-// Use forward BFS from start node, layered by dependencies
-func BuildExecutionLayers(nodes []*entity.FlowNode, edges []*entity.FlowEdge) ([]ExecLayer, error) {
+// Use forward BFS from start node, layered by dependencies.
+// If startNodeId > 0, it is used as the entry point; otherwise a node whose type is "start" is selected.
+func BuildExecutionLayers(nodes []*entity.FlowNode, edges []*entity.FlowEdge, startNodeId uint) ([]ExecLayer, error) {
 	// In-degree table: nodeID -> set of source node IDs
 	inDegree := make(map[uint]map[uint]bool)
 	// Out-edge table: nodeID -> list of target node IDs
@@ -28,12 +29,14 @@ func BuildExecutionLayers(nodes []*entity.FlowNode, edges []*entity.FlowEdge) ([
 		inDegree[e.TargetNodeId][e.SourceNodeId] = true
 	}
 
-	// Find start node
-	var startID uint
-	for _, n := range nodes {
-		if n.Type == "start" {
-			startID = n.Id
-			break
+	// Determine start node
+	startID := startNodeId
+	if startID == 0 {
+		for _, n := range nodes {
+			if n.Type == "start" {
+				startID = n.Id
+				break
+			}
 		}
 	}
 	if startID == 0 {

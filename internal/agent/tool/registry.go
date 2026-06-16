@@ -60,6 +60,7 @@ func (r *Registry) Init(ctx *core.Context) error {
 	r.Register(&WebSearch{})
 	r.Register(&ManageFlows{})
 	r.Register(&RunFlow{})
+	r.Register(&CreateFlowConversation{})
 	r.Register(&ManageModels{})
 	return nil
 }

@@ -15,6 +15,7 @@ import (
 	"github.com/chuccp/go-ai-agent/internal/flow/engine"
 	flownodes "github.com/chuccp/go-ai-agent/internal/flow/nodes"
 	flowModel "github.com/chuccp/go-ai-agent/internal/model"
+	"github.com/chuccp/go-ai-agent/internal/service"
 
 	"github.com/chuccp/go-web-frame/core"
 	"github.com/chuccp/go-web-frame/log"
@@ -24,17 +25,20 @@ import (
 // FlowRunner manages flow execution via WebSocket interaction
 type FlowRunner struct {
 	core.IRunner
-	ctx             *core.Context
-	chatService     *chat.UnifiedChatService
-	genService      *ai.GenService
-	flowModel       *flowModel.FlowModel
-	nodeModel       *flowModel.FlowNodeModel
-	edgeModel       *flowModel.FlowEdgeModel
-	executionModel     *flowModel.FlowExecutionModel
-	registry           *engine.Registry // Node type registry (initialized once)
-	taskMgr            *engine.TaskManager
-	functions          *engine.FunctionRegistry
-	cacheMgr           *cache.CacheManager
+	ctx            *core.Context
+	chatService    *chat.UnifiedChatService
+	genService     *ai.GenService
+	flowService    *service.FlowService
+	flowModel      *flowModel.FlowModel
+	nodeModel      *flowModel.FlowNodeModel
+	edgeModel      *flowModel.FlowEdgeModel
+	executionModel *flowModel.FlowExecutionModel
+	registry       *engine.Registry // Node type registry (initialized once)
+	taskMgr        *engine.TaskManager
+	functions      *engine.FunctionRegistry
+	cacheMgr       *cache.CacheManager
+
+	builtInFlows map[string]*BuiltInFlow // System-built-in flows, keyed by name
 
 	running map[uint]*runningExecution
 	mu      sync.Mutex
@@ -42,10 +46,19 @@ type FlowRunner struct {
 	sendFn func(data []byte)
 }
 
+// BuiltInFlow holds an in-memory flow definition used by the system itself.
+type BuiltInFlow struct {
+	Definition *entity.FlowDefinition
+	Nodes      []*entity.FlowNode
+	Edges      []*entity.FlowEdge
+}
+
 type runningExecution struct {
 	engine        *engine.Engine
 	ctx           *engine.ExecutionContext
 	currentNodeId uint
+	waitCh        chan string   // receives waiting prompts from user_input nodes
+	doneCh        chan struct{} // closed when execution finishes
 }
 
 func NewFlowRunner() *FlowRunner {
@@ -58,6 +71,7 @@ func (r *FlowRunner) Init(ctx *core.Context) error {
 	r.ctx = ctx
 	r.chatService = core.GetService[*chat.UnifiedChatService](ctx)
 	r.genService = core.GetService[*ai.GenService](ctx)
+	r.flowService = core.GetService[*service.FlowService](ctx)
 	r.flowModel = core.GetModel[*flowModel.FlowModel](ctx)
 	r.nodeModel = core.GetModel[*flowModel.FlowNodeModel](ctx)
 	r.edgeModel = core.GetModel[*flowModel.FlowEdgeModel](ctx)
@@ -83,6 +97,15 @@ func (r *FlowRunner) Init(ctx *core.Context) error {
 	r.registry.Register(flownodes.NewVideoGenNode())
 	r.registry.Register(flownodes.NewSkillNode())
 
+	// Internal nodes (not exposed to frontend)
+	if r.flowService != nil {
+		r.registry.Register(flownodes.NewCreateFlowNode(r.flowService))
+	}
+
+	// Built-in system flows
+	r.builtInFlows = make(map[string]*BuiltInFlow)
+	r.registerBuiltInFlows()
+
 	// Task manager
 	r.taskMgr = engine.NewTaskManager(4)
 
@@ -95,6 +118,123 @@ func (r *FlowRunner) Init(ctx *core.Context) error {
 
 	log.Info("FlowRunner initialized")
 	return nil
+}
+
+// registerBuiltInFlows defines system flows that live in memory, not in the database.
+func (r *FlowRunner) registerBuiltInFlows() {
+	r.builtInFlows["create_flow"] = builtInCreateFlow(r.chatService.GetDefaultPath())
+}
+
+// builtInCreateFlow returns the "create flow" meta-flow definition.
+// Structure: Start → UserInput → Loop[LLM ask → UserInput confirm] → LLM generate JSON → create_flow → End
+func builtInCreateFlow(defaultModel string) *BuiltInFlow {
+	if defaultModel == "" {
+		defaultModel = "1.default"
+	}
+
+	const (
+		startID     = 1
+		inputID     = 2
+		loopID      = 3
+		loopLLMID   = 4
+		loopInputID = 5
+		genJSONID   = 6
+		saveID      = 7
+		endID       = 8
+	)
+
+	groupID := uint(loopID)
+
+	nodes := []*entity.FlowNode{
+		{Id: startID, Type: flownodes.TypeStart, Label: "start", Config: "{}", PositionX: 80, PositionY: 200},
+		{Id: inputID, Type: flownodes.TypeUserInput, Label: "describe_flow", Config: `{"prompt":"请描述你想创建的流程：用来做什么？输入是什么？输出是什么？"}`, PositionX: 280, PositionY: 200},
+		{
+			Id: loopID, Type: flownodes.TypeLoop, Label: "design_loop",
+			Config:    `{"max_iterations":5,"break_field":"ask_design.output","break_operator":"contains","break_value":"READY"}`,
+			PositionX: 480, PositionY: 200,
+		},
+		{
+			Id: loopLLMID, Type: flownodes.TypeLLM, Label: "ask_design", GroupId: &groupID,
+			Config: mustJSON(map[string]any{
+				"model":  defaultModel,
+				"prompt": "你是流程设计助手。用户想创建一个新流程。\n用户需求：{{describe_flow.output}}\n如果信息还不够，请提出一个最需要的追问；如果已经足够，请直接回复 'READY' 并给出简短设计方案。",
+			}),
+			PositionX: 480, PositionY: 80,
+		},
+		{
+			Id: loopInputID, Type: flownodes.TypeUserInput, Label: "user_response", GroupId: &groupID,
+			Config:    `{"prompt":"请回复"}`,
+			PositionX: 680, PositionY: 80,
+		},
+		{
+			Id: genJSONID, Type: flownodes.TypeLLM, Label: "generate_json",
+			Config: mustJSON(map[string]any{
+				"model":      defaultModel,
+				"max_tokens": 2000,
+				"prompt":     "根据用户需求生成一个流程的 JSON 定义。\n需求：{{describe_flow.output}}\nLLM 与用户的确认对话：{{user_response.output}}\n\n请输出标准 JSON，字段如下：\n{\"name\":\"流程名称\",\"description\":\"描述\",\"category\":\"分类\",\"icon\":\"📖\",\"nodes\":[{\"type\":\"start\",\"label\":\"start\",\"config\":{},\"position_x\":100,\"position_y\":200}],\"edges\":[]}\n\n重要规则（必须遵守，否则流程无法运行）：\n1. 必须包含一个 type=\"user_input\"、label=\"user_input\" 的节点，用于接收用户输入的一句话。\n2. LLM 节点的 model 字段必须使用 'id.model' 格式，例如 '1.deepseek-v4-flash'，不要只写模型名。\n3. LLM 节点的 prompt 字段引用用户输入时，必须原样包含字面量模板占位符 `{{user_input.output}}`（包括双花括号）。运行时系统会自动把它替换为用户的实际输入。\n   错误示例（会导致运行失败）：{{user_input}}、{{node_0.output}}、把 {{user_input.output}} 替换成示例句子。\n   正确示例：\"prompt\":\"请根据以下句子写一篇300字的故事：{{user_input.output}}\"\n4. edges 使用 source/target（或 from/to）0-based 索引。\n5. 节点 label 必须使用英文或中文名称，prompt 模板中引用节点时必须使用 label，不能使用 node_0 这类索引。\n\n示例（一句话生成故事）：\n{\"name\":\"一句话故事生成\",\"description\":\"输入一句话，生成300字故事\",\"category\":\"写作\",\"icon\":\"📖\",\"nodes\":[{\"type\":\"start\",\"label\":\"start\",\"config\":{},\"position_x\":100,\"position_y\":200},{\"type\":\"user_input\",\"label\":\"user_input\",\"config\":{\"prompt\":\"请输入一句话\"},\"position_x\":300,\"position_y\":200},{\"type\":\"llm\",\"label\":\"generate_story\",\"config\":{\"model\":\"1.deepseek-v4-flash\",\"prompt\":\"请根据以下句子写一篇300字的故事：{{user_input.output}}\"},\"position_x\":500,\"position_y\":200},{\"type\":\"end\",\"label\":\"end\",\"config\":{},\"position_x\":700,\"position_y\":200}],\"edges\":[{\"source\":0,\"target\":1},{\"source\":1,\"target\":2},{\"source\":2,\"target\":3}]}\n\n只输出 JSON，不要解释。",
+			}),
+			PositionX: 680, PositionY: 200,
+		},
+		{
+			Id: saveID, Type: flownodes.TypeCreateFlow, Label: "save_flow",
+			Config:    `{"source":"generate_json"}`,
+			PositionX: 880, PositionY: 200,
+		},
+		{Id: endID, Type: flownodes.TypeEnd, Label: "end", Config: "{}", PositionX: 1080, PositionY: 200},
+	}
+
+	edges := []*entity.FlowEdge{
+		{SourceNodeId: startID, TargetNodeId: inputID, SourceHandle: "output", TargetHandle: "input"},
+		{SourceNodeId: inputID, TargetNodeId: loopID, SourceHandle: "output", TargetHandle: "input"},
+		{SourceNodeId: loopID, TargetNodeId: genJSONID, SourceHandle: "output", TargetHandle: "input"},
+		{SourceNodeId: genJSONID, TargetNodeId: saveID, SourceHandle: "output", TargetHandle: "input"},
+		{SourceNodeId: saveID, TargetNodeId: endID, SourceHandle: "output", TargetHandle: "input"},
+		// loop body edges
+		{SourceNodeId: loopLLMID, TargetNodeId: loopInputID, SourceHandle: "output", TargetHandle: "input"},
+	}
+
+	return &BuiltInFlow{
+		Definition: &entity.FlowDefinition{
+			Name:        "创建流程",
+			Description: "通过对话创建新流程（系统内置）",
+			Category:    "system",
+			Config:      "{}",
+			Icon:        "🛠️",
+		},
+		Nodes: nodes,
+		Edges: edges,
+	}
+}
+
+func mustJSON(v any) string {
+	b, err := json.Marshal(v)
+	if err != nil {
+		panic(err)
+	}
+	return string(b)
+}
+
+// topLevelFlow returns only top-level nodes and edges, filtering out children of container nodes (loop, etc.).
+func topLevelFlow(nodes []*entity.FlowNode, edges []*entity.FlowEdge) ([]*entity.FlowNode, []*entity.FlowEdge) {
+	topIDs := make(map[uint]bool)
+	for _, n := range nodes {
+		if n.GroupId == nil {
+			topIDs[n.Id] = true
+		}
+	}
+	mainNodes := make([]*entity.FlowNode, 0, len(topIDs))
+	for _, n := range nodes {
+		if n.GroupId == nil {
+			mainNodes = append(mainNodes, n)
+		}
+	}
+	mainEdges := make([]*entity.FlowEdge, 0, len(edges))
+	for _, e := range edges {
+		if topIDs[e.SourceNodeId] && topIDs[e.TargetNodeId] {
+			mainEdges = append(mainEdges, e)
+		}
+	}
+	return mainNodes, mainEdges
 }
 
 func (r *FlowRunner) Run() error {
@@ -272,7 +412,21 @@ func (r *FlowRunner) HandleFlowStart(flowId uint, executionId uint, sessionId ui
 		return 0, fmt.Errorf("failed to load edges: %w", err)
 	}
 
+	return r.startExecution(flowId, flowDef, flowNodes, flowEdges, executionId, sessionId, opts)
+}
+
+// HandleBuiltInFlowStart starts a system built-in flow by name.
+func (r *FlowRunner) HandleBuiltInFlowStart(name string, executionId uint, sessionId uint, opts FlowStartOptions) (uint, error) {
+	bf, ok := r.builtInFlows[name]
+	if !ok {
+		return 0, fmt.Errorf("built-in flow not found: %s", name)
+	}
+	return r.startExecution(0, bf.Definition, bf.Nodes, bf.Edges, executionId, sessionId, opts)
+}
+
+func (r *FlowRunner) startExecution(flowId uint, flowDef *entity.FlowDefinition, flowNodes []*entity.FlowNode, flowEdges []*entity.FlowEdge, executionId uint, sessionId uint, opts FlowStartOptions) (uint, error) {
 	var exec *entity.FlowExecution
+	var err error
 	if executionId > 0 {
 		exec, err = r.executionModel.FindById(executionId)
 		if err != nil {
@@ -291,9 +445,12 @@ func (r *FlowRunner) HandleFlowStart(flowId uint, executionId uint, sessionId ui
 		executionId = exec.Id
 	}
 
+	// Separate top-level nodes/edges from container children (e.g. loop bodies).
+	mainNodes, mainEdges := topLevelFlow(flowNodes, flowEdges)
+
 	eng := engine.NewEngine(r.registry, r)
 	eng.SetTaskManager(r.taskMgr)
-	eng.LoadFlow(flowNodes, flowEdges)
+	eng.LoadFlow(mainNodes, mainEdges)
 
 	startId, err := eng.FindStartNode()
 	if err != nil {
@@ -303,6 +460,9 @@ func (r *FlowRunner) HandleFlowStart(flowId uint, executionId uint, sessionId ui
 	execCtx := engine.NewExecutionContext(flowId, executionId, sessionId, r)
 	execCtx.Functions = r.functions
 	execCtx.Cache = r.cacheMgr
+	execCtx.Registry = r.registry
+	execCtx.Nodes = flowNodes
+	execCtx.Edges = flowEdges
 
 	// Load config from FlowDefinition.Config (JSON string).
 	if flowDef.Config != "" {
@@ -332,6 +492,8 @@ func (r *FlowRunner) HandleFlowStart(flowId uint, executionId uint, sessionId ui
 		engine:        eng,
 		ctx:           execCtx,
 		currentNodeId: startId,
+		waitCh:        make(chan string, 1),
+		doneCh:        make(chan struct{}),
 	}
 	r.mu.Unlock()
 
@@ -342,9 +504,6 @@ func (r *FlowRunner) HandleFlowStart(flowId uint, executionId uint, sessionId ui
 
 	go func() {
 		err := eng.Run(execCtx, startId)
-		r.mu.Lock()
-		delete(r.running, executionId)
-		r.mu.Unlock()
 
 		if err != nil {
 			exec.Status = engine.ExecError
@@ -357,7 +516,15 @@ func (r *FlowRunner) HandleFlowStart(flowId uint, executionId uint, sessionId ui
 			})
 			exec.Context = string(ctxJSON)
 		}
+		// Persist status before removing from running map so status checks are consistent.
 		r.executionModel.Update(exec)
+
+		r.mu.Lock()
+		if re, ok := r.running[executionId]; ok {
+			close(re.doneCh)
+		}
+		delete(r.running, executionId)
+		r.mu.Unlock()
 
 		log.Info("Flow execution finished",
 			zap.Uint("executionId", executionId),
@@ -408,8 +575,44 @@ func (r *FlowRunner) GetExecutionStatus(executionId uint) (*entity.FlowExecution
 	return r.executionModel.FindById(executionId)
 }
 
+// GetWaitingPrompt returns the current user-input prompt for a running execution, if any.
+func (r *FlowRunner) GetWaitingPrompt(executionId uint) string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if re, ok := r.running[executionId]; ok && re.ctx != nil {
+		return re.ctx.WaitingPrompt
+	}
+	return ""
+}
+
+// GetWaitChannels returns the wait/done channels for a running execution.
+// Returns nil channels if the execution is not running.
+func (r *FlowRunner) GetWaitChannels(executionId uint) (chan string, chan struct{}) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if re, ok := r.running[executionId]; ok {
+		return re.waitCh, re.doneCh
+	}
+	return nil, nil
+}
+
 // Emit implements the engine.EventEmitter interface
 func (r *FlowRunner) Emit(event engine.FlowEvent) {
+	r.mu.Lock()
+	re, ok := r.running[event.ExecutionId]
+	sessionId := uint(0)
+	if ok && re.ctx != nil {
+		sessionId = re.ctx.SessionId
+		// Forward waiting prompts to any blocking tool call.
+		if event.Type == engine.EventWaitingUser {
+			select {
+			case re.waitCh <- event.Message:
+			default:
+			}
+		}
+	}
+	r.mu.Unlock()
+
 	if r.sendFn == nil {
 		return
 	}
@@ -418,6 +621,13 @@ func (r *FlowRunner) Emit(event engine.FlowEvent) {
 		log.Error("Failed to serialize flow event", zap.Error(err))
 		return
 	}
+	// Enrich event with session_id so desktop IPC can route it.
+	if sessionId > 0 {
+		var eventMap map[string]any
+		if err := json.Unmarshal(data, &eventMap); err == nil {
+			eventMap["session_id"] = sessionId
+			data, _ = json.Marshal(eventMap)
+		}
+	}
 	r.sendFn(data)
 }
-

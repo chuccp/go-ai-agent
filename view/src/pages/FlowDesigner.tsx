@@ -1075,6 +1075,8 @@ function FlowListView() {
   const [newCategory, setNewCategory] = useState('')
   const [filterCategory, setFilterCategory] = useState('')
   const [importing, setImporting] = useState(false)
+  const [flowToDelete, setFlowToDelete] = useState<number | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => { fetchFlows() }, [])
 
@@ -1130,9 +1132,16 @@ function FlowListView() {
     } catch (e) { console.error(e) }
   }
 
-  const handleDelete = async (id: number) => {
-    if (!window.confirm(t('flow.confirmDelete'))) return
-    await deleteFlow(id)
+  const handleDelete = (id: number) => {
+    setFlowToDelete(id)
+  }
+
+  const confirmDelete = async () => {
+    if (flowToDelete == null) return
+    setDeleting(true)
+    await deleteFlow(flowToDelete)
+    setDeleting(false)
+    setFlowToDelete(null)
   }
 
   const handleImport = async () => {
@@ -1256,6 +1265,18 @@ function FlowListView() {
                   >
                     <Icon d={ICONS.edit} size={14} />
                   </button>
+                  <button
+                    onClick={() => handleDelete(f.id)}
+                    title={t('common.delete')}
+                    style={{
+                      padding: '10px 16px', borderRadius: 8,
+                      border: '1px solid #d0d5dd', background: '#fff',
+                      color: '#f04438', fontSize: 14, fontWeight: 500,
+                      cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
+                    }}
+                  >
+                    <Icon d={ICONS.trash} size={14} />
+                  </button>
                 </div>
               </div>
             ))}
@@ -1322,6 +1343,28 @@ function FlowListView() {
               <button onClick={() => setShowNewModal(false)} style={btnStyle()}>{t('common.cancel')}</button>
               <button onClick={handleCreate} disabled={creating || !newName.trim()} style={btnStyle(true)}>
                 {creating ? t('common.loading') : t('common.create')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirmation modal */}
+      {flowToDelete !== null && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', zIndex: 201,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }} onClick={() => setFlowToDelete(null)}>
+          <div
+            style={{ background: '#fff', borderRadius: 16, padding: 24, width: 360, boxShadow: '0 12px 32px rgba(0,0,0,0.15)' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 12, color: '#101828' }}>{t('common.delete')}</div>
+            <div style={{ fontSize: 14, color: '#676f83', marginBottom: 24 }}>{t('flow.confirmDelete')}</div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button onClick={() => setFlowToDelete(null)} disabled={deleting} style={btnStyle()}>{t('common.cancel')}</button>
+              <button onClick={confirmDelete} disabled={deleting} style={{ ...btnStyle(true), background: '#f04438' }}>
+                {deleting ? t('common.loading') : t('common.delete')}
               </button>
             </div>
           </div>

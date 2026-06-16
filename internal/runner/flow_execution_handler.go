@@ -3,6 +3,7 @@ package runner
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 )
 
 // handleFlowExecutionAction serves the run_flow agent tool.
@@ -28,23 +29,6 @@ func (r *ChatRunner) flowRun(args map[string]any) (string, error) {
 		return "", fmt.Errorf("FlowRunner not initialized")
 	}
 
-	// If no flow_id provided, search by query first.
-	var flowId uint
-	if v, ok := args["flow_id"]; ok {
-		flowId = uintArg(v)
-	}
-	if flowId == 0 {
-		query, _ := args["query"].(string)
-		if query == "" {
-			return "", fmt.Errorf("flow_id or query is required")
-		}
-		res, err := r.flowSearch(args)
-		if err != nil {
-			return "", err
-		}
-		return res, nil
-	}
-
 	initialInput, _ := args["initial_input"].(string)
 	var formValues map[string]any
 	if fv, ok := args["form_values"].(map[string]any); ok {
@@ -56,12 +40,77 @@ func (r *ChatRunner) flowRun(args map[string]any) (string, error) {
 		FormValues:   formValues,
 	}
 
+	// Built-in flow takes precedence.
+	if builtin, ok := args["builtin_flow"].(string); ok && builtin != "" {
+		execId, err := r.flowRunner.HandleBuiltInFlowStart(builtin, 0, 0, opts)
+		if err != nil {
+			return "", err
+		}
+		return r.waitForFlowEvent(execId, 15)
+	}
+
+	// If no flow_id provided, search by query first.
+	var flowId uint
+	if v, ok := args["flow_id"]; ok {
+		flowId = uintArg(v)
+	}
+	if flowId == 0 {
+		query, _ := args["query"].(string)
+		if query == "" {
+			return "", fmt.Errorf("flow_id, query, or builtin_flow is required")
+		}
+		res, err := r.flowSearch(args)
+		if err != nil {
+			return "", err
+		}
+		return res, nil
+	}
+
 	execId, err := r.flowRunner.HandleFlowStart(flowId, 0, 0, opts)
 	if err != nil {
 		return "", err
 	}
 
-	return fmt.Sprintf("Flow started. Execution ID: %d", execId), nil
+	return r.waitForFlowEvent(execId, 15)
+}
+
+// waitForFlowEvent blocks until the execution emits a waiting prompt, completes, errors, or times out.
+func (r *ChatRunner) waitForFlowEvent(executionId uint, timeoutSec int) (string, error) {
+	waitCh, doneCh := r.flowRunner.GetWaitChannels(executionId)
+	if waitCh == nil {
+		// Execution already finished or not found; return current status.
+		exec, err := r.flowRunner.GetExecutionStatus(executionId)
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("Execution ID: %d, status: %s", executionId, exec.Status), nil
+	}
+
+	timeout := time.Duration(timeoutSec) * time.Second
+	select {
+	case prompt := <-waitCh:
+		data := map[string]any{
+			"execution_id":   executionId,
+			"status":         "running",
+			"waiting_prompt": prompt,
+		}
+		b, _ := json.Marshal(data)
+		return string(b), nil
+	case <-doneCh:
+		exec, err := r.flowRunner.GetExecutionStatus(executionId)
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("Execution ID: %d, status: %s", executionId, exec.Status), nil
+	case <-time.After(timeout):
+		data := map[string]any{
+			"execution_id": executionId,
+			"status":       "running",
+			"message":      "timeout waiting for next event",
+		}
+		b, _ := json.Marshal(data)
+		return string(b), nil
+	}
 }
 
 func (r *ChatRunner) flowRespond(args map[string]any) (string, error) {
@@ -79,7 +128,7 @@ func (r *ChatRunner) flowRespond(args map[string]any) (string, error) {
 	if err := r.flowRunner.HandleUserResponse(executionId, response); err != nil {
 		return "", err
 	}
-	return "Response sent", nil
+	return r.waitForFlowEvent(executionId, 30)
 }
 
 func (r *ChatRunner) flowStatus(args map[string]any) (string, error) {
@@ -94,11 +143,13 @@ func (r *ChatRunner) flowStatus(args map[string]any) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("execution not found: %d", executionId)
 	}
+	waitingPrompt := r.flowRunner.GetWaitingPrompt(executionId)
 	data := map[string]any{
-		"execution_id": executionId,
-		"flow_id":      exec.FlowId,
-		"status":       exec.Status,
-		"context":      exec.Context,
+		"execution_id":   executionId,
+		"flow_id":        exec.FlowId,
+		"status":         exec.Status,
+		"context":        exec.Context,
+		"waiting_prompt": waitingPrompt,
 	}
 	b, _ := json.Marshal(data)
 	return string(b), nil

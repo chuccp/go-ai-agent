@@ -19,8 +19,6 @@ interface IpcAdapterOptions {
   onFlowEnded?: () => void
 }
 
-const WS_URL = 'ws://localhost:19009/ws/chat'
-
 export function createIpcAdapter(opts: IpcAdapterOptions): ChatModelAdapter {
   return {
     async *run({ messages, abortSignal }): AsyncGenerator<ChatModelRunResult> {
@@ -153,11 +151,10 @@ export function createIpcAdapter(opts: IpcAdapterOptions): ChatModelAdapter {
         }
       })
 
-      // Only open WebSocket for flow execution, not for normal chat
-      let ws: WebSocket | null = null
-      const wsHandler = (evt: MessageEvent) => {
+      // In desktop mode flow events are delivered via Wails runtime events.
+      const flowEventName = `chat:${activeSessionId}:flow_event`
+      const unsubFlow = wailsEventsOn(flowEventName, (msg: any) => {
         try {
-          const msg = JSON.parse(evt.data)
           if (msg.type === 'flow_started' && activeExecutionId === 0 && msg.execution_id) {
             activeExecutionId = Number(msg.execution_id)
           }
@@ -168,6 +165,10 @@ export function createIpcAdapter(opts: IpcAdapterOptions): ChatModelAdapter {
             case 'flow_started':
               accumulatedText += `▶️ ${msg.message || 'Flow started'}\n`
               flush()
+              break
+            case 'flow_node_start':
+            case 'flow_node_done':
+              // Low-noise progress; skip by default.
               break
             case 'flow_waiting_user':
               if (msg.message) {
@@ -195,21 +196,10 @@ export function createIpcAdapter(opts: IpcAdapterOptions): ChatModelAdapter {
               break
           }
         } catch {}
-      }
-
-      // Only create WebSocket connection if we have a pending flow
-      if (pending?.executionId) {
-        ws = new WebSocket(WS_URL)
-        ws.onopen = () => {}
-        ws.onerror = () => {}
-        ws.addEventListener('message', wsHandler)
-      }
+      })
 
       abortSignal.addEventListener('abort', () => {
         done = true
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: 'stop' }))
-        }
       })
 
       // Yield loop
@@ -233,17 +223,15 @@ export function createIpcAdapter(opts: IpcAdapterOptions): ChatModelAdapter {
       unsubToolResult()
       unsubError()
       unsubSessionCreated()
+      unsubFlow()
       wailsEventsOff(
         `${eventPrefix}chunk`,
         `${eventPrefix}tool_call`,
         `${eventPrefix}tool_result`,
         `${eventPrefix}error`,
         `${eventPrefix}session_created`,
+        flowEventName,
       )
-      if (ws) {
-        ws.removeEventListener('message', wsHandler)
-        ws.close()
-      }
     },
   }
 }

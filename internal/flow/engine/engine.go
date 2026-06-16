@@ -56,7 +56,7 @@ func isModelNode(nodeType string) bool {
 }
 
 func (e *Engine) Run(ctx *ExecutionContext, startNodeId uint) error {
-	layers, err := BuildExecutionLayers(e.nodeList(), e.edges)
+	layers, err := BuildExecutionLayers(e.nodeList(), e.edges, startNodeId)
 	if err != nil {
 		return err
 	}
@@ -212,6 +212,10 @@ func (e *Engine) executeNode(ctx *ExecutionContext, nodeID uint) error {
 		})
 		return err
 	}
+
+	ctx.CurrentNodeId = node.Id
+	ctx.CurrentNodeLabel = node.Label
+	ctx.CurrentNodeType = node.Type
 
 	output, err := executor.Execute(ctx, node.Config)
 	duration := time.Since(start).Milliseconds()

@@ -44,6 +44,7 @@ func (n *UserInputNode) Execute(ctx *engine.ExecutionContext, config string) (*e
 
 	prompt := renderPrompt(cfg.Prompt, ctx)
 
+	ctx.WaitingPrompt = prompt
 	if ctx.Emitter != nil {
 		ctx.Emitter.Emit(engine.FlowEvent{
 			Type:        engine.EventWaitingUser,

@@ -19,6 +19,9 @@ const (
 	TypeAudioGen  = "audio_gen"
 	TypeVideoGen  = "video_gen"
 	TypeSkill     = "skill"
+
+	// Internal node types (not exposed in frontend palette)
+	TypeCreateFlow = "create_flow"
 )
 
 // Node output data keys

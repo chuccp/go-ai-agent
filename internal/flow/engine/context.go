@@ -4,24 +4,32 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/chuccp/go-ai-agent/internal/entity"
 	"github.com/chuccp/go-ai-agent/internal/flow/cache"
 )
 
 // ExecutionContext Flow execution context, passes data between nodes
 type ExecutionContext struct {
-	mu              sync.RWMutex
-	FlowId          uint
-	ExecutionId     uint
-	SessionId       uint
-	Data            map[string]any         // Global data (with flat label.field keys)
-	NodeOutputs     map[string]*NodeOutput // key = node label
-	Config          map[string]string      // Package-level runtime config
-	FormValues      map[string]any         // Flow form values (app mode)
-	UserInput       chan string            // User input channel
-	Emitter         EventEmitter           // Event emitter
-	Aborted         bool
-	Functions       *FunctionRegistry      // Function registry
-	Cache           *cache.CacheManager    // LLM result cache
+	mu               sync.RWMutex
+	FlowId           uint
+	ExecutionId      uint
+	SessionId        uint
+	Data             map[string]any         // Global data (with flat label.field keys)
+	NodeOutputs      map[string]*NodeOutput // key = node label
+	Config           map[string]string      // Package-level runtime config
+	FormValues       map[string]any         // Flow form values (app mode)
+	UserInput        chan string            // User input channel
+	Emitter          EventEmitter           // Event emitter
+	Aborted          bool
+	Functions        *FunctionRegistry   // Function registry
+	Cache            *cache.CacheManager // LLM result cache
+	Registry         *Registry           // Node executor registry (used by container nodes like loop)
+	Nodes            []*entity.FlowNode  // All nodes in current flow (for container/loop lookup)
+	Edges            []*entity.FlowEdge  // All edges in current flow
+	CurrentNodeId    uint                // Node currently being executed
+	CurrentNodeLabel string              // Label of current node
+	CurrentNodeType  string              // Type of current node
+	WaitingPrompt    string              // Prompt shown when waiting for user input
 }
 
 func NewExecutionContext(flowId, executionId, sessionId uint, emitter EventEmitter) *ExecutionContext {

@@ -67,21 +67,27 @@ func (r *ChatRunner) Init(ctx *core.Context) error {
 		r.flowRunner.SetSendFunc(func(data []byte) {
 			r.mu.Lock()
 			defer r.mu.Unlock()
-			
+
 			// Parse the event to get execution ID
 			var event map[string]any
 			if err := json.Unmarshal(data, &event); err != nil {
 				log.Warn("failed to parse flow event", zap.Error(err))
 				return
 			}
-			
+
 			executionId, _ := event["execution_id"].(float64)
 			eventType, _ := event["type"].(string)
-			
+
 			if r.isDesktop {
 				// Desktop mode: emit via Wails Events
 				eventName := fmt.Sprintf("flow:%d:%s", uint(executionId), eventType)
 				wailsRuntime.EventsEmit(r.ctx, eventName, event)
+				// Also emit a session-scoped generic event so the IPC adapter can subscribe once.
+				sessionId, _ := event["session_id"].(float64)
+				if sessionId > 0 {
+					genericName := fmt.Sprintf("chat:%d:flow_event", uint(sessionId))
+					wailsRuntime.EventsEmit(r.ctx, genericName, event)
+				}
 			} else {
 				// Web mode: send via WebSocket
 				for conn := range r.activeConns {
@@ -145,14 +151,13 @@ func (r *ChatRunner) loadProvidersFromDB() {
 	}
 	// Resolve default model path for fallback when client sends no model
 	if def, err := aiModel.FindDefault(aiTypes.CategoryLLM); err == nil && def != nil {
-		path := strconv.FormatUint(uint64(def.Id), 10) + ".default"
+		path := strconv.FormatUint(uint64(def.Id), 10) + "." + def.Model
 		r.defaultModelPath = path
 		r.chatService.SetDefaultPath(path)
 	}
 	r.providersLoaded = true
 	log.Info("providers loaded from DB", zap.Int("count", len(models)))
 }
-
 
 func (r *ChatRunner) Run() error {
 	ticker := time.NewTicker(30 * time.Second)
@@ -181,13 +186,13 @@ type Attachment struct {
 }
 
 type WSRequest struct {
-	Type        string             `json:"type"`
-	SessionID   uint               `json:"session_id,omitempty"`
-	Model       string             `json:"model,omitempty"`
+	Type        string               `json:"type"`
+	SessionID   uint                 `json:"session_id,omitempty"`
+	Model       string               `json:"model,omitempty"`
 	Messages    []common.ChatMessage `json:"messages,omitempty"`
-	Stream      bool               `json:"stream"`
-	Options     map[string]any     `json:"options,omitempty"`
-	Attachments []Attachment       `json:"attachments,omitempty"`
+	Stream      bool                 `json:"stream"`
+	Options     map[string]any       `json:"options,omitempty"`
+	Attachments []Attachment         `json:"attachments,omitempty"`
 }
 
 type WSResponse struct {

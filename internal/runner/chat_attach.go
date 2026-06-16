@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	aiTypes "github.com/chuccp/go-ai-agent/internal/ai/types"
 	"github.com/chuccp/go-ai-agent/internal/ai/chat/common"
+	aiTypes "github.com/chuccp/go-ai-agent/internal/ai/types"
 	"github.com/chuccp/go-web-frame/log"
 	"go.uber.org/zap"
 )
@@ -101,7 +101,7 @@ func (r *ChatRunner) ocrImage(filePath string) (string, error) {
 	var ocrModelPath string
 	for _, m := range list {
 		if m.SupportsMultimodal && m.Category == aiTypes.CategoryLLM {
-			ocrModelPath = strconv.FormatUint(uint64(m.Id), 10) + ".default"
+			ocrModelPath = strconv.FormatUint(uint64(m.Id), 10) + "." + m.Model
 			break
 		}
 	}
@@ -111,7 +111,7 @@ func (r *ChatRunner) ocrImage(filePath string) (string, error) {
 
 	imageURL := "data:image/png;base64," + base64.StdEncoding.EncodeToString(data)
 	msg := common.ChatMessage{
-		Role: "user",
+		Role:    "user",
 		Content: "Please recognize and extract all text from the image. Return only the recognized text, no explanations or additional content.",
 		ContentParts: []common.ContentPart{
 			{Type: "image", ImageURL: imageURL},

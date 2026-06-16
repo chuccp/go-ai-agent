@@ -17,6 +17,7 @@ func (r *ChatRunner) handleFlowStart(conn *websocket.Conn, req WSRequest) {
 	}
 
 	var flowId, executionId uint
+	var builtInName string
 	if req.Options != nil {
 		if v, ok := req.Options["flow_id"]; ok {
 			if vv, ok := v.(float64); ok {
@@ -27,6 +28,9 @@ func (r *ChatRunner) handleFlowStart(conn *websocket.Conn, req WSRequest) {
 			if vv, ok := v.(float64); ok {
 				executionId = uint(vv)
 			}
+		}
+		if v, ok := req.Options["builtin_flow"]; ok {
+			builtInName = fmt.Sprintf("%v", v)
 		}
 	}
 
@@ -44,7 +48,14 @@ func (r *ChatRunner) handleFlowStart(conn *websocket.Conn, req WSRequest) {
 			opts.ConfigOverrides = co
 		}
 	}
-	newExecId, err := r.flowRunner.HandleFlowStart(flowId, executionId, req.SessionID, opts)
+
+	var newExecId uint
+	var err error
+	if builtInName != "" {
+		newExecId, err = r.flowRunner.HandleBuiltInFlowStart(builtInName, executionId, req.SessionID, opts)
+	} else {
+		newExecId, err = r.flowRunner.HandleFlowStart(flowId, executionId, req.SessionID, opts)
+	}
 	if err != nil {
 		r.sendJSON(conn, WSResponse{Type: "error", Message: err.Error()})
 	} else if newExecId > 0 {
@@ -122,8 +133,8 @@ type flowNodesEdgesResult struct {
 	nodeIDs  []uint // Ordered list of node IDs
 	nodeCnt  int
 	edgeCnt  int
-	hasNodes bool   // Whether nodes were provided
-	err      error  // Validation error (returns early, nodes/edges not saved)
+	hasNodes bool  // Whether nodes were provided
+	err      error // Validation error (returns early, nodes/edges not saved)
 }
 
 // saveFlowNodesEdges parses and saves nodes + edges (shared by create/update)
