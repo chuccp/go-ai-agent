@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { useSetupStore } from '@/stores/setupStore'
+import PasswordInput from '@/components/PasswordInput'
 import ModelForm, { emptyModelForm, ModelFormData } from '@/components/ModelForm'
 
 const LANGUAGES = [
@@ -185,7 +186,7 @@ export default function SetupWizard() {
                     <input value={dbForm.user} onChange={e => setDbForm(f => ({ ...f, user: e.target.value }))} style={inputStyle} />
                   </div>
                   <div style={{ flex: 1 }}><label style={labelStyle}>{t('setup.db.password')}</label>
-                    <input type="password" value={dbForm.password} onChange={e => setDbForm(f => ({ ...f, password: e.target.value }))} style={inputStyle} />
+                    <PasswordInput value={dbForm.password} onChange={v => setDbForm(f => ({ ...f, password: v }))} style={inputStyle} />
                   </div>
                 </div>
               </>
@@ -206,10 +207,10 @@ export default function SetupWizard() {
               <input value={adminForm.username} onChange={e => setAdminForm(f => ({ ...f, username: e.target.value }))} style={inputStyle} />
             </div>
             <div><label style={labelStyle}>{t('setup.db.password')} ({t('setup.admin.minLength')})</label>
-              <input type="password" value={adminForm.password} onChange={e => setAdminForm(f => ({ ...f, password: e.target.value }))} style={inputStyle} />
+              <PasswordInput value={adminForm.password} onChange={v => setAdminForm(f => ({ ...f, password: v }))} style={inputStyle} />
             </div>
             <div><label style={labelStyle}>{t('setup.admin.confirmPassword')}</label>
-              <input type="password" value={adminForm.confirm} onChange={e => setAdminForm(f => ({ ...f, confirm: e.target.value }))} style={inputStyle} />
+              <PasswordInput value={adminForm.confirm} onChange={v => setAdminForm(f => ({ ...f, confirm: v }))} style={inputStyle} />
             </div>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
               <button onClick={() => setStep(0)} style={btnStyle()}>{t('common.prev')}</button>
@@ -222,7 +223,7 @@ export default function SetupWizard() {
         {step === 2 && (
           <div>
             <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>{t('setup.model.configBase')}</div>
-            <ModelForm form={modelForm} onChange={setModelForm} compact />
+            <ModelForm form={modelForm} onChange={setModelForm} />
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
               {!isDesktop && <button onClick={() => setStep(1)} style={btnStyle()}>{t('common.prev')}</button>}
               <button onClick={() => { store.completeSetup().then(() => nav('/')) }} style={btnStyle()}>{t('setup.skip')}</button>
