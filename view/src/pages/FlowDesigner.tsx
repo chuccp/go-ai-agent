@@ -24,7 +24,7 @@ import ReactFlow, {
 import 'reactflow/dist/style.css'
 import { useFlowStore } from '@/stores/flowStore'
 import { API_BASE } from '@/constants'
-import { ALL_NODE_TYPES, NODE_CATEGORIES, getNodeDef, type NodeType, type FlowNode, type FlowEdge, type FlowDefinition } from '@/types/flow'
+import { ALL_NODE_TYPES, NODE_CATEGORIES, getNodeDef, isIconFilename, type NodeType, type FlowNode, type FlowEdge, type FlowDefinition } from '@/types/flow'
 
 /* ============================================================
    Helper: convert backend FlowNode/FlowEdge <-> reactflow Node/Edge
@@ -1254,9 +1254,12 @@ function FlowListView() {
                   <div style={{
                     width: 48, height: 48, borderRadius: 12,
                     background: '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 28, flexShrink: 0,
+                    fontSize: 28, flexShrink: 0, overflow: 'hidden',
                   }}>
-                    {f.icon || '📱'}
+                    {isIconFilename(f.icon)
+                      ? <img src={`${API_BASE}/api/flows/${f.id}/icon`} alt="" style={{ width: 48, height: 48, borderRadius: 12, objectFit: 'cover' }} />
+                      : (f.icon || '📱')
+                    }
                   </div>
                   <div style={{ flex: 1, overflow: 'hidden' }}>
                     <div style={{ fontSize: 16, fontWeight: 600, color: '#101828', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -1435,7 +1438,7 @@ function ZoomControls() {
 function FlowEditor({ flowId }: { flowId: string }) {
   const { t } = useTranslation()
   const nav = useNavigate()
-  const { fetchFlow, saveFlow, deleteFlow } = useFlowStore()
+  const { fetchFlow, saveFlow, deleteFlow, uploadIcon, getIconUrl } = useFlowStore()
 
   // editor state
   const [flowName, setFlowName] = useState('')
@@ -2428,12 +2431,42 @@ function FlowEditor({ flowId }: { flowId: string }) {
               <div style={{ padding: 20, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div>
                   <label style={{ fontSize: 12, color: '#354052', fontWeight: 500, marginBottom: 4, display: 'block' }}>Icon</label>
-                  <input
-                    value={flowIcon}
-                    onChange={e => { setFlowIcon(e.target.value); markDirty() }}
-                    placeholder="emoji or image path"
-                    style={{ width: '100%', padding: '8px 10px', border: '1px solid #d0d5dd', borderRadius: 8, fontSize: 13, outline: 'none' }}
-                  />
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <div style={{ width: 40, height: 40, borderRadius: 8, background: '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0, overflow: 'hidden' }}>
+                      {dbFlowId && isIconFilename(flowIcon)
+                        ? <img src={getIconUrl(dbFlowId)} alt="" style={{ width: 40, height: 40, borderRadius: 8, objectFit: 'cover' }} />
+                        : (flowIcon || '⚡')
+                      }
+                    </div>
+                    <input
+                      value={flowIcon}
+                      onChange={e => { setFlowIcon(e.target.value); markDirty() }}
+                      placeholder="emoji or leave empty for auto-SVG"
+                      style={{ flex: 1, padding: '8px 10px', border: '1px solid #d0d5dd', borderRadius: 8, fontSize: 13, outline: 'none' }}
+                    />
+                    {dbFlowId && (
+                      <button
+                        onClick={() => {
+                          const input = document.createElement('input')
+                          input.type = 'file'
+                          input.accept = 'image/*'
+                          input.onchange = async (e) => {
+                            const file = (e.target as HTMLInputElement).files?.[0]
+                            if (!file) return
+                            const ok = await uploadIcon(dbFlowId, file)
+                            if (ok) {
+                              setFlowIcon('icon' + file.name.substring(file.name.lastIndexOf('.')))
+                              markDirty()
+                            }
+                          }
+                          input.click()
+                        }}
+                        style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #d0d5dd', background: '#fff', color: '#354052', fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                      >
+                        Upload
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div>
                   <label style={{ fontSize: 12, color: '#354052', fontWeight: 500, marginBottom: 4, display: 'block' }}>Form Schema (JSON)</label>

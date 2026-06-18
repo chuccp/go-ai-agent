@@ -10,6 +10,8 @@ interface FlowState {
   fetchFlow: (id: number) => Promise<FlowDetail | null>
   saveFlow: (payload: any, flowId?: number) => Promise<any>
   deleteFlow: (id: number) => Promise<void>
+  uploadIcon: (flowId: number, file: File) => Promise<boolean>
+  getIconUrl: (flowId: number) => string
   addFlowEvent: (event: FlowEvent) => void
   clearFlowEvents: () => void
 }
@@ -63,6 +65,27 @@ export const useFlowStore = create<FlowState>((set, get) => ({
       await fetch(`${API_BASE}/api/flows/${id}`, { method: 'DELETE' })
       set({ flows: get().flows.filter(f => f.id !== id) })
     } catch (e) { console.error('deleteFlow failed', e) }
+  },
+
+  async uploadIcon(flowId: number, file: File) {
+    try {
+      const formData = new FormData()
+      formData.append('icon', file)
+      const res = await fetch(`${API_BASE}/api/flows/${flowId}/icon`, {
+        method: 'POST',
+        body: formData,
+      })
+      const data = await res.json()
+      if (data.data) {
+        const flows = get().flows
+        set({ flows: flows.map(f => f.id === flowId ? { ...f, icon: data.data.icon } : f) })
+      }
+      return true
+    } catch (e) { console.error('uploadIcon failed', e); return false }
+  },
+
+  getIconUrl(flowId: number) {
+    return `${API_BASE}/api/flows/${flowId}/icon`
   },
 
   addFlowEvent(event: FlowEvent) {

@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import i18n from '@/i18n'
 import { API_BASE, IS_DESKTOP } from '@/constants'
 import { useFlowStore } from '@/stores/flowStore'
+import { isIconFilename } from '@/types/flow'
 import { MyRuntimeProvider, type ThreadMessageLike, type PendingFlow } from '@/components/assistant-ui/MyRuntimeProvider'
 import { Thread } from '@/components/assistant-ui/Thread'
 
@@ -25,7 +25,6 @@ export default function ChatHome() {
   const [showNewSession, setShowNewSession] = useState(false)
   const [newSessionFlowId, setNewSessionFlowId] = useState<number | null>(null)
   const [sessionToDelete, setSessionToDelete] = useState<number | null>(null)
-  const [showSettings, setShowSettings] = useState(false)
   const [pendingFlow, setPendingFlow] = useState<PendingFlow | null>(null)
 
   // WebSocket
@@ -203,12 +202,12 @@ export default function ChatHome() {
               </svg>
               {t('nav.flowDesigner')}
             </a>
-            <button onClick={() => setShowSettings(true)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 20, color: '#3c4043', fontSize: 14, background: 'none', border: 'none', cursor: 'pointer', width: '100%', textAlign: 'left' }}>
+            <a href="#/settings" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 20, color: '#3c4043', fontSize: 14, textDecoration: 'none' }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
               </svg>
               {t('common.settings')}
-            </button>
+            </a>
           </div>
         </div>
 
@@ -236,44 +235,19 @@ export default function ChatHome() {
             </div>
             {flows.map(flow => (
               <div key={flow.id} onClick={() => setNewSessionFlowId(flow.id)} style={{ padding: '14px 16px', borderRadius: 14, cursor: 'pointer', marginBottom: 8, border: newSessionFlowId === flow.id ? '2px solid #1a73e8' : '1px solid #dadce0', background: newSessionFlowId === flow.id ? '#e8f0fe' : '#fff', transition: 'all 0.15s' }}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: '#202124' }}>⚡ {flow.name}</div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: '#202124', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {isIconFilename(flow.icon)
+                    ? <img src={`${API_BASE}/api/flows/${flow.id}/icon`} alt="" style={{ width: 18, height: 18, borderRadius: 4, objectFit: 'cover' }} />
+                    : <span>{flow.icon || '⚡'}</span>
+                  }
+                  {flow.name}
+                </div>
                 {flow.description && <div style={{ fontSize: 12, color: '#5f6368', marginTop: 2 }}>{flow.description}</div>}
               </div>
             ))}
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
               <button onClick={() => { setShowNewSession(false); setNewSessionFlowId(null) }} style={{ padding: '10px 24px', borderRadius: 20, border: '1px solid #dadce0', background: '#fff', color: '#3c4043', fontSize: 14, fontWeight: 500, cursor: 'pointer' }}>{t('common.cancel')}</button>
               <button onClick={() => createSession(newSessionFlowId)} style={{ padding: '10px 24px', borderRadius: 20, border: 'none', background: '#1a73e8', color: '#fff', fontSize: 14, fontWeight: 500, cursor: 'pointer' }}>{t('common.confirm')}</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Settings Modal ── */}
-      {showSettings && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setShowSettings(false)}>
-          <div style={{ background: '#fff', borderRadius: 20, padding: 0, width: 480, maxWidth: '90vw', boxShadow: '0 8px 32px rgba(0,0,0,0.12)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
-            <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid #e8eaed' }}>
-              <div style={{ fontSize: 18, fontWeight: 600, color: '#202124' }}>{t('common.settings')}</div>
-            </div>
-            <div style={{ padding: '16px 24px 24px' }}>
-              <div style={{ marginBottom: 20 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: '#5f6368', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 12 }}>General</div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid #f1f3f4' }}>
-                  <div>
-                    <div style={{ fontSize: 14, fontWeight: 500, color: '#202124' }}>Language</div>
-                    <div style={{ fontSize: 12, color: '#5f6368', marginTop: 2 }}>Display language for the interface</div>
-                  </div>
-                  <select value={i18n.language} onChange={e => i18n.changeLanguage(e.target.value)} style={{ padding: '8px 12px', borderRadius: 12, border: '1px solid #dadce0', fontSize: 14, outline: 'none', background: '#fff', color: '#202124', cursor: 'pointer', minWidth: 140 }}>
-                    <option value="en">English</option>
-                    <option value="zh">简体中文</option>
-                    <option value="zh-TW">繁體中文</option>
-                    <option value="ja">日本語</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-            <div style={{ padding: '12px 24px', borderTop: '1px solid #e8eaed', display: 'flex', justifyContent: 'flex-end' }}>
-              <button onClick={() => setShowSettings(false)} style={{ padding: '10px 24px', borderRadius: 20, border: 'none', background: '#1a73e8', color: '#fff', fontSize: 14, fontWeight: 500, cursor: 'pointer' }}>Done</button>
             </div>
           </div>
         </div>

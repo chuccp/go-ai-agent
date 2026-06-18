@@ -39,6 +39,7 @@ export interface FlowDefinition {
   name: string
   description: string
   category: string
+  path?: string
   config: Record<string, any>
   form_schema?: FormSchema | null
   settings?: FlowSettings | null
@@ -118,4 +119,10 @@ export interface FlowEvent {
 
 export function getNodeDef(type: NodeType): NodeDef | undefined {
   return ALL_NODE_TYPES.find(n => n.type === type)
+}
+
+/** Returns true if the icon string is a filename (e.g. "icon.png") rather than an emoji. */
+export function isIconFilename(icon?: string): boolean {
+  if (!icon) return false
+  return icon.includes('.') && /\.(png|jpg|jpeg|gif|svg|webp)$/i.test(icon)
 }

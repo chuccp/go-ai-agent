@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { API_BASE, IS_DESKTOP } from '@/constants'
 import FlowForm from '@/components/FlowForm'
+import { isIconFilename } from '@/types/flow'
 import type { FlowDetail, FlowEvent as IFlowEvent, FormSchema } from '@/types/flow'
 
 interface FlowEvent {
@@ -234,7 +235,7 @@ export default function FlowRunner() {
     return <div style={{ padding: 40, textAlign: 'center' }}>{t('flow.notFound')}</div>
   }
 
-  const icon = flow.settings?.icon || flow.icon || '⚡'
+  const iconStr = flow.settings?.icon || flow.icon || '⚡'
   const title = flow.name || 'Untitled Flow'
   const hasForm = flow.form_schema && flow.form_schema.fields && flow.form_schema.fields.length > 0
 
@@ -243,7 +244,11 @@ export default function FlowRunner() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 20px', background: '#fff', borderBottom: '0.5px solid rgba(16,24,40,0.08)' }}>
         <button onClick={() => nav('/designer')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#676f83', fontSize: 13 }}>← {t('common.back')}</button>
-        <div style={{ fontSize: 20 }}>{icon}</div>
+        <div style={{ fontSize: 20 }}>
+          {isIconFilename(iconStr) ? (
+            <img src={`${API_BASE}/api/flows/${flowId}/icon`} alt="icon" style={{ width: 28, height: 28, borderRadius: 6, objectFit: 'cover' }} />
+          ) : iconStr}
+        </div>
         <div style={{ fontSize: 16, fontWeight: 600, color: '#101828' }}>{title}</div>
         {flow.category && <span style={{ fontSize: 11, color: '#155aef', background: '#eff4ff', padding: '2px 8px', borderRadius: 10 }}>{flow.category}</span>}
       </div>

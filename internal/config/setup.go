@@ -52,6 +52,7 @@ type FlowCacheConfig struct {
 type FlowConfig struct {
 	Cache          FlowCacheConfig `yaml:"cache"`
 	MaxConcurrency int             `yaml:"maxConcurrency"`
+	AppsPath       string          `yaml:"appsPath"`
 }
 
 // DefaultAppConfig returns a set of defaults matching the existing application.yml.
@@ -73,6 +74,7 @@ func DefaultAppConfig() *ApplicationConfig {
 				Path:    "./data/cache",
 			},
 			MaxConcurrency: 4,
+			AppsPath:       "./data/apps",
 		},
 	}
 }

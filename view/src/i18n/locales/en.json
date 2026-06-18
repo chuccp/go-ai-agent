@@ -147,6 +147,19 @@
     "ipcError": "IPC not available",
     "sendResponse": "Send"
   },
+  "settings": {
+    "general": "General",
+    "language": "Language",
+    "languageDesc": "Display language for the interface",
+    "dangerZone": "Danger Zone",
+    "clearDatabase": "Clear Database",
+    "clearDbDesc": "Drop all tables and recreate them empty. Chat history, models, and flows will be lost.",
+    "clearAllData": "Clear All Data",
+    "clearAllDesc": "Delete everything: database tables, app directories, uploads, and cache.",
+    "clearDbConfirm": "This will delete all data in the database (chat history, models, flows, admin accounts). Tables will be recreated empty. Are you sure?",
+    "clearAllConfirm": "This will permanently delete ALL data including database, app files, uploads, and cache. This action cannot be undone. Are you sure?",
+    "clearSuccess": "Data cleared. Reloading..."
+  },
   "setup": {
     "title": "go-ai-agent",
     "subtitle": "First run, please complete the following configuration to get started",

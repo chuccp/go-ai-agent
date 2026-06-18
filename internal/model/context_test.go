@@ -26,24 +26,6 @@ func TestFlowModel_WithContext(t *testing.T) {
 	}
 }
 
-func TestFlowNodeModel_WithContext(t *testing.T) {
-	em := fwModel.NewEntryModel[*entity.FlowNode, uint](nil, "test")
-	m := &FlowNodeModel{EntryModel: em}
-	m2 := m.WithContext(context.Background())
-	if m2.EntryModel == m.EntryModel {
-		t.Error("EntryModel should be a new instance after WithContext")
-	}
-}
-
-func TestFlowEdgeModel_WithContext(t *testing.T) {
-	em := fwModel.NewEntryModel[*entity.FlowEdge, uint](nil, "test")
-	m := &FlowEdgeModel{EntryModel: em}
-	m2 := m.WithContext(context.Background())
-	if m2.EntryModel == m.EntryModel {
-		t.Error("EntryModel should be a new instance after WithContext")
-	}
-}
-
 func TestFlowExecutionModel_WithContext(t *testing.T) {
 	em := fwModel.NewEntryModel[*entity.FlowExecution, uint](nil, "test")
 	m := &FlowExecutionModel{EntryModel: em}

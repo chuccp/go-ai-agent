@@ -128,17 +128,19 @@ func (r *ChatRunner) handleFlowAction(action string, args map[string]any) (strin
 	}
 }
 
-// flowNodesEdgesResult stores node and edge results
+// flowNodesEdgesResult stores parsed node and edge results
 type flowNodesEdgesResult struct {
-	nodeIDs  []uint // Ordered list of node IDs
+	nodes    []*entity.FlowNode
+	edges    []*entity.FlowEdge
 	nodeCnt  int
 	edgeCnt  int
 	hasNodes bool  // Whether nodes were provided
 	err      error // Validation error (returns early, nodes/edges not saved)
 }
 
-// saveFlowNodesEdges parses and saves nodes + edges (shared by create/update)
-func (r *ChatRunner) saveFlowNodesEdges(flowId uint, args map[string]any) flowNodesEdgesResult {
+// parseFlowNodesEdges parses, validates, and returns nodes + edges from args.
+// It does NOT save to disk — the caller passes the result to FlowService.
+func (r *ChatRunner) parseFlowNodesEdges(flowId uint, args map[string]any) flowNodesEdgesResult {
 	var res flowNodesEdgesResult
 	nodesRaw, ok := args["nodes"]
 	if !ok {
@@ -242,10 +244,12 @@ func (r *ChatRunner) saveFlowNodesEdges(flowId uint, args map[string]any) flowNo
 		}
 	}
 
-	res.nodeIDs = make([]uint, len(nodeInputs))
+	// Build nodes with sequential IDs (not saved to DB)
+	res.nodes = make([]*entity.FlowNode, len(nodeInputs))
 	for i, ni := range nodeInputs {
 		cfgBytes, _ := json.Marshal(ni.Config)
-		node := &entity.FlowNode{
+		res.nodes[i] = &entity.FlowNode{
+			Id:        uint(i + 1),
 			FlowId:    flowId,
 			Type:      ni.Type,
 			Label:     ni.Label,
@@ -253,12 +257,10 @@ func (r *ChatRunner) saveFlowNodesEdges(flowId uint, args map[string]any) flowNo
 			PositionX: float64(100 + (i%4)*300),
 			PositionY: float64(100 + (i/4)*200),
 		}
-		if err := r.nodeModel.Create(node); err == nil {
-			res.nodeIDs[i] = node.Id
-			res.nodeCnt++
-		}
+		res.nodeCnt++
 	}
 
+	// Build edges, mapping source/target indices to sequential node IDs
 	if edgesRaw, ok := args["edges"]; ok {
 		edgesBytes, _ := json.Marshal(edgesRaw)
 		var edgeInputs []struct {
@@ -269,25 +271,23 @@ func (r *ChatRunner) saveFlowNodesEdges(flowId uint, args map[string]any) flowNo
 		}
 		if json.Unmarshal(edgesBytes, &edgeInputs) == nil {
 			for _, ei := range edgeInputs {
-				if ei.SourceIndex < 0 || ei.SourceIndex >= len(res.nodeIDs) ||
-					ei.TargetIndex < 0 || ei.TargetIndex >= len(res.nodeIDs) {
+				if ei.SourceIndex < 0 || ei.SourceIndex >= len(res.nodes) ||
+					ei.TargetIndex < 0 || ei.TargetIndex >= len(res.nodes) {
 					continue
 				}
 				handle := ei.SourceHandle
 				if handle == "" {
 					handle = "output"
 				}
-				edge := &entity.FlowEdge{
+				res.edges = append(res.edges, &entity.FlowEdge{
 					FlowId:       flowId,
-					SourceNodeId: res.nodeIDs[ei.SourceIndex],
-					TargetNodeId: res.nodeIDs[ei.TargetIndex],
+					SourceNodeId: res.nodes[ei.SourceIndex].Id,
+					TargetNodeId: res.nodes[ei.TargetIndex].Id,
 					SourceHandle: handle,
 					TargetHandle: "input",
 					Label:        ei.Label,
-				}
-				if err := r.edgeModel.Create(edge); err == nil {
-					res.edgeCnt++
-				}
+				})
+				res.edgeCnt++
 			}
 		}
 	}

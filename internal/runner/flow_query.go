@@ -88,12 +88,10 @@ func (r *ChatRunner) flowGet(args map[string]any) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	f, err := r.flowModel.FindById(id)
+	f, nodes, edges, err := r.flowService.GetFlowDetail(id)
 	if err != nil {
 		return "", fmt.Errorf("flow not found: ID=%d", id)
 	}
-	nodes, _ := r.nodeModel.FindByFlowId(id)
-	edges, _ := r.edgeModel.FindByFlowId(id)
 
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("Flow [ID:%d] %s | %s | %d nodes %d edges\n",
@@ -119,56 +117,38 @@ func (r *ChatRunner) flowCreate(args map[string]any) (string, error) {
 	}
 	desc, _ := args["description"].(string)
 	cat, _ := args["category"].(string)
+	config := getStringArg(args, "config")
+	formSchema := getStringArg(args, "form_schema")
+	settings := getStringArg(args, "settings")
+	icon := getStringArg(args, "icon")
 
-	f := &entity.FlowDefinition{
-		Name:        name,
-		Description: desc,
-		Category:    cat,
-		Config:      getStringArg(args, "config"),
-		FormSchema:  getStringArg(args, "form_schema"),
-		Settings:    getStringArg(args, "settings"),
-		Icon:        getStringArg(args, "icon"),
-	}
-	if err := r.flowModel.Create(f); err != nil {
-		return "", fmt.Errorf("create flow failed: %w", err)
-	}
-
-	res := r.saveFlowNodesEdges(f.Id, args)
+	// Parse and validate nodes/edges (does NOT save to disk)
+	res := r.parseFlowNodesEdges(0, args)
 	if res.err != nil {
-		// Clean up the created flow on validation error
-		r.flowModel.Delete(f.Id)
 		return "", res.err
 	}
+
+	nodes := res.nodes
+	edges := res.edges
 	nodeCount := res.nodeCnt
 	edgeCount := res.edgeCnt
 
-	// No nodes provided -- auto-adding start + end
+	// No nodes provided -- auto-add start + end
 	if nodeCount == 0 {
-		startNode := &entity.FlowNode{
-			FlowId:    f.Id,
-			Type:      "start",
-			Label:     "Start",
-			PositionX: 100,
-			PositionY: 100,
+		nodes = []*entity.FlowNode{
+			{Id: 1, Type: "start", Label: "Start", PositionX: 100, PositionY: 100},
+			{Id: 2, Type: "end", Label: "End", PositionX: 400, PositionY: 100},
 		}
-		r.nodeModel.Create(startNode)
-		endNode := &entity.FlowNode{
-			FlowId:    f.Id,
-			Type:      "end",
-			Label:     "End",
-			PositionX: 400,
-			PositionY: 100,
+		edges = []*entity.FlowEdge{
+			{SourceNodeId: 1, TargetNodeId: 2, SourceHandle: "output", TargetHandle: "input"},
 		}
-		r.nodeModel.Create(endNode)
-		r.edgeModel.Create(&entity.FlowEdge{
-			FlowId:       f.Id,
-			SourceNodeId: startNode.Id,
-			TargetNodeId: endNode.Id,
-			SourceHandle: "output",
-			TargetHandle: "input",
-		})
 		nodeCount = 2
 		edgeCount = 1
+	}
+
+	f, err := r.flowService.CreateFlow(name, desc, cat, config, formSchema, settings, icon, nodes, edges)
+	if err != nil {
+		return "", fmt.Errorf("create flow failed: %w", err)
 	}
 
 	return fmt.Sprintf("Flow created successfully!\nID: %d\nName: %s\nCategory: %s\nNodes: %d\nEdges: %d",
@@ -180,58 +160,37 @@ func (r *ChatRunner) flowUpdate(args map[string]any) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	f, err := r.flowModel.FindById(id)
-	if err != nil {
-		return "", fmt.Errorf("flow not found: ID=%d", id)
-	}
 
-	if v, ok := args["name"].(string); ok && v != "" {
-		f.Name = v
-	}
-	if v, ok := args["description"].(string); ok && v != "" {
-		f.Description = v
-	}
-	if v, ok := args["category"].(string); ok && v != "" {
-		f.Category = v
-	}
-	if v := getStringArg(args, "config"); v != "" {
-		f.Config = v
-	}
-	if v := getStringArg(args, "form_schema"); v != "" {
-		f.FormSchema = v
-	}
-	if v := getStringArg(args, "settings"); v != "" {
-		f.Settings = v
-	}
-	if v := getStringArg(args, "icon"); v != "" {
-		f.Icon = v
-	}
+	name := getStringArg(args, "name")
+	desc := getStringArg(args, "description")
+	cat := getStringArg(args, "category")
+	config := getStringArg(args, "config")
+	formSchema := getStringArg(args, "form_schema")
+	settings := getStringArg(args, "settings")
+	icon := getStringArg(args, "icon")
 
 	nodeCount := 0
 	edgeCount := 0
 
-	// New nodes provided -- validate, then replace all nodes and edges
-	res := r.saveFlowNodesEdges(id, args)
+	// Parse and validate nodes/edges if provided (does NOT save to disk)
+	res := r.parseFlowNodesEdges(id, args)
 	if res.err != nil {
 		return "", res.err
 	}
+	var nodes []*entity.FlowNode
+	var edges []*entity.FlowEdge
 	if res.hasNodes {
-		// Validation passed, now replace: delete old, then re-save
-		r.nodeModel.DeleteByFlowId(id)
-		r.edgeModel.DeleteByFlowId(id)
-		res = r.saveFlowNodesEdges(id, args)
-		if res.err != nil {
-			return "", res.err
-		}
+		nodes = res.nodes
+		edges = res.edges
 		nodeCount = res.nodeCnt
 		edgeCount = res.edgeCnt
 	}
 
-	if err := r.flowModel.Update(f); err != nil {
+	if err := r.flowService.UpdateFlow(id, name, desc, cat, config, formSchema, settings, icon, nodes, edges); err != nil {
 		return "", fmt.Errorf("update flow failed: %w", err)
 	}
 	return fmt.Sprintf("Flow updated successfully!\nID: %d\nName: %s\nNodes: %d\nEdges: %d",
-		f.Id, f.Name, nodeCount, edgeCount), nil
+		id, name, nodeCount, edgeCount), nil
 }
 
 func (r *ChatRunner) flowDelete(args map[string]any) (string, error) {
@@ -239,12 +198,7 @@ func (r *ChatRunner) flowDelete(args map[string]any) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if _, err := r.flowModel.FindById(id); err != nil {
-		return "", fmt.Errorf("flow not found: ID=%d", id)
-	}
-	r.nodeModel.DeleteByFlowId(id)
-	r.edgeModel.DeleteByFlowId(id)
-	if err := r.flowModel.Delete(id); err != nil {
+	if err := r.flowService.DeleteFlow(id); err != nil {
 		return "", fmt.Errorf("delete failed: %w", err)
 	}
 	return fmt.Sprintf("Flow [ID:%d] deleted", id), nil

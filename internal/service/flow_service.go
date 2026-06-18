@@ -2,28 +2,59 @@ package service
 
 import (
 	"github.com/chuccp/go-ai-agent/internal/entity"
+	"github.com/chuccp/go-ai-agent/internal/flow/appstore"
 	"github.com/chuccp/go-ai-agent/internal/model"
 	"github.com/chuccp/go-web-frame/core"
 	"github.com/chuccp/go-web-frame/db"
+	"github.com/chuccp/go-web-frame/log"
+	"go.uber.org/zap"
 )
 
 type FlowService struct {
 	context   *core.Context
 	flowModel *model.FlowModel
-	nodeModel *model.FlowNodeModel
-	edgeModel *model.FlowEdgeModel
+	appStore  *appstore.Store
 }
 
 func (s *FlowService) Init(ctx *core.Context) error {
 	s.context = ctx
 	s.flowModel = core.GetModel[*model.FlowModel](ctx)
-	s.nodeModel = core.GetModel[*model.FlowNodeModel](ctx)
-	s.edgeModel = core.GetModel[*model.FlowEdgeModel](ctx)
+
+	appsPath := ctx.GetConfig().GetStringOrDefault("flow.appsPath", "./data/apps")
+	s.appStore = appstore.New(appsPath)
+	if err := s.appStore.EnsureBaseDir(); err != nil {
+		log.Warn("Failed to create apps directory", zap.String("path", appsPath), zap.Error(err))
+	}
+
+	log.Info("FlowService initialized", zap.String("appsPath", appsPath))
 	return nil
 }
 
+// GetAppStore exposes the app store for REST handlers and runners.
+func (s *FlowService) GetAppStore() *appstore.Store {
+	return s.appStore
+}
+
+// CreateFlow creates a new app directory, writes flow.json, and inserts a DB metadata row.
 func (s *FlowService) CreateFlow(name, description, category, config, formSchema, settings, icon string, nodes []*entity.FlowNode, edges []*entity.FlowEdge) (*entity.FlowDefinition, error) {
-	f := &entity.FlowDefinition{
+	// 1. Create app directory
+	appPath, err := s.appStore.CreateAppDir()
+	if err != nil {
+		return nil, err
+	}
+
+	// 2. Handle icon: generate SVG if none provided or emoji
+	if icon == "" {
+		iconFilename, err := s.appStore.SaveSVGIcon(appPath, name)
+		if err != nil {
+			_ = s.appStore.DeleteApp(appPath)
+			return nil, err
+		}
+		icon = iconFilename
+	}
+
+	// 3. Write flow.json
+	content := &appstore.FlowContent{
 		Name:        name,
 		Description: description,
 		Category:    category,
@@ -31,20 +62,37 @@ func (s *FlowService) CreateFlow(name, description, category, config, formSchema
 		FormSchema:  formSchema,
 		Settings:    settings,
 		Icon:        icon,
+		Nodes:       nodes,
+		Edges:       edges,
 	}
-	err := s.context.GetTransaction().Exec(func(tx *db.DB) error {
+	if err := s.appStore.SaveFlow(appPath, content); err != nil {
+		_ = s.appStore.DeleteApp(appPath)
+		return nil, err
+	}
+
+	// 4. Insert DB metadata row
+	f := &entity.FlowDefinition{
+		Name:        name,
+		Description: description,
+		Category:    category,
+		Path:        appPath,
+		Icon:        icon,
+		Config:      config,
+		FormSchema:  formSchema,
+		Settings:    settings,
+	}
+	err = s.context.GetTransaction().Exec(func(tx *db.DB) error {
 		flowModel := core.GetReNewModel[*model.FlowModel](tx, s.context)
-		if err := flowModel.Create(f); err != nil {
-			return err
-		}
-		return s.saveNodesAndEdges(tx, f.Id, nodes, edges)
+		return flowModel.Create(f)
 	})
 	if err != nil {
+		_ = s.appStore.DeleteApp(appPath)
 		return nil, err
 	}
 	return f, nil
 }
 
+// UpdateFlow loads the existing flow.json, merges changes, and saves.
 func (s *FlowService) UpdateFlow(id uint, name, description, category, config, formSchema, settings, icon string, nodes []*entity.FlowNode, edges []*entity.FlowEdge) error {
 	return s.context.GetTransaction().Exec(func(tx *db.DB) error {
 		flowModel := core.GetReNewModel[*model.FlowModel](tx, s.context)
@@ -52,89 +100,115 @@ func (s *FlowService) UpdateFlow(id uint, name, description, category, config, f
 		if err != nil {
 			return err
 		}
+
+		// Load existing flow.json
+		content, err := s.appStore.LoadFlow(f.Path)
+		if err != nil {
+			return err
+		}
+
+		// Merge non-empty fields
 		if name != "" {
 			f.Name = name
+			content.Name = name
 		}
 		if description != "" {
 			f.Description = description
+			content.Description = description
 		}
 		if category != "" {
 			f.Category = category
+			content.Category = category
 		}
 		if config != "" {
-			f.Config = config
+			content.Config = config
 		}
 		if formSchema != "" {
-			f.FormSchema = formSchema
+			content.FormSchema = formSchema
 		}
 		if settings != "" {
-			f.Settings = settings
+			content.Settings = settings
 		}
 		if icon != "" {
 			f.Icon = icon
+			content.Icon = icon
 		}
-		if err := flowModel.Update(f); err != nil {
+		if nodes != nil {
+			content.Nodes = nodes
+		}
+		if edges != nil {
+			content.Edges = edges
+		}
+
+		// Save flow.json
+		if err := s.appStore.SaveFlow(f.Path, content); err != nil {
 			return err
 		}
-		return s.saveNodesAndEdges(tx, id, nodes, edges)
+
+		// Update DB row
+		return flowModel.Update(f)
 	})
 }
 
+// GetFlowDetail loads the flow definition and its on-disk content (nodes, edges, config).
+func (s *FlowService) GetFlowDetail(id uint) (*entity.FlowDefinition, []*entity.FlowNode, []*entity.FlowEdge, error) {
+	f, err := s.flowModel.FindById(id)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	content, err := s.appStore.LoadFlow(f.Path)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	// Hydrate on-disk fields onto the entity
+	f.Config = content.Config
+	f.FormSchema = content.FormSchema
+	f.Settings = content.Settings
+
+	return f, content.Nodes, content.Edges, nil
+}
+
+// DuplicateFlow copies the app directory and creates a new DB row.
 func (s *FlowService) DuplicateFlow(id uint) (*entity.FlowDefinition, error) {
 	var clone *entity.FlowDefinition
 	err := s.context.GetTransaction().Exec(func(tx *db.DB) error {
 		flowModel := core.GetReNewModel[*model.FlowModel](tx, s.context)
-		nodeModel := core.GetReNewModel[*model.FlowNodeModel](tx, s.context)
-		edgeModel := core.GetReNewModel[*model.FlowEdgeModel](tx, s.context)
 
 		src, err := flowModel.FindById(id)
 		if err != nil {
 			return err
 		}
+
+		// Copy app directory
+		newPath, err := s.appStore.CopyApp(src.Path)
+		if err != nil {
+			return err
+		}
+
+		// Load and rename the copied flow.json
+		content, err := s.appStore.LoadFlow(newPath)
+		if err != nil {
+			_ = s.appStore.DeleteApp(newPath)
+			return err
+		}
+		content.Name = src.Name + " (copy)"
+		if err := s.appStore.SaveFlow(newPath, content); err != nil {
+			_ = s.appStore.DeleteApp(newPath)
+			return err
+		}
+
 		clone = &entity.FlowDefinition{
-			Name:        src.Name + " (copy)",
+			Name:        content.Name,
 			Description: src.Description,
 			Category:    src.Category,
-			Config:      src.Config,
-			FormSchema:  src.FormSchema,
-			Settings:    src.Settings,
+			Path:        newPath,
 			Icon:        src.Icon,
 		}
 		if err := flowModel.Create(clone); err != nil {
+			_ = s.appStore.DeleteApp(newPath)
 			return err
-		}
-
-		sns, err := nodeModel.FindByFlowId(id)
-		if err != nil {
-			return err
-		}
-		idMap := make(map[uint]uint)
-		for _, n := range sns {
-			oid := n.Id
-			n.Id = 0
-			n.FlowId = clone.Id
-			if err := nodeModel.Create(n); err != nil {
-				return err
-			}
-			idMap[oid] = n.Id
-		}
-
-		ses, err := edgeModel.FindByFlowId(id)
-		if err != nil {
-			return err
-		}
-		for _, e := range ses {
-			e.Id = 0
-			e.FlowId = clone.Id
-			if nid, ok := idMap[e.SourceNodeId]; ok {
-				e.SourceNodeId = nid
-			}
-			if nid, ok := idMap[e.TargetNodeId]; ok {
-				e.TargetNodeId = nid
-			}
-			if err := edgeModel.Create(e); err != nil {
-				return err
-			}
 		}
 		return nil
 	})
@@ -144,70 +218,18 @@ func (s *FlowService) DuplicateFlow(id uint) (*entity.FlowDefinition, error) {
 	return clone, nil
 }
 
+// DeleteFlow removes the app directory and the DB row.
 func (s *FlowService) DeleteFlow(id uint) error {
 	return s.context.GetTransaction().Exec(func(tx *db.DB) error {
-		nodeModel := core.GetReNewModel[*model.FlowNodeModel](tx, s.context)
-		edgeModel := core.GetReNewModel[*model.FlowEdgeModel](tx, s.context)
 		flowModel := core.GetReNewModel[*model.FlowModel](tx, s.context)
-
-		if err := nodeModel.DeleteByFlowId(id); err != nil {
-			return err
-		}
-		if err := edgeModel.DeleteByFlowId(id); err != nil {
-			return err
-		}
-		return flowModel.Delete(id)
-	})
-}
-
-func (s *FlowService) saveNodesAndEdges(tx *db.DB, flowId uint, nodes []*entity.FlowNode, edges []*entity.FlowEdge) error {
-	if len(nodes) == 0 && len(edges) == 0 {
-		return nil
-	}
-	nodeModel := core.GetReNewModel[*model.FlowNodeModel](tx, s.context)
-	edgeModel := core.GetReNewModel[*model.FlowEdgeModel](tx, s.context)
-
-	idMap := make(map[uint]uint)
-	if len(nodes) > 0 {
-		if err := nodeModel.DeleteByFlowId(flowId); err != nil {
-			return err
-		}
-		oldIds := make([]uint, len(nodes))
-		for i, n := range nodes {
-			oldIds[i] = n.Id
-			n.Id = 0
-			n.FlowId = flowId
-			if err := nodeModel.Create(n); err != nil {
-				return err
-			}
-		}
-		savedNodes, err := nodeModel.FindByFlowId(flowId)
+		f, err := flowModel.FindById(id)
 		if err != nil {
 			return err
 		}
-		for i, sn := range savedNodes {
-			if i < len(oldIds) {
-				idMap[oldIds[i]] = sn.Id
-			}
+		// Delete app directory
+		if f.Path != "" {
+			_ = s.appStore.DeleteApp(f.Path)
 		}
-	}
-	if len(edges) > 0 {
-		if err := edgeModel.DeleteByFlowId(flowId); err != nil {
-			return err
-		}
-		for _, e := range edges {
-			e.Id = 0
-			e.FlowId = flowId
-			if nid, ok := idMap[e.SourceNodeId]; ok {
-				e.SourceNodeId = nid
-			}
-			if nid, ok := idMap[e.TargetNodeId]; ok {
-				e.TargetNodeId = nid
-			}
-			if err := edgeModel.Create(e); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
+		return flowModel.Delete(id)
+	})
 }

@@ -5,6 +5,7 @@ import ChatHome from '@/pages/ChatHome'
 import FlowDesigner from '@/pages/FlowDesigner'
 import FlowRunner from '@/pages/FlowRunner'
 import ModelManager from '@/pages/ModelManager'
+import Settings from '@/pages/Settings'
 import SetupWizard from '@/pages/SetupWizard'
 
 export default function App() {
@@ -35,6 +36,7 @@ export default function App() {
             <Route path="/designer/:id" element={<FlowDesigner />} />
             <Route path="/run/:id" element={<FlowRunner />} />
             <Route path="/models" element={<ModelManager />} />
+            <Route path="/settings" element={<Settings />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </>
         )}

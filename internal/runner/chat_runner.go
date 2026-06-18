@@ -13,6 +13,7 @@ import (
 	"github.com/chuccp/go-ai-agent/internal/ai/chat/common"
 	aiTypes "github.com/chuccp/go-ai-agent/internal/ai/types"
 	"github.com/chuccp/go-ai-agent/internal/model"
+	"github.com/chuccp/go-ai-agent/internal/service"
 	"github.com/chuccp/go-web-frame/core"
 	"github.com/chuccp/go-web-frame/log"
 	"github.com/gorilla/websocket"
@@ -28,8 +29,7 @@ type ChatRunner struct {
 	sessionModel     *model.ChatSessionModel
 	messageModel     *model.ChatMessageModel
 	flowModel        *model.FlowModel
-	nodeModel        *model.FlowNodeModel
-	edgeModel        *model.FlowEdgeModel
+	flowService      *service.FlowService
 	flowRunner       *FlowRunner
 	activeConns      map[*websocket.Conn]bool
 	defaultModelPath string
@@ -54,8 +54,7 @@ func (r *ChatRunner) Init(ctx *core.Context) error {
 	r.sessionModel = core.GetModel[*model.ChatSessionModel](ctx)
 	r.messageModel = core.GetModel[*model.ChatMessageModel](ctx)
 	r.flowModel = core.GetModel[*model.FlowModel](ctx)
-	r.nodeModel = core.GetModel[*model.FlowNodeModel](ctx)
-	r.edgeModel = core.GetModel[*model.FlowEdgeModel](ctx)
+	r.flowService = core.GetService[*service.FlowService](ctx)
 
 	// Check if running in desktop mode
 	r.isDesktop = ctx.GetConfig().GetBoolOrDefault("system.desktop", false)
@@ -163,6 +162,14 @@ func (r *ChatRunner) loadProvidersFromDB() {
 	r.providersLoaded = true
 	r.chatService.MarkProvidersReady()
 	log.Info("providers loaded from DB", zap.Int("count", len(models)))
+}
+
+// ResetProviders clears all loaded providers so the Run() loop will re-fetch
+// them from the database on the next tick. Called after a database clear.
+func (r *ChatRunner) ResetProviders() {
+	r.providersLoaded = false
+	r.defaultModelPath = ""
+	log.Info("providers reset, will reload from DB on next tick")
 }
 
 func (r *ChatRunner) Run() error {

@@ -35,6 +35,8 @@ interface SetupState {
   initBaseModel: (data: any) => Promise<{ ok: boolean; msg: string }>
   completeSetup: () => Promise<{ ok: boolean; msg: string }>
   fetchProviderDefaults: () => Promise<Record<string, any>>
+  clearDatabase: () => Promise<boolean>
+  clearAllData: () => Promise<boolean>
 }
 
 export const useSetupStore = create<SetupState>((set) => ({
@@ -115,5 +117,19 @@ export const useSetupStore = create<SetupState>((set) => ({
       const data = await res.json()
       return data.data || {}
     } catch { return {} }
+  },
+
+  async clearDatabase() {
+    try {
+      const res = await fetch(`${API_BASE}/api/system/clear-db`, { method: 'POST' })
+      return res.ok
+    } catch { return false }
+  },
+
+  async clearAllData() {
+    try {
+      const res = await fetch(`${API_BASE}/api/system/clear-all`, { method: 'POST' })
+      return res.ok
+    } catch { return false }
   },
 }))

@@ -12,6 +12,7 @@ import (
 	"github.com/chuccp/go-ai-agent/internal/ai/chat"
 	"github.com/chuccp/go-ai-agent/internal/ai/chat/common"
 	"github.com/chuccp/go-ai-agent/internal/entity"
+	"github.com/chuccp/go-ai-agent/internal/flow/appstore"
 	"github.com/chuccp/go-ai-agent/internal/flow/cache"
 	"github.com/chuccp/go-ai-agent/internal/flow/engine"
 	flownodes "github.com/chuccp/go-ai-agent/internal/flow/nodes"
@@ -31,9 +32,8 @@ type FlowRunner struct {
 	genService     *ai.GenService
 	flowService    *service.FlowService
 	flowModel      *flowModel.FlowModel
-	nodeModel      *flowModel.FlowNodeModel
-	edgeModel      *flowModel.FlowEdgeModel
 	executionModel *flowModel.FlowExecutionModel
+	appStore       *appstore.Store
 	registry       *engine.Registry // Node type registry (initialized once)
 	taskMgr        *engine.TaskManager
 	functions      *engine.FunctionRegistry
@@ -74,9 +74,10 @@ func (r *FlowRunner) Init(ctx *core.Context) error {
 	r.genService = core.GetService[*ai.GenService](ctx)
 	r.flowService = core.GetService[*service.FlowService](ctx)
 	r.flowModel = core.GetModel[*flowModel.FlowModel](ctx)
-	r.nodeModel = core.GetModel[*flowModel.FlowNodeModel](ctx)
-	r.edgeModel = core.GetModel[*flowModel.FlowEdgeModel](ctx)
 	r.executionModel = core.GetModel[*flowModel.FlowExecutionModel](ctx)
+	if r.flowService != nil {
+		r.appStore = r.flowService.GetAppStore()
+	}
 
 	// Node registry
 	r.registry = engine.NewRegistry()
@@ -403,17 +404,18 @@ func (r *FlowRunner) HandleFlowStart(flowId uint, executionId uint, sessionId ui
 		return 0, fmt.Errorf("flow not found: %w", err)
 	}
 
-	flowNodes, err := r.nodeModel.FindByFlowId(flowId)
+	// Load flow content (nodes, edges, config) from disk via app store.
+	content, err := r.appStore.LoadFlow(flowDef.Path)
 	if err != nil {
-		return 0, fmt.Errorf("failed to load nodes: %w", err)
+		return 0, fmt.Errorf("failed to load flow from disk: %w", err)
 	}
 
-	flowEdges, err := r.edgeModel.FindByFlowId(flowId)
-	if err != nil {
-		return 0, fmt.Errorf("failed to load edges: %w", err)
-	}
+	// Hydrate on-disk fields onto the flow definition for the engine.
+	flowDef.Config = content.Config
+	flowDef.FormSchema = content.FormSchema
+	flowDef.Settings = content.Settings
 
-	return r.startExecution(flowId, flowDef, flowNodes, flowEdges, executionId, sessionId, opts)
+	return r.startExecution(flowId, flowDef, content.Nodes, content.Edges, executionId, sessionId, opts)
 }
 
 // HandleBuiltInFlowStart starts a system built-in flow by name.
