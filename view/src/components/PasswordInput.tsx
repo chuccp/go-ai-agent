@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   value: string
@@ -8,6 +9,7 @@ interface Props {
 }
 
 export default function PasswordInput({ value, onChange, placeholder, style }: Props) {
+  const { t } = useTranslation()
   const [show, setShow] = useState(false)
 
   const wrapperStyle: React.CSSProperties = {
@@ -55,7 +57,7 @@ export default function PasswordInput({ value, onChange, placeholder, style }: P
         onClick={() => setShow(s => !s)}
         style={toggleStyle}
         tabIndex={-1}
-        title={show ? '隐藏' : '显示'}
+        title={show ? t('common.hidePassword') : t('common.showPassword')}
       >
         {show ? (
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

@@ -28,7 +28,9 @@
     "settings": "設定",
     "success": "成功",
     "error": "エラー",
-    "warning": "警告"
+    "warning": "警告",
+    "showPassword": "パスワードを表示",
+    "hidePassword": "パスワードを非表示"
   },
   "nav": {
     "chat": "チャット",
@@ -131,7 +133,16 @@
     "flowIcon": "アイコン",
     "flowDesc": "説明",
     "enterDesc": "アプリの説明を入力",
-    "run": "開く"
+    "run": "開く",
+    "runFlow": "フローを実行",
+    "executionLog": "実行ログ",
+    "runToSeeProgress": "フローを実行すると進捗が表示されます",
+    "yourResponse": "返信を入力...",
+    "failedToLoad": "フローの読み込みに失敗しました",
+    "notFound": "フローが見つかりません",
+    "wsError": "WebSocket エラー",
+    "ipcError": "IPC は利用できません",
+    "sendResponse": "送信"
   },
   "setup": {
     "title": "go-ai-agent",

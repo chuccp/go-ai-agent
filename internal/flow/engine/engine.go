@@ -163,18 +163,24 @@ func (e *Engine) executeLayer(ctx *ExecutionContext, nodeIDs []uint) error {
 		}
 	}
 
-	// Model nodes: submit via TaskManager one by one
-	for _, id := range modelNodes {
-		nodeID := id
-		if e.taskMgr != nil {
-			if err := e.taskMgr.Submit([]TaskFunc{func() error {
+	// Model nodes: batch submit for parallel execution
+	if len(modelNodes) > 0 {
+		tasks := make([]TaskFunc, len(modelNodes))
+		for i, id := range modelNodes {
+			nodeID := id
+			tasks[i] = func() error {
 				return e.executeNode(ctx, nodeID)
-			}}); err != nil {
+			}
+		}
+		if e.taskMgr != nil {
+			if err := e.taskMgr.Submit(tasks); err != nil {
 				return err
 			}
 		} else {
-			if err := e.executeNode(ctx, nodeID); err != nil {
-				return err
+			for _, fn := range tasks {
+				if err := fn(); err != nil {
+					return err
+				}
 			}
 		}
 	}

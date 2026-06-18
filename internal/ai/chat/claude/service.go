@@ -80,8 +80,9 @@ type anthropicSSE struct {
 }
 
 type anthropicDelta struct {
-	Type string `json:"type"`
-	Text string `json:"text"`
+	Type        string `json:"type"`
+	Text        string `json:"text"`
+	PartialJSON string `json:"partial_json"`
 }
 
 // ==================== Provider ====================
@@ -303,6 +304,101 @@ func (c *ChatService) ChatWithTools(ctx context.Context, history []common.ChatMe
 func (c *ChatService) GetModel() string  { return c.model }
 func (c *ChatService) SetModel(m string) { c.model = m }
 
+func (c *ChatService) ChatWithToolsStream(ctx context.Context, history []common.ChatMessage, text string, opts *common.LLMOptions, handler *common.StreamHandler) (*common.ChatResponse, error) {
+	msgs := history
+	if text != "" {
+		msgs = append(msgs, common.ChatMessage{Role: "user", Content: text})
+	}
+	req := c.buildRequest(msgs, opts, true)
+	if tools := opts.GetTools(); tools != nil {
+		req.Tools = tools
+	}
+
+	r, err := c.restyClient.R().
+		SetContext(ctx).
+		SetHeader("x-api-key", c.apiKey).
+		SetHeader("anthropic-version", AnthropicVersion).
+		SetHeader("Content-Type", "application/json").
+		SetBody(req).
+		SetResponseDoNotParse(true).
+		Post("/v1/messages")
+	if err != nil {
+		return nil, fmt.Errorf("HTTP request failed: %w", err)
+	}
+	defer r.RawResponse.Body.Close()
+
+	if r.StatusCode() != 200 {
+		body, _ := io.ReadAll(r.RawResponse.Body)
+		return nil, fmt.Errorf("API error (%d): %s", r.StatusCode(), string(body))
+	}
+
+	var fullText strings.Builder
+	var toolCalls []common.ToolCall
+	var currentToolID, currentToolName string
+	var currentToolArgs strings.Builder
+	inToolBlock := false
+
+	scanner := bufio.NewScanner(r.RawResponse.Body)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+		data := strings.TrimPrefix(line, "data: ")
+		var evt anthropicSSE
+		if json.Unmarshal([]byte(data), &evt) != nil {
+			continue
+		}
+
+		switch evt.Type {
+		case "content_block_start":
+			if evt.ContentBlock != nil && evt.ContentBlock.Type == "tool_use" {
+				inToolBlock = true
+				currentToolID = evt.ContentBlock.ID
+				currentToolName = evt.ContentBlock.Name
+				currentToolArgs.Reset()
+			}
+		case "content_block_delta":
+			if evt.Delta != nil {
+				if evt.Delta.Type == "text_delta" && evt.Delta.Text != "" {
+					fullText.WriteString(evt.Delta.Text)
+					if handler != nil && handler.OnContentFunc != nil {
+						handler.OnContentFunc(evt.Delta.Text, false)
+					}
+				}
+				if evt.Delta.Type == "input_json_delta" && evt.Delta.PartialJSON != "" {
+					currentToolArgs.WriteString(evt.Delta.PartialJSON)
+				}
+			}
+		case "content_block_stop":
+			if inToolBlock {
+				toolCalls = append(toolCalls, common.ToolCall{
+					ID:        currentToolID,
+					Name:      currentToolName,
+					Arguments: currentToolArgs.String(),
+				})
+				inToolBlock = false
+			}
+		case "message_stop":
+			if handler != nil && handler.OnCompleteFunc != nil {
+				handler.OnCompleteFunc(fullText.String(), "")
+			}
+			return &common.ChatResponse{
+				Text:      fullText.String(),
+				ToolCalls: toolCalls,
+			}, nil
+		}
+	}
+
+	if handler != nil && handler.OnCompleteFunc != nil {
+		handler.OnCompleteFunc(fullText.String(), "")
+	}
+	return &common.ChatResponse{
+		Text:      fullText.String(),
+		ToolCalls: toolCalls,
+	}, nil
+}
+
 func (c *ChatService) buildRequest(messages []common.ChatMessage, opts *common.LLMOptions, stream bool) anthropicRequest {
 	req := anthropicRequest{Model: c.model, MaxTokens: DefaultMaxTokens, Stream: stream}
 	if opts != nil {
@@ -314,6 +410,37 @@ func (c *ChatService) buildRequest(messages []common.ChatMessage, opts *common.L
 	for _, m := range messages {
 		if m.Role == "system" {
 			req.System = m.Content
+			continue
+		}
+		// Tool result messages: convert role=tool to user with tool_result content block
+		if m.Role == "tool" && m.ToolCallID != "" {
+			content := []anthropicContent{{
+				Type:      "tool_result",
+				ToolUseID: m.ToolCallID,
+				Text:      m.Content,
+			}}
+			msgs = append(msgs, anthropicMsg{Role: "user", Content: content})
+			continue
+		}
+		// Assistant messages with tool calls: convert to content blocks
+		if m.Role == "assistant" && len(m.ToolCalls) > 0 {
+			var content []anthropicContent
+			if m.Content != "" {
+				content = append(content, anthropicContent{Type: "text", Text: m.Content})
+			}
+			for _, tc := range m.ToolCalls {
+				var input any
+				if tc.Arguments != "" {
+					json.Unmarshal([]byte(tc.Arguments), &input)
+				}
+				content = append(content, anthropicContent{
+					Type:  "tool_use",
+					ID:    tc.ID,
+					Name:  tc.Name,
+					Input: input,
+				})
+			}
+			msgs = append(msgs, anthropicMsg{Role: "assistant", Content: content})
 			continue
 		}
 		var content any = m.Content

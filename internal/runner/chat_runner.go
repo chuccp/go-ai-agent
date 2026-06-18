@@ -42,6 +42,11 @@ func NewChatRunner() *ChatRunner {
 	return &ChatRunner{activeConns: make(map[*websocket.Conn]bool)}
 }
 
+// maxActiveConns is the maximum number of simultaneous WebSocket connections
+// the chat runner will accept. New connections beyond this limit are rejected
+// with an error message to prevent resource exhaustion.
+const maxActiveConns = 100
+
 func (r *ChatRunner) Init(ctx *core.Context) error {
 	r.ctx = ctx
 	r.chatService = core.GetService[*chat.UnifiedChatService](ctx)
@@ -156,6 +161,7 @@ func (r *ChatRunner) loadProvidersFromDB() {
 		r.chatService.SetDefaultPath(path)
 	}
 	r.providersLoaded = true
+	r.chatService.MarkProvidersReady()
 	log.Info("providers loaded from DB", zap.Int("count", len(models)))
 }
 
@@ -215,8 +221,41 @@ func (r *ChatRunner) HandleFlowUserResponse(executionId uint, response string) e
 	return r.flowRunner.HandleUserResponse(executionId, response)
 }
 
+// StartFlowIPC starts a flow execution from desktop IPC (no WebSocket connection).
+// formValuesJSON is an optional JSON string of form values; pass "" for none.
+// The caller is responsible for creating or reusing a chat session.
+func (r *ChatRunner) StartFlowIPC(flowID uint, sessionID uint, initialInput string, formValuesJSON string) (uint, error) {
+	if r.flowRunner == nil {
+		return 0, fmt.Errorf("FlowRunner not initialized")
+	}
+	opts := FlowStartOptions{InitialInput: initialInput}
+	if formValuesJSON != "" {
+		var fv map[string]any
+		if err := json.Unmarshal([]byte(formValuesJSON), &fv); err == nil {
+			opts.FormValues = fv
+		}
+	}
+	return r.flowRunner.HandleFlowStart(flowID, 0, sessionID, opts)
+}
+
+// StopFlowIPC aborts a running flow execution from desktop IPC.
+func (r *ChatRunner) StopFlowIPC(executionID uint) error {
+	if r.flowRunner == nil {
+		return fmt.Errorf("FlowRunner not initialized")
+	}
+	return r.flowRunner.HandleFlowStop(executionID)
+}
+
 func (r *ChatRunner) HandleWebSocket(conn *websocket.Conn) error {
 	r.mu.Lock()
+	if len(r.activeConns) >= maxActiveConns {
+		r.mu.Unlock()
+		// Reject the connection: send an error then close.
+		_ = conn.WriteJSON(WSResponse{Type: "error", Message: "Too many concurrent connections. Please try again later."})
+		conn.Close()
+		log.Warn("websocket connection rejected: max connections reached", zap.Int("limit", maxActiveConns))
+		return nil
+	}
 	r.activeConns[conn] = true
 	r.mu.Unlock()
 

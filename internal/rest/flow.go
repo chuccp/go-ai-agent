@@ -201,15 +201,25 @@ func (r *FlowRest) importFlow(req *web.Request) (any, error) {
 		return nil, fmt.Errorf("no file uploaded (field name: file)")
 	}
 
+	// Enforce a maximum upload size to prevent abuse.
+	const maxUploadSize = 10 << 20 // 10 MB
+	if files[0].Size > maxUploadSize {
+		return nil, fmt.Errorf("uploaded file too large: %d bytes (max %d bytes)", files[0].Size, maxUploadSize)
+	}
+
 	file, err := files[0].Open()
 	if err != nil {
 		return nil, fmt.Errorf("failed to open uploaded file: %w", err)
 	}
 	defer file.Close()
 
-	data, err := io.ReadAll(file)
+	// Defense-in-depth: limit the reader as well in case Size is spoofed.
+	data, err := io.ReadAll(io.LimitReader(file, maxUploadSize+1))
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file data: %w", err)
+	}
+	if int64(len(data)) > maxUploadSize {
+		return nil, fmt.Errorf("uploaded file too large (max %d bytes)", maxUploadSize)
 	}
 
 	fd, err := export.ParseAppPackage(data)

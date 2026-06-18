@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"encoding/json"
 	"strconv"
 	"strings"
 
@@ -52,7 +53,14 @@ func (r *ChatRunner) prepareChat(conn *websocket.Conn, req WSRequest) chatPrep {
 		if err == nil && len(msgs) > 0 {
 			cp.history = make([]common.ChatMessage, 0, len(msgs))
 			for _, m := range msgs {
-				cp.history = append(cp.history, common.ChatMessage{Role: m.Role, Content: m.Content})
+				cm := common.ChatMessage{Role: m.Role, Content: m.Content}
+				if m.ToolCalls != "" {
+					var tcs []common.ToolCall
+					if json.Unmarshal([]byte(m.ToolCalls), &tcs) == nil {
+						cm.ToolCalls = tcs
+					}
+				}
+				cp.history = append(cp.history, cm)
 			}
 		}
 	} else {

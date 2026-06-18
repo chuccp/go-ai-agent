@@ -28,7 +28,9 @@
     "settings": "设置",
     "success": "成功",
     "error": "错误",
-    "warning": "警告"
+    "warning": "警告",
+    "showPassword": "显示密码",
+    "hidePassword": "隐藏密码"
   },
   "nav": {
     "chat": "聊天",
@@ -134,7 +136,16 @@
     "flowIcon": "图标",
     "flowDesc": "描述",
     "enterDesc": "输入应用描述",
-    "run": "打开"
+    "run": "打开",
+    "runFlow": "运行流程",
+    "executionLog": "执行日志",
+    "runToSeeProgress": "运行流程以查看进度",
+    "yourResponse": "输入回复...",
+    "failedToLoad": "加载流程失败",
+    "notFound": "流程未找到",
+    "wsError": "WebSocket 错误",
+    "ipcError": "IPC 不可用",
+    "sendResponse": "发送"
   },
   "setup": {
     "title": "go-ai-agent",

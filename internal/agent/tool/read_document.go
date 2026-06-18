@@ -139,11 +139,27 @@ type docxBody struct {
 }
 
 type docxParagraph struct {
-	Runs []docxRun `xml:"r"`
+	Runs      []docxRun       `xml:"r"`
+	Hyperlinks []docxHyperlink `xml:"hyperlink"`
+}
+
+// docxRunProps captures basic formatting flags from w:rPr.
+type docxRunProps struct {
+	Bold   bool `xml:"b"`
+	Italic bool `xml:"i"`
 }
 
 type docxRun struct {
-	Texts []docxText `xml:"t"`
+	RPr   docxRunProps `xml:"rPr"`
+	Texts []docxText   `xml:"t"`
+}
+
+// docxHyperlink mirrors w:hyperlink which wraps runs (w:r) and may carry an
+// anchor (internal link) or r:id (external relationship).
+type docxHyperlink struct {
+	Anchor string   `xml:"anchor,attr"`
+	RId    string   `xml:"id,attr"`
+	Runs   []docxRun `xml:"r"`
 }
 
 type docxText struct {
@@ -172,8 +188,25 @@ func extractTextFromDocxXML(data []byte) string {
 	for _, p := range doc.Body.Paragraphs {
 		var line strings.Builder
 		for _, r := range p.Runs {
-			for _, t := range r.Texts {
-				line.WriteString(t.Value)
+			line.WriteString(formatRunText(r))
+		}
+		// Process hyperlinks within the paragraph.
+		for _, hl := range p.Hyperlinks {
+			var hlText strings.Builder
+			for _, r := range hl.Runs {
+				hlText.WriteString(formatRunText(r))
+			}
+			text := strings.TrimSpace(hlText.String())
+			if text == "" {
+				continue
+			}
+			if hl.Anchor != "" {
+				// Internal bookmark link.
+				line.WriteString(fmt.Sprintf("[%s](#%s)", text, hl.Anchor))
+			} else {
+				// External link (r:id) — we don't resolve the relationship target
+				// here, so just mark it as a link with its visible text.
+				line.WriteString(fmt.Sprintf("[%s]", text))
 			}
 		}
 		if line.Len() > 0 {
@@ -190,8 +223,11 @@ func extractTextFromDocxXML(data []byte) string {
 				var cellText strings.Builder
 				for _, p := range cell.Paragraphs {
 					for _, r := range p.Runs {
-						for _, t := range r.Texts {
-							cellText.WriteString(t.Value)
+						cellText.WriteString(formatRunText(r))
+					}
+					for _, hl := range p.Hyperlinks {
+						for _, r := range hl.Runs {
+							cellText.WriteString(formatRunText(r))
 						}
 					}
 				}
@@ -203,6 +239,29 @@ func extractTextFromDocxXML(data []byte) string {
 	}
 
 	return result.String()
+}
+
+// formatRunText extracts text from a run and applies markdown bold/italic
+// markers based on the run's formatting properties (w:b / w:i).
+func formatRunText(r docxRun) string {
+	var text strings.Builder
+	for _, t := range r.Texts {
+		text.WriteString(t.Value)
+	}
+	s := text.String()
+	if s == "" {
+		return ""
+	}
+	if r.RPr.Bold && r.RPr.Italic {
+		return "***" + s + "***"
+	}
+	if r.RPr.Bold {
+		return "**" + s + "**"
+	}
+	if r.RPr.Italic {
+		return "*" + s + "*"
+	}
+	return s
 }
 
 func readXLSX(path string) (string, error) {

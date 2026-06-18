@@ -82,11 +82,32 @@ func BuildAppPackage(app *entity.FlowDefinition, nodes []*entity.FlowNode, edges
 	return buf.Bytes(), nil
 }
 
+// maxTotalUncompressed is the maximum total uncompressed size allowed when
+// parsing an app package, to mitigate ZIP-bomb attacks (100 MB).
+const maxTotalUncompressed = 100 << 20
+
+// maxSingleUncompressed is the maximum uncompressed size of a single entry
+// within the package (50 MB).
+const maxSingleUncompressed = 50 << 20
+
 // ParseAppPackage reads an app ZIP and extracts the data.
 func ParseAppPackage(data []byte) (*AppData, error) {
 	r, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
 	if err != nil {
 		return nil, fmt.Errorf("failed to open package: %w", err)
+	}
+
+	// ZIP-bomb mitigation: check total and per-file uncompressed sizes before
+	// reading any content.
+	var total uint64
+	for _, f := range r.File {
+		if f.UncompressedSize64 > maxSingleUncompressed {
+			return nil, fmt.Errorf("file %q in package is too large: %d bytes (max %d bytes)", f.Name, f.UncompressedSize64, maxSingleUncompressed)
+		}
+		total += f.UncompressedSize64
+		if total > maxTotalUncompressed {
+			return nil, fmt.Errorf("package total uncompressed size exceeds limit (%d bytes)", maxTotalUncompressed)
+		}
 	}
 
 	// Try to read meta.json to find primary app path

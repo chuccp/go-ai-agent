@@ -17,8 +17,10 @@ type Call struct {
 
 // Result is the result of executing a tool
 type Result struct {
-	CallID string `json:"call_id"`
-	Output string `json:"output"`
+	CallID  string `json:"call_id"`
+	Output  string `json:"output"`
+	Success bool   `json:"success"`
+	Error   string `json:"error,omitempty"`
 }
 
 // Executor is the interface for tool executors

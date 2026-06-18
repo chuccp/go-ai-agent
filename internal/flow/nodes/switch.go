@@ -52,7 +52,7 @@ func (n *SwitchNode) Execute(ctx *engine.ExecutionContext, config string) (*engi
 
 // evalSwitch runs a Starlark script and expects a string result.
 func evalSwitch(ctx *engine.ExecutionContext, script string) (string, error) {
-	thread := &starlark.Thread{Name: "switch"}
+	thread := newStarlarkThread("switch")
 	globals, err := starlark.ExecFileOptions(&syntax.FileOptions{}, thread, "switch.py", script, starlarkPredeclared(ctx))
 	if err != nil {
 		return "", err

@@ -66,8 +66,19 @@ type contentPartParam struct {
 }
 
 type messageParam struct {
-	Role    string `json:"role"`
-	Content any    `json:"content"` // string | []contentPartParam
+	Role       string           `json:"role"`
+	Content    any              `json:"content"` // string | []contentPartParam
+	ToolCalls  []toolCallParam  `json:"tool_calls,omitempty"`
+	ToolCallID string           `json:"tool_call_id,omitempty"`
+}
+
+type toolCallParam struct {
+	ID       string `json:"id"`
+	Type     string `json:"type"`
+	Function struct {
+		Name      string `json:"name"`
+		Arguments string `json:"arguments"`
+	} `json:"function"`
 }
 
 type chatResponse struct {
@@ -92,11 +103,22 @@ type toolCall struct {
 type streamResponse struct {
 	Choices []struct {
 		Delta struct {
-			Content          string `json:"content"`
-			ReasoningContent string `json:"reasoning_content"`
+			Content          string          `json:"content"`
+			ReasoningContent string          `json:"reasoning_content"`
+			ToolCalls        []streamToolCall `json:"tool_calls"`
 		} `json:"delta"`
 		FinishReason string `json:"finish_reason"`
 	} `json:"choices"`
+}
+
+type streamToolCall struct {
+	Index    int    `json:"index"`
+	ID       string `json:"id"`
+	Type     string `json:"type"`
+	Function struct {
+		Name      string `json:"name"`
+		Arguments string `json:"arguments"`
+	} `json:"function"`
 }
 
 // ==================== Provider ====================
@@ -316,6 +338,105 @@ func (c *ChatService) ChatWithTools(ctx context.Context, history []common.ChatMe
 func (c *ChatService) GetModel() string  { return c.model }
 func (c *ChatService) SetModel(m string) { c.model = m }
 
+func (c *ChatService) ChatWithToolsStream(ctx context.Context, history []common.ChatMessage, text string, opts *common.LLMOptions, handler *common.StreamHandler) (*common.ChatResponse, error) {
+	req := c.buildRequest(buildMessages(history, text), opts, true)
+	if tools := opts.GetTools(); tools != nil {
+		req.Tools = tools
+		req.ToolChoice = "auto"
+	}
+
+	r, err := c.restyClient.R().
+		SetContext(ctx).
+		SetHeader("Authorization", "Bearer "+c.apiKey).
+		SetHeader("Content-Type", "application/json").
+		SetBody(req).
+		SetResponseDoNotParse(true).
+		Post("/chat/completions")
+	if err != nil {
+		return nil, fmt.Errorf("HTTP request failed: %w", err)
+	}
+	defer r.RawResponse.Body.Close()
+
+	if r.StatusCode() != 200 {
+		body, _ := io.ReadAll(r.RawResponse.Body)
+		return nil, fmt.Errorf("API error (%d): %s", r.StatusCode(), string(body))
+	}
+
+	var fullContent, fullReasoning strings.Builder
+	toolCallMap := make(map[int]*streamToolCall)
+
+	scanner := bufio.NewScanner(r.RawResponse.Body)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+		data := strings.TrimPrefix(line, "data: ")
+		if data == "[DONE]" {
+			break
+		}
+		var sr streamResponse
+		if json.Unmarshal([]byte(data), &sr) != nil {
+			continue
+		}
+		for _, choice := range sr.Choices {
+			if choice.Delta.ReasoningContent != "" {
+				fullReasoning.WriteString(choice.Delta.ReasoningContent)
+				if handler != nil && handler.OnContentFunc != nil {
+					handler.OnContentFunc(choice.Delta.ReasoningContent, true)
+				}
+			}
+			if choice.Delta.Content != "" {
+				fullContent.WriteString(choice.Delta.Content)
+				if handler != nil && handler.OnContentFunc != nil {
+					handler.OnContentFunc(choice.Delta.Content, false)
+				}
+			}
+			for i := range choice.Delta.ToolCalls {
+				stc := &choice.Delta.ToolCalls[i]
+				existing, ok := toolCallMap[stc.Index]
+				if !ok {
+					toolCallMap[stc.Index] = &streamToolCall{
+						Index: stc.Index,
+						ID:    stc.ID,
+						Type:  "function",
+					}
+					existing = toolCallMap[stc.Index]
+				}
+				if stc.ID != "" {
+					existing.ID = stc.ID
+				}
+				if stc.Function.Name != "" {
+					existing.Function.Name += stc.Function.Name
+				}
+				if stc.Function.Arguments != "" {
+					existing.Function.Arguments += stc.Function.Arguments
+				}
+			}
+		}
+	}
+
+	cr := &common.ChatResponse{
+		Text:      fullContent.String(),
+		Reasoning: fullReasoning.String(),
+	}
+	for i := 0; i < len(toolCallMap); i++ {
+		stc := toolCallMap[i]
+		if stc != nil && stc.ID != "" {
+			cr.ToolCalls = append(cr.ToolCalls, common.ToolCall{
+				ID:        stc.ID,
+				Name:      stc.Function.Name,
+				Arguments: stc.Function.Arguments,
+			})
+		}
+	}
+
+	if handler != nil && handler.OnCompleteFunc != nil {
+		handler.OnCompleteFunc(cr.Text, cr.Reasoning)
+	}
+	return cr, nil
+}
+
 func (c *ChatService) buildRequest(messages []messageParam, opts *common.LLMOptions, stream bool) chatRequest {
 	req := chatRequest{Model: c.model, Messages: messages, Stream: stream}
 	t := float64(DefaultTemperature)
@@ -373,7 +494,21 @@ func getResponseContent(resp *chatResponse) string {
 func buildMessages(history []common.ChatMessage, text string) []messageParam {
 	msgs := make([]messageParam, 0, len(history)+1)
 	for _, m := range history {
-		msgs = append(msgs, messageParam{Role: m.Role, Content: buildOpenAIContent(m.Content, m.ContentParts)})
+		mp := messageParam{Role: m.Role, Content: buildOpenAIContent(m.Content, m.ContentParts)}
+		if m.ToolCallID != "" {
+			mp.ToolCallID = m.ToolCallID
+		}
+		if len(m.ToolCalls) > 0 {
+			tcs := make([]toolCallParam, len(m.ToolCalls))
+			for i, tc := range m.ToolCalls {
+				tcs[i].ID = tc.ID
+				tcs[i].Type = "function"
+				tcs[i].Function.Name = tc.Name
+				tcs[i].Function.Arguments = tc.Arguments
+			}
+			mp.ToolCalls = tcs
+		}
+		msgs = append(msgs, mp)
 	}
 	if text != "" {
 		msgs = append(msgs, messageParam{Role: "user", Content: text})

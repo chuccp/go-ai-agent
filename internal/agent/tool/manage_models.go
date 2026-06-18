@@ -20,9 +20,9 @@ type pendingModelOp struct {
 var pendingModelOps sync.Map // map[string]pendingModelOp
 
 func storePendingOp(action string, params map[string]any) string {
-	b := make([]byte, 4)
+	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
-		return fmt.Sprintf("%08d", time.Now().UnixNano()%100000000)
+		return fmt.Sprintf("%032d", time.Now().UnixNano()%1000000000000000000)
 	}
 	key := hex.EncodeToString(b)
 

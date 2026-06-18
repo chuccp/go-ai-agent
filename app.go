@@ -69,6 +69,31 @@ func (a *App) FlowRespond(executionID uint, response string) string {
 	return `{"ok":true}`
 }
 
+// FlowStart begins a flow execution via desktop IPC.
+// Flow events are delivered via Wails runtime events on the "flow:<execID>:<type>" channel
+// (and the session-scoped "chat:<sessionID>:flow_event" channel).
+func (a *App) FlowStart(flowID uint, sessionID uint, initialInput string, formValuesJSON string) string {
+	if a.chatRunner == nil {
+		return `{"error":"ChatRunner not initialized"}`
+	}
+	execID, err := a.chatRunner.StartFlowIPC(flowID, sessionID, initialInput, formValuesJSON)
+	if err != nil {
+		return fmt.Sprintf(`{"error":"%s"}`, err.Error())
+	}
+	return fmt.Sprintf(`{"execution_id":%d}`, execID)
+}
+
+// FlowStop aborts a running flow execution via desktop IPC.
+func (a *App) FlowStop(executionID uint) string {
+	if a.chatRunner == nil {
+		return `{"error":"ChatRunner not initialized"}`
+	}
+	if err := a.chatRunner.StopFlowIPC(executionID); err != nil {
+		return fmt.Sprintf(`{"error":"%s"}`, err.Error())
+	}
+	return `{"ok":true}`
+}
+
 // assetFS returns the embedded frontend assets.
 func assetFS() fs.FS {
 	sub, err := fs.Sub(embeddedAssets, "view/dist")

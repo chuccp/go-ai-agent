@@ -1,6 +1,7 @@
 package tool
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -88,7 +89,9 @@ func parseResults(html string) string {
 	snippets := reSnippet.FindAllStringSubmatch(html, -1)
 
 	if len(links) == 0 {
-		return ""
+		// Regex parsing failed. As a fallback, return a cleaned-up raw HTML
+		// fragment so the caller still gets useful content instead of nothing.
+		return fallbackRawHTML(html)
 	}
 
 	var b strings.Builder
@@ -113,6 +116,25 @@ func parseResults(html string) string {
 		b.WriteString("\n")
 	}
 	return b.String()
+}
+
+// fallbackRawHTML is used when the structured regex parsing fails. It returns a
+// best-effort cleaned text fragment derived from the raw HTML so that the caller
+// still receives some content rather than an empty string.
+func fallbackRawHTML(html string) string {
+	// If there is genuinely no result-related content, return empty.
+	if !strings.Contains(html, "result") && !strings.Contains(html, "Result") {
+		return ""
+	}
+	cleaned := cleanHTML(html)
+	cleaned = strings.TrimSpace(cleaned)
+	if len(cleaned) > 2000 {
+		cleaned = cleaned[:2000] + "..."
+	}
+	if cleaned == "" {
+		return ""
+	}
+	return "Search results (raw fallback):\n" + cleaned
 }
 
 func cleanHTML(s string) string {
@@ -142,12 +164,25 @@ func cleanURL(s string) string {
 }
 
 func parseArgs(argsJSON string) map[string]string {
-	// Simple JSON string parser — avoid heavy dependency for a flat string map
+	// Use encoding/json for robust parsing instead of a fragile regex.
 	result := make(map[string]string)
-	re := regexp.MustCompile(`"([^"]+)"\s*:\s*"((?:[^"\\]|\\.)*)"`)
-	matches := re.FindAllStringSubmatch(argsJSON, -1)
-	for _, m := range matches {
-		result[m[1]] = strings.ReplaceAll(m[2], `\"`, `"`)
+	if strings.TrimSpace(argsJSON) == "" {
+		return result
+	}
+	var raw map[string]any
+	if err := json.Unmarshal([]byte(argsJSON), &raw); err != nil {
+		// Fall back to empty map on parse error; callers handle missing keys.
+		return result
+	}
+	for k, v := range raw {
+		switch val := v.(type) {
+		case string:
+			result[k] = val
+		case nil:
+			result[k] = ""
+		default:
+			result[k] = fmt.Sprintf("%v", val)
+		}
 	}
 	return result
 }

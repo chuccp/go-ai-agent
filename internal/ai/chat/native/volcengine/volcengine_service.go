@@ -415,6 +415,20 @@ func (c *VolcengineChat) GetModel() string {
 	return c.model
 }
 
+func (c *VolcengineChat) ChatWithToolsStream(ctx context.Context, history []common.ChatMessage, text string, opts *common.LLMOptions, handler *common.StreamHandler) (*common.ChatResponse, error) {
+	resp, err := c.ChatWithTools(ctx, history, text, opts)
+	if err != nil {
+		return nil, err
+	}
+	if handler != nil && handler.OnContentFunc != nil && resp.Text != "" {
+		handler.OnContentFunc(resp.Text, false)
+	}
+	if handler != nil && handler.OnCompleteFunc != nil {
+		handler.OnCompleteFunc(resp.Text, resp.Reasoning)
+	}
+	return resp, nil
+}
+
 func (c *VolcengineChat) SetModel(model string) {
 	c.model = model
 }

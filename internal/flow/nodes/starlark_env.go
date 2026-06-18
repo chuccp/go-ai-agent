@@ -66,3 +66,14 @@ func starlarkPredeclared(ctx *engine.ExecutionContext) starlark.StringDict {
 }
 
 var _ = starlarkjson.Module
+
+const maxStarlarkSteps = 100000
+
+// newStarlarkThread creates a Starlark thread with step limit to prevent infinite loops.
+func newStarlarkThread(name string) *starlark.Thread {
+	t := &starlark.Thread{
+		Name: name,
+	}
+	t.SetMaxExecutionSteps(maxStarlarkSteps)
+	return t
+}

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { API_BASE } from '@/constants'
+import { useTranslation } from 'react-i18next'
+import { API_BASE, IS_DESKTOP } from '@/constants'
 import FlowForm from '@/components/FlowForm'
 import type { FlowDetail, FlowEvent as IFlowEvent, FormSchema } from '@/types/flow'
 
@@ -15,7 +16,14 @@ interface FlowEvent {
   form_schema?: FormSchema
 }
 
+// Wails runtime globals (desktop mode only).
+const wailsRuntime = (window as any).runtime
+const wailsEventsOn = (name: string, cb: (...args: any[]) => void) => wailsRuntime?.EventsOn(name, cb) ?? (() => {})
+const wailsEventsOff = (...names: string[]) => { if (wailsRuntime) wailsRuntime.EventsOff(...names) }
+const wailsApp = () => (window as any).go?.main?.App
+
 export default function FlowRunner() {
+  const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
   const nav = useNavigate()
   const flowId = parseInt(id || '0', 10)
@@ -34,6 +42,8 @@ export default function FlowRunner() {
 
   const wsRef = useRef<WebSocket | null>(null)
   const eventsEndRef = useRef<HTMLDivElement | null>(null)
+  const wailsUnsubsRef = useRef<Array<() => void>>([])
+  const sessionIdRef = useRef<number>(0)
 
   useEffect(() => {
     eventsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -48,7 +58,7 @@ export default function FlowRunner() {
         setLoading(false)
       })
       .catch(() => {
-        setError('Failed to load flow')
+        setError(t('flow.failedToLoad'))
         setLoading(false)
       })
   }, [flowId])
@@ -68,8 +78,24 @@ export default function FlowRunner() {
     return ws
   }, [])
 
-  const startFlow = useCallback((formValues?: Record<string, any>) => {
-    if (running) return
+  const pushEvent = useCallback((evt: FlowEvent) => {
+    setEvents(prev => [...prev, evt])
+    if (evt.execution_id) {
+      setExecutionId(evt.execution_id)
+    }
+    if (evt.type === 'flow_waiting_user') {
+      setWaitingUser(true)
+      setPromptMessage(evt.message || 'Please provide input:')
+      setResponse('')
+    }
+    if (evt.type === 'flow_complete' || evt.type === 'flow_error') {
+      setRunning(false)
+      setFinished(true)
+      setWaitingUser(false)
+    }
+  }, [])
+
+  const startFlowWS = useCallback((formValues?: Record<string, any>) => {
     setRunning(true)
     setFinished(false)
     setEvents([])
@@ -89,58 +115,123 @@ export default function FlowRunner() {
     ws.onmessage = (evt) => {
       try {
         const msg = JSON.parse(evt.data) as FlowEvent
-        setEvents(prev => [...prev, msg])
-        if (msg.execution_id) {
-          setExecutionId(msg.execution_id)
-        }
-        if (msg.type === 'flow_waiting_user') {
-          setWaitingUser(true)
-          setPromptMessage(msg.message || 'Please provide input:')
-          setResponse('')
-        }
+        pushEvent(msg)
         if (msg.type === 'flow_complete' || msg.type === 'flow_error') {
-          setRunning(false)
-          setFinished(true)
-          setWaitingUser(false)
           ws.close()
         }
-      } catch {}
+      } catch (e) { console.error('FlowRunner ws message parse error:', e) }
     }
 
     ws.onerror = () => {
-      setError('WebSocket error')
+      setError(t('flow.wsError'))
       setRunning(false)
     }
 
     ws.onclose = () => {
       if (!finished) setRunning(false)
     }
-  }, [connectWS, flowId, finished, running])
+  }, [connectWS, flowId, finished, pushEvent])
+
+  const startFlowIPC = useCallback(async (formValues?: Record<string, any>) => {
+    const app = wailsApp()
+    if (!app) {
+      setError(t('flow.ipcError'))
+      return
+    }
+
+    setRunning(true)
+    setFinished(false)
+    setEvents([])
+
+    // Create a session so flow events are delivered on a known channel.
+    let sessionId = 0
+    try {
+      const res = await fetch(`${API_BASE}/api/sessions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: 'Flow Session', flow_id: flowId }),
+      })
+      const data = await res.json()
+      if (data.data?.id) {
+        sessionId = data.data.id
+        sessionIdRef.current = sessionId
+      }
+    } catch (e) { console.error('FlowRunner session creation failed:', e) }
+
+    // Subscribe to session-scoped flow events BEFORE starting the flow.
+    const flowEventName = `chat:${sessionId}:flow_event`
+    let activeExecId = 0
+    wailsEventsOn(flowEventName, (msg: any) => {
+      try {
+        if (msg.execution_id) {
+          const msgExecId = Number(msg.execution_id)
+          if (activeExecId && msgExecId !== activeExecId) return
+          if (!activeExecId) activeExecId = msgExecId
+        }
+        pushEvent(msg as FlowEvent)
+      } catch (e) { console.error('FlowRunner IPC event handler error:', e) }
+    })
+
+    const formValuesJSON = formValues && Object.keys(formValues).length > 0 ? JSON.stringify(formValues) : ''
+    const raw: string = await app.FlowStart(flowId, sessionId, '', formValuesJSON)
+    let result: any = {}
+    try { result = JSON.parse(raw) } catch {}
+    if (result.error) {
+      setError(result.error)
+      setRunning(false)
+      wailsEventsOff(flowEventName)
+      return
+    }
+    if (result.execution_id) {
+      activeExecId = result.execution_id
+      setExecutionId(result.execution_id)
+    }
+  }, [flowId, pushEvent])
+
+  const startFlow = useCallback((formValues?: Record<string, any>) => {
+    if (running) return
+    if (IS_DESKTOP) {
+      startFlowIPC(formValues)
+    } else {
+      startFlowWS(formValues)
+    }
+  }, [running, IS_DESKTOP, startFlowIPC, startFlowWS])
 
   const sendUserResponse = useCallback(() => {
-    if (!executionId || !wsRef.current) return
-    wsRef.current.send(JSON.stringify({
-      type: 'flow_user_response',
-      options: { execution_id: executionId, response: response },
-    }))
+    if (!executionId) return
+    if (IS_DESKTOP) {
+      const app = wailsApp()
+      if (app) {
+        app.FlowRespond(executionId, response)
+      }
+    } else if (wsRef.current) {
+      wsRef.current.send(JSON.stringify({
+        type: 'flow_user_response',
+        options: { execution_id: executionId, response: response },
+      }))
+    }
     setWaitingUser(false)
     setResponse('')
-  }, [executionId, response])
+  }, [executionId, response, IS_DESKTOP])
 
   useEffect(() => {
     return () => {
       wsRef.current?.close()
+      if (wailsUnsubsRef.current.length > 0) {
+        wailsEventsOff(...wailsUnsubsRef.current.map(() => ''))
+        wailsUnsubsRef.current = []
+      }
     }
   }, [])
 
   if (loading) {
-    return <div style={{ padding: 40, textAlign: 'center' }}>Loading...</div>
+    return <div style={{ padding: 40, textAlign: 'center' }}>{t('common.loading')}</div>
   }
   if (error) {
     return <div style={{ padding: 40, textAlign: 'center', color: '#f04438' }}>{error}</div>
   }
   if (!flow) {
-    return <div style={{ padding: 40, textAlign: 'center' }}>Flow not found</div>
+    return <div style={{ padding: 40, textAlign: 'center' }}>{t('flow.notFound')}</div>
   }
 
   const icon = flow.settings?.icon || flow.icon || '⚡'
@@ -151,7 +242,7 @@ export default function FlowRunner() {
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: '#f2f4f7' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 20px', background: '#fff', borderBottom: '0.5px solid rgba(16,24,40,0.08)' }}>
-        <button onClick={() => nav('/designer')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#676f83', fontSize: 13 }}>← Back</button>
+        <button onClick={() => nav('/designer')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#676f83', fontSize: 13 }}>← {t('common.back')}</button>
         <div style={{ fontSize: 20 }}>{icon}</div>
         <div style={{ fontSize: 16, fontWeight: 600, color: '#101828' }}>{title}</div>
         {flow.category && <span style={{ fontSize: 11, color: '#155aef', background: '#eff4ff', padding: '2px 8px', borderRadius: 10 }}>{flow.category}</span>}
@@ -175,7 +266,7 @@ export default function FlowRunner() {
                   background: '#155aef', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer',
                 }}
               >
-                Run Flow
+                {t('flow.runFlow')}
               </button>
             )
           )}
@@ -186,9 +277,9 @@ export default function FlowRunner() {
                 value={response}
                 onChange={e => setResponse(e.target.value)}
                 style={{ width: '100%', padding: '8px 10px', border: '1px solid #d0d5dd', borderRadius: 8, fontSize: 13, marginBottom: 8 }}
-                placeholder="Your response..."
+                placeholder={t('flow.yourResponse')}
               />
-              <button onClick={sendUserResponse} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#155aef', color: '#fff', fontSize: 13, cursor: 'pointer' }}>Send</button>
+              <button onClick={sendUserResponse} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#155aef', color: '#fff', fontSize: 13, cursor: 'pointer' }}>{t('flow.sendResponse')}</button>
             </div>
           )}
         </div>
@@ -196,9 +287,9 @@ export default function FlowRunner() {
         {/* Right: execution log */}
         <div style={{ flex: 1, padding: 20, overflowY: 'auto' }}>
           <div style={{ maxWidth: 720, margin: '0 auto' }}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: '#101828', marginBottom: 12 }}>Execution Log</div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: '#101828', marginBottom: 12 }}>{t('flow.executionLog')}</div>
             {events.length === 0 && (
-              <div style={{ padding: 40, textAlign: 'center', color: '#98a2b3', fontSize: 13 }}>Run the flow to see progress</div>
+              <div style={{ padding: 40, textAlign: 'center', color: '#98a2b3', fontSize: 13 }}>{t('flow.runToSeeProgress')}</div>
             )}
             {events.map((e, i) => (
               <div key={i} style={{ padding: '10px 12px', borderRadius: 8, background: '#fff', marginBottom: 8, border: '0.5px solid rgba(16,24,40,0.06)' }}>

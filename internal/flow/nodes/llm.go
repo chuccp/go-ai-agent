@@ -2,6 +2,7 @@ package nodes
 
 import (
 	"encoding/json"
+	"fmt"
 	"strconv"
 
 	"github.com/chuccp/go-ai-agent/internal/flow/cache"
@@ -81,7 +82,8 @@ func (n *LLMNode) Execute(ctx *engine.ExecutionContext, config string) (*engine.
 	// Cache check
 	cacheEnabled := isCacheEnabled(ctx, cfg.CacheEnabled)
 	if cacheEnabled && ctx.Cache != nil {
-		cacheKey := cache.GenerateKey(cfg.Model, system, prompt, strconv.Itoa(cfg.MaxTokens))
+		cacheKey := cache.GenerateKey(cfg.Model, system, prompt, strconv.Itoa(cfg.MaxTokens),
+			fmt.Sprintf("%f", cfg.Temperature), fmt.Sprintf("%f", cfg.TopP), cfg.ThinkingLevel)
 		if cached, ok := ctx.Cache.Get(cacheKey); ok {
 			if ctx.Emitter != nil {
 				ctx.Emitter.Emit(engine.FlowEvent{
@@ -119,7 +121,8 @@ func (n *LLMNode) Execute(ctx *engine.ExecutionContext, config string) (*engine.
 
 	// Write cache
 	if cacheEnabled && ctx.Cache != nil {
-		cacheKey := cache.GenerateKey(cfg.Model, system, prompt, strconv.Itoa(cfg.MaxTokens))
+		cacheKey := cache.GenerateKey(cfg.Model, system, prompt, strconv.Itoa(cfg.MaxTokens),
+			fmt.Sprintf("%f", cfg.Temperature), fmt.Sprintf("%f", cfg.TopP), cfg.ThinkingLevel)
 		_ = ctx.Cache.Set(cacheKey, output)
 	}
 

@@ -3,7 +3,6 @@ package agent
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -116,6 +115,25 @@ func (c *Chat) AddUserMessage(content string) {
 	})
 }
 
+// AddMessage appends a message with the given role, content, and optional tool calls
+func (c *Chat) AddMessage(role, content string, toolCalls []common.ToolCall) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	msg := Message{
+		Role:      role,
+		Content:   content,
+		Timestamp: time.Now(),
+	}
+	if len(toolCalls) > 0 {
+		tcs := make([]ToolCall, len(toolCalls))
+		for i, tc := range toolCalls {
+			tcs[i] = ToolCall{ID: tc.ID, Name: tc.Name, Args: tc.Arguments}
+		}
+		msg.ToolCalls = tcs
+	}
+	c.messages = append(c.messages, msg)
+}
+
 // SetIteration sets the starting iteration (based on existing conversation turns)
 func (c *Chat) SetIteration(n int) {
 	c.iteration = n
@@ -126,24 +144,29 @@ func (c *Chat) SetSystemPrompt(prompt string) {
 	c.systemPrompt = prompt
 }
 
-// LoadHistory loads historical messages
+// LoadHistory loads historical messages preserving roles and tool calls
 func (c *Chat) LoadHistory(history []common.ChatMessage) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for _, m := range history {
-		c.messages = append(c.messages, Message{
+		msg := Message{
 			Role:      m.Role,
 			Content:   m.Content,
 			Timestamp: time.Now(),
-		})
+		}
+		if len(m.ToolCalls) > 0 {
+			tcs := make([]ToolCall, len(m.ToolCalls))
+			for i, tc := range m.ToolCalls {
+				tcs[i] = ToolCall{ID: tc.ID, Name: tc.Name, Args: tc.Arguments}
+			}
+			msg.ToolCalls = tcs
+		}
+		c.messages = append(c.messages, msg)
 	}
 }
 
-// Process runs the agent main loop
+// Process runs the agent main loop with real streaming output
 func (c *Chat) Process() {
-	if c.iteration == 0 {
-		// Only reset on first Process call; preserves SetIteration override
-	}
 	c.opts.SetTools(c.toolRegistry.List())
 
 	for c.iteration < MaxIterations {
@@ -155,32 +178,34 @@ func (c *Chat) Process() {
 			zap.Int("iteration", c.iteration),
 			zap.Int("msgCount", len(c.messages)))
 
-		// Build LLM messages
 		llmMsgs := c.buildLLMMessages()
 
-		resp, err := c.svc.ChatWithTools(c.ctx, c.path, llmMsgs, "", c.opts)
+		streamHandler := &common.StreamHandler{
+			OnContentFunc: func(content string, reasoning bool) {
+				if c.ctx.Err() != nil {
+					return
+				}
+				if reasoning {
+					c.emit(Event{Type: "chunk", Content: content, Reasoning: content, Iteration: c.iteration})
+				} else {
+					c.emit(Event{Type: "chunk", Content: content, Iteration: c.iteration})
+				}
+			},
+		}
+
+		resp, err := c.svc.ChatWithToolsStream(c.ctx, c.path, llmMsgs, "", c.opts, streamHandler)
 		if err != nil {
 			c.emit(Event{Type: "error", Message: err.Error(), Done: true, Iteration: c.iteration})
 			return
 		}
 
-		// Emit reasoning first if present (mainstream pattern: thinking before content/tool)
-		if resp.Reasoning != "" {
-			c.emit(Event{Type: "chunk", Content: resp.Reasoning, Reasoning: resp.Reasoning, Iteration: c.iteration})
-		}
-
-		// Has tool calls → execute them
 		if len(resp.ToolCalls) > 0 {
 			c.addToolCalls(resp)
 			c.iteration++
 			continue
 		}
 
-		// No tool calls → emit text response, done
 		c.saveAssistantMessage(resp.Text, nil)
-		if resp.Text != "" {
-			c.streamText(resp.Text)
-		}
 		c.emit(Event{Type: "chunk", Done: true, Iteration: c.iteration})
 		return
 	}
@@ -230,7 +255,7 @@ func (c *Chat) addToolCalls(resp *common.ChatResponse) {
 			ToolID:   tc.ID,
 			Name:     tc.Name,
 			Result:   result.Output,
-			Success:  true,
+			Success:  result.Success,
 			Duration: duration,
 		}
 		results = append(results, tr)
@@ -263,14 +288,13 @@ func (c *Chat) saveAssistantMessage(text string, tcs []ToolCall) {
 	})
 }
 
-// buildLLMMessages builds the list of messages to send to the LLM
+// buildLLMMessages builds the list of messages to send to the LLM using native function calling protocol
 func (c *Chat) buildLLMMessages() []common.ChatMessage {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	var result []common.ChatMessage
 
-	// Prepend system prompt if set
 	if c.systemPrompt != "" {
 		result = append(result, common.ChatMessage{
 			Role:    "system",
@@ -279,12 +303,14 @@ func (c *Chat) buildLLMMessages() []common.ChatMessage {
 	}
 
 	for _, m := range c.messages {
-		// Process tool results first (attached to assistant message)
+		// Emit tool results as tool-role messages (native protocol)
 		if len(m.ToolResults) > 0 {
 			for _, tr := range m.ToolResults {
 				result = append(result, common.ChatMessage{
-					Role:    "user",
-					Content: fmt.Sprintf("[tool_result id=%s name=%s]\n%s", tr.ToolID, tr.Name, tr.Result),
+					Role:       "tool",
+					Content:    tr.Result,
+					ToolCallID: tr.ToolID,
+					Name:       tr.Name,
 				})
 			}
 		}
@@ -294,13 +320,13 @@ func (c *Chat) buildLLMMessages() []common.ChatMessage {
 			Content: m.Content,
 		}
 
-		// Tool calls → append to content
+		// Keep tool calls as native structure on assistant messages
 		if len(m.ToolCalls) > 0 {
-			var calls []string
-			for _, tc := range m.ToolCalls {
-				calls = append(calls, fmt.Sprintf("[tool_call id=%s name=%s args=%s]", tc.ID, tc.Name, tc.Args))
+			tcs := make([]common.ToolCall, len(m.ToolCalls))
+			for i, tc := range m.ToolCalls {
+				tcs[i] = common.ToolCall{ID: tc.ID, Name: tc.Name, Arguments: tc.Args}
 			}
-			msg.Content = msg.Content + "\n" + strings.Join(calls, "\n")
+			msg.ToolCalls = tcs
 		}
 
 		result = append(result, msg)
@@ -324,21 +350,4 @@ func (c *Chat) emit(event Event) {
 	event.ConversationID = base.ConversationID
 	event.Timestamp = base.Timestamp
 	c.conn.Send(event)
-}
-
-// streamText sends text in character slices to simulate streaming output
-func (c *Chat) streamText(text string) {
-	runes := []rune(text)
-	chunkSize := 8
-	for i := 0; i < len(runes); i += chunkSize {
-		if c.ctx.Err() != nil {
-			return
-		}
-		end := i + chunkSize
-		if end > len(runes) {
-			end = len(runes)
-		}
-		c.emit(Event{Type: "chunk", Content: string(runes[i:end]), Iteration: c.iteration})
-		time.Sleep(12 * time.Millisecond)
-	}
 }

@@ -28,7 +28,9 @@
     "settings": "Settings",
     "success": "Success",
     "error": "Error",
-    "warning": "Warning"
+    "warning": "Warning",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password"
   },
   "nav": {
     "chat": "Chat",
@@ -134,7 +136,16 @@
     "flowIcon": "Icon",
     "flowDesc": "Description",
     "enterDesc": "Enter app description",
-    "run": "Open"
+    "run": "Open",
+    "runFlow": "Run Flow",
+    "executionLog": "Execution Log",
+    "runToSeeProgress": "Run the flow to see progress",
+    "yourResponse": "Your response...",
+    "failedToLoad": "Failed to load flow",
+    "notFound": "Flow not found",
+    "wsError": "WebSocket error",
+    "ipcError": "IPC not available",
+    "sendResponse": "Send"
   },
   "setup": {
     "title": "go-ai-agent",

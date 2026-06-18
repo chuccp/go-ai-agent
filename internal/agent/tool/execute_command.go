@@ -2,7 +2,9 @@ package tool
 
 import (
 	"encoding/json"
+	"fmt"
 	"os/exec"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -38,6 +40,11 @@ func (t *ExecuteCommand) Execute(call Call) (string, error) {
 
 	if params.Command == "" {
 		return "Error: command cannot be empty", nil
+	}
+
+	// Sandbox: reject dangerous commands before execution.
+	if err := validateCommand(params.Command); err != nil {
+		return "Error: " + err.Error(), nil
 	}
 
 	var cmd *exec.Cmd
@@ -78,4 +85,28 @@ func (t *ExecuteCommand) Execute(call Call) (string, error) {
 		cmd.Process.Kill()
 		return "Command execution timed out (30s)", nil
 	}
+}
+
+// dangerousPatterns is the list of regex patterns that identify commands
+// considered too dangerous to execute.
+var dangerousPatterns = []string{
+	`rm\s+(-[a-zA-Z]*f[a-zA-Z]*\s+)?/(?:\s|$)`, // rm -rf /, rm -rf /*
+	`rm\s+-[a-zA-Z]*r[a-zA-Z]*f[a-zA-Z]*\s+/`,   // rm -rf / variants
+	`mkfs`,                                       // mkfs filesystem formatting
+	`format\s+[a-zA-Z]:`,                         // Windows format command
+	`shutdown`,                                   // shutdown
+	`:\(\)\s*\{\s*:\|:\s*&\s*\}\s*;:`,            // classic fork bomb :(){ :|:& };:
+	`>\s*/dev/sd[a-z]`,                           // write directly to block device
+	`dd\s+.*of=/dev/sd[a-z]`,                     // dd to block device
+}
+
+// validateCommand checks a command string against a set of dangerous patterns.
+// It returns an error if the command matches any blocked pattern.
+func validateCommand(command string) error {
+	for _, p := range dangerousPatterns {
+		if matched, _ := regexp.MatchString(p, command); matched {
+			return fmt.Errorf("command rejected by sandbox: matches dangerous pattern %q", p)
+		}
+	}
+	return nil
 }

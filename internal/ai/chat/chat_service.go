@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/chuccp/go-ai-agent/internal/ai/chat/claude"
 	"github.com/chuccp/go-ai-agent/internal/ai/chat/common"
@@ -24,6 +25,10 @@ type UnifiedChatService struct {
 	providers        map[uint]common.ChatProvider
 	config           config.IConfig
 	defaultModelPath string
+	// providersReady is closed once initial provider loading completes.
+	// Callers can wait on it (with a timeout) via WaitProvidersReady to avoid
+	// reading the providers map before the async/deferred load has finished.
+	providersReady chan struct{}
 }
 
 // SetDefaultPath sets the default model path for fallback resolution.
@@ -42,7 +47,8 @@ func (s *UnifiedChatService) GetDefaultPath() string {
 
 func NewUnifiedChatService() *UnifiedChatService {
 	return &UnifiedChatService{
-		providers: make(map[uint]common.ChatProvider),
+		providers:      make(map[uint]common.ChatProvider),
+		providersReady: make(chan struct{}),
 	}
 }
 
@@ -52,6 +58,54 @@ func (s *UnifiedChatService) Init(ctx *core.Context) error {
 	defer s.mu.Unlock()
 	s.config = ctx.GetConfig()
 	return nil
+}
+
+// MarkProvidersReady signals that the initial batch of providers has been
+// loaded from the database. It is idempotent — safe to call multiple times.
+func (s *UnifiedChatService) MarkProvidersReady() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.providersReady != nil {
+		close(s.providersReady)
+		s.providersReady = nil
+	}
+}
+
+// WaitProvidersReady blocks until providers have finished loading or the given
+// timeout elapses. Returns nil if ready, or an error if the timeout expired.
+// This prevents GetChatService/ChatWithTools from racing with the deferred
+// provider load triggered by the setup wizard.
+func (s *UnifiedChatService) WaitProvidersReady(timeout time.Duration) error {
+	s.mu.RLock()
+	ch := s.providersReady
+	s.mu.RUnlock()
+	if ch == nil {
+		// Already ready (or never set up a gate).
+		return nil
+	}
+	select {
+	case <-ch:
+		return nil
+	case <-time.After(timeout):
+		return fmt.Errorf("timed out waiting for providers to load")
+	}
+}
+
+// IsProvidersReady reports whether the initial provider load has completed
+// without blocking.
+func (s *UnifiedChatService) IsProvidersReady() bool {
+	s.mu.RLock()
+	ch := s.providersReady
+	s.mu.RUnlock()
+	if ch == nil {
+		return true
+	}
+	select {
+	case <-ch:
+		return true
+	default:
+		return false
+	}
 }
 
 func (s *UnifiedChatService) RegisterProvider(id uint, provider common.ChatProvider) error {
@@ -99,6 +153,14 @@ func (s *UnifiedChatService) GetChatService(path string) (common.ChatService, er
 	id, err := strconv.ParseUint(parts[0], 10, 64)
 	if err != nil {
 		return nil, fmt.Errorf("invalid provider id in path: %s", parts[0])
+	}
+
+	// If providers are still being loaded (deferred until setup completes),
+	// wait briefly so we don't return a spurious "provider not found" error.
+	if !s.IsProvidersReady() {
+		if waitErr := s.WaitProvidersReady(5 * time.Second); waitErr != nil {
+			return nil, waitErr
+		}
 	}
 
 	provider, err := s.GetProvider(uint(id))
@@ -163,6 +225,14 @@ func (s *UnifiedChatService) ChatWithTools(ctx context.Context, path string, his
 		return nil, err
 	}
 	return service.ChatWithTools(ctx, history, text, opts)
+}
+
+func (s *UnifiedChatService) ChatWithToolsStream(ctx context.Context, path string, history []common.ChatMessage, text string, opts *common.LLMOptions, handler *common.StreamHandler) (*common.ChatResponse, error) {
+	service, err := s.GetChatService(path)
+	if err != nil {
+		return nil, err
+	}
+	return service.ChatWithToolsStream(ctx, history, text, opts, handler)
 }
 
 func (s *UnifiedChatService) ListAllModels() []string {

@@ -72,7 +72,7 @@ func (n *ConditionNode) Execute(ctx *engine.ExecutionContext, config string) (*e
 
 // evalCondition runs a Starlark script and expects a boolean result.
 func evalCondition(ctx *engine.ExecutionContext, script string) (bool, error) {
-	thread := &starlark.Thread{Name: "condition"}
+	thread := newStarlarkThread("condition")
 	globals, err := starlark.ExecFileOptions(&syntax.FileOptions{}, thread, "condition.py", script, starlarkPredeclared(ctx))
 	if err != nil {
 		return false, err

@@ -61,7 +61,7 @@ Every node type has REQUIRED config fields that MUST be filled in:
 | audio_gen | text, model | voice |
 | video_gen | prompt | model, duration |
 
-- edges use source_index/target_index (0-based). source_handle: "output" (default), "yes"/"no" (condition), or case values (switch).
+- edges use source_index/target_index (0-based). source_handle: "output" (default), "true"/"false" (condition), or case values (switch).
 - Starlark scripts access upstream data via ctx["node_label"]["field"]. Built-in helpers: json_parse(s), split(s, sep).
 - Never create a node with empty required fields. Ask the user for any missing values.
 
@@ -97,10 +97,11 @@ When a user wants to run a flow:
 // ── wsSender (agent → WebSocket bridge) ──
 
 type wsSender struct {
-	conn    *websocket.Conn
-	runner  *ChatRunner
-	onChunk func(content string, reasoning bool)
-	onDone  func()
+	conn       *websocket.Conn
+	runner     *ChatRunner
+	onChunk    func(content string, reasoning bool)
+	onDone     func()
+	onToolCall func(name string, args string)
 }
 
 func (s *wsSender) Send(event agent.Event) {
@@ -123,6 +124,9 @@ func (s *wsSender) Send(event agent.Event) {
 		}
 	case "tool_call":
 		resp.Message = fmt.Sprintf("🔧 %s(%s)", event.ToolName, event.ToolInput)
+		if s.onToolCall != nil {
+			s.onToolCall(event.ToolName, event.ToolInput)
+		}
 	case "tool_result":
 		resp.Message = fmt.Sprintf("📋 %s", event.Message)
 	}
@@ -160,23 +164,36 @@ func (r *ChatRunner) handleAgent(conn *websocket.Conn, req WSRequest) {
 	c.SetIteration(startIter)
 
 	for _, m := range cp.history {
-		c.AddUserMessage(m.Content)
+		c.AddMessage(m.Role, m.Content, m.ToolCalls)
 	}
 	c.AddUserMessage(cp.userMessage)
 
 	var assistantContent strings.Builder
+	var assistantToolCalls []common.ToolCall
 	sender.onChunk = func(content string, reasoning bool) {
 		if !reasoning {
 			assistantContent.WriteString(content)
 		}
 	}
+	sender.onToolCall = func(name string, args string) {
+		assistantToolCalls = append(assistantToolCalls, common.ToolCall{
+			Name:      name,
+			Arguments: args,
+		})
+	}
 	sender.onDone = func() {
 		if cp.sessionID > 0 && assistantContent.Len() > 0 {
-			r.messageModel.Create(&entity.ChatMessage{
+			msg := &entity.ChatMessage{
 				SessionId: cp.sessionID,
 				Role:      "assistant",
 				Content:   assistantContent.String(),
-			})
+			}
+			if len(assistantToolCalls) > 0 {
+				if data, err := json.Marshal(assistantToolCalls); err == nil {
+					msg.ToolCalls = string(data)
+				}
+			}
+			r.messageModel.Create(msg)
 		}
 	}
 	c.Process()

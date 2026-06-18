@@ -64,7 +64,7 @@ func (n *ScriptNode) Execute(ctx *engine.ExecutionContext, config string) (*engi
 		ctxDict.SetKey(starlark.String(label), inner)
 	}
 
-	thread := &starlark.Thread{Name: "script"}
+	thread := newStarlarkThread("script")
 	predeclared := starlark.StringDict{
 		"ctx":    ctxDict,
 		"result": starlark.None,

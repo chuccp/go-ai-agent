@@ -109,11 +109,11 @@ func (r *Registry) List() []Definition {
 func (r *Registry) Execute(call Call) Result {
 	e, err := r.Get(call.Name)
 	if err != nil {
-		return Result{CallID: call.ID, Output: fmt.Sprintf("error: %v", err)}
+		return Result{CallID: call.ID, Output: fmt.Sprintf("error: %v", err), Success: false, Error: err.Error()}
 	}
 	output, err := e.Execute(call)
 	if err != nil {
-		return Result{CallID: call.ID, Output: fmt.Sprintf("execute failed: %v", err)}
+		return Result{CallID: call.ID, Output: fmt.Sprintf("execute failed: %v", err), Success: false, Error: err.Error()}
 	}
-	return Result{CallID: call.ID, Output: output}
+	return Result{CallID: call.ID, Output: output, Success: true}
 }

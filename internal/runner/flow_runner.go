@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/chuccp/go-ai-agent/internal/ai"
 	"github.com/chuccp/go-ai-agent/internal/ai/chat"
@@ -502,8 +503,14 @@ func (r *FlowRunner) startExecution(flowId uint, flowDef *entity.FlowDefinition,
 		log.Warn("Failed to update execution status", zap.Error(err))
 	}
 
+	snapshotStop := make(chan struct{})
+	go r.snapshotLoop(executionId, exec, execCtx, snapshotStop)
+
 	go func() {
 		err := eng.Run(execCtx, startId)
+
+		close(snapshotStop)
+		r.snapshotContext(executionId, exec, execCtx)
 
 		if err != nil {
 			exec.Status = engine.ExecError
@@ -583,6 +590,43 @@ func (r *FlowRunner) GetWaitingPrompt(executionId uint) string {
 		return re.ctx.WaitingPrompt
 	}
 	return ""
+}
+
+// snapshotContext serializes the current execution context into the FlowExecution row.
+func (r *FlowRunner) snapshotContext(executionId uint, exec *entity.FlowExecution, ctx *engine.ExecutionContext) {
+	nodeID, _, _ := ctx.GetCurrentNode()
+	ctxJSON, err := json.Marshal(map[string]any{
+		"data":          ctx.Data,
+		"node_outputs":  ctx.NodeOutputs,
+		"current_node":  nodeID,
+		"waiting_prompt": ctx.GetWaitingPrompt(),
+	})
+	if err != nil {
+		log.Warn("Failed to marshal snapshot", zap.Uint("executionId", executionId), zap.Error(err))
+		return
+	}
+	exec.Context = string(ctxJSON)
+	exec.CurrentNodeId = &nodeID
+	if err := r.executionModel.Update(exec); err != nil {
+		log.Warn("Failed to persist snapshot", zap.Uint("executionId", executionId), zap.Error(err))
+	}
+}
+
+// snapshotLoop periodically snapshots the execution context until stop is closed.
+func (r *FlowRunner) snapshotLoop(executionId uint, exec *entity.FlowExecution, ctx *engine.ExecutionContext, stop <-chan struct{}) {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-stop:
+			return
+		case <-ticker.C:
+			if ctx.IsAborted() {
+				return
+			}
+			r.snapshotContext(executionId, exec, ctx)
+		}
+	}
 }
 
 // GetWaitChannels returns the wait/done channels for a running execution.

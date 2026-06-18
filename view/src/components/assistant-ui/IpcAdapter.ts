@@ -195,7 +195,7 @@ export function createIpcAdapter(opts: IpcAdapterOptions): ChatModelAdapter {
               done = true
               break
           }
-        } catch {}
+        } catch (e) { console.error('IPC flow event handler error:', e) }
       })
 
       abortSignal.addEventListener('abort', () => {

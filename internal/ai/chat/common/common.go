@@ -58,6 +58,7 @@ type ChatService interface {
 	ChatStream(text string, handler *StreamHandler, options *LLMOptions) error
 	ChatStreamWithContext(ctx context.Context, history []ChatMessage, text string, handler *StreamHandler, options *LLMOptions) error
 	ChatWithTools(ctx context.Context, history []ChatMessage, text string, opts *LLMOptions) (*ChatResponse, error)
+	ChatWithToolsStream(ctx context.Context, history []ChatMessage, text string, opts *LLMOptions, handler *StreamHandler) (*ChatResponse, error)
 	GetModel() string
 	SetModel(model string)
 }
@@ -76,6 +77,9 @@ type ChatMessage struct {
 	Role         string        `json:"role"`
 	Content      string        `json:"content"`
 	ContentParts []ContentPart `json:"content_parts,omitempty"` // Multimodal content; provider uses this field when non-empty
+	ToolCalls    []ToolCall    `json:"tool_calls,omitempty"`    // Tool calls from assistant (native function calling)
+	ToolCallID   string        `json:"tool_call_id,omitempty"`  // Tool result message: ID of the tool call this responds to
+	Name         string        `json:"name,omitempty"`          // Tool result message: name of the tool
 }
 
 // HasContentParts Check if message contains multimodal content

@@ -200,7 +200,7 @@ export function createStreamingWebSocketAdapter(opts: WebSocketAdapterOptions): 
           }
 
           flush()
-        } catch {}
+        } catch (e) { console.error('WS event handler error:', e) }
       }
 
       ws.addEventListener('message', handler)

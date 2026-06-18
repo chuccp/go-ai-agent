@@ -37,7 +37,7 @@ export default function ChatHome() {
       const res = await fetch(`${API_BASE}/api/sessions`)
       const data = await res.json()
       setSessions(Array.isArray(data.data) ? data.data : [])
-    } catch {}
+    } catch (e) { console.error('fetchSessions failed:', e) }
   }, [])
 
   const fetchModels = useCallback(async () => {
@@ -48,7 +48,7 @@ export default function ChatHome() {
       setModels(m)
       const def = m.find((x: LLMModel) => x.is_default)
       if (def) setSelectedModelId(def.id)
-    } catch {}
+    } catch (e) { console.error('fetchModels failed:', e) }
   }, [])
 
   useEffect(() => { fetchSessions(); fetchModels(); fetchFlows() }, [fetchSessions, fetchModels, fetchFlows])
@@ -98,7 +98,7 @@ export default function ChatHome() {
         setActiveSessionId(s.id)
         setSelectedFlowId(flowId || null)
       }
-    } catch {}
+    } catch (e) { console.error('createSession failed:', e) }
     setShowNewSession(false)
     setNewSessionFlowId(null)
   }, [])
@@ -108,7 +108,7 @@ export default function ChatHome() {
       await fetch(`${API_BASE}/api/sessions/${id}`, { method: 'DELETE' })
       setSessions(prev => prev.filter(s => s.id !== id))
       if (activeSessionId === id) setActiveSessionId(null)
-    } catch {}
+    } catch (e) { console.error('deleteSession failed:', e) }
     setSessionToDelete(null)
   }, [activeSessionId])
 

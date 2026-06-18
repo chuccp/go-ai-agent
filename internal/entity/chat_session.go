@@ -17,11 +17,13 @@ func (ChatSession) TableName() string {
 
 // ChatMessage Chat message
 type ChatMessage struct {
-	Id        uint      `gorm:"primaryKey" json:"id"`
-	SessionId uint      `gorm:"index" json:"session_id"`
-	Role      string    `gorm:"size:32" json:"role"`
-	Content   string    `gorm:"type:text" json:"content"`
-	CreatedAt time.Time `json:"created_at"`
+	Id          uint      `gorm:"primaryKey" json:"id"`
+	SessionId   uint      `gorm:"index" json:"session_id"`
+	Role        string    `gorm:"size:32" json:"role"`
+	Content     string    `gorm:"type:text" json:"content"`
+	ToolCalls   string    `gorm:"type:text" json:"tool_calls,omitempty"`   // JSON-serialized tool calls
+	ToolResults string    `gorm:"type:text" json:"tool_results,omitempty"` // JSON-serialized tool results
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 func (ChatMessage) TableName() string {

@@ -18,7 +18,6 @@ type ExecutionContext struct {
 	NodeOutputs      map[string]*NodeOutput // key = node label
 	Config           map[string]string      // Package-level runtime config
 	FormValues       map[string]any         // Flow form values (app mode)
-	UserInput        chan string            // User input channel
 	Emitter          EventEmitter           // Event emitter
 	Aborted          bool
 	Functions        *FunctionRegistry   // Function registry
@@ -30,10 +29,16 @@ type ExecutionContext struct {
 	CurrentNodeLabel string              // Label of current node
 	CurrentNodeType  string              // Type of current node
 	WaitingPrompt    string              // Prompt shown when waiting for user input
+
+	// User input mechanism (replaces channel to prevent lost inputs)
+	userInputMu    sync.Mutex
+	userInputCond  *sync.Cond
+	userInputValue string
+	userInputReady bool
 }
 
 func NewExecutionContext(flowId, executionId, sessionId uint, emitter EventEmitter) *ExecutionContext {
-	return &ExecutionContext{
+	ctx := &ExecutionContext{
 		FlowId:      flowId,
 		ExecutionId: executionId,
 		SessionId:   sessionId,
@@ -41,9 +46,10 @@ func NewExecutionContext(flowId, executionId, sessionId uint, emitter EventEmitt
 		NodeOutputs: make(map[string]*NodeOutput),
 		Config:      make(map[string]string),
 		FormValues:  make(map[string]any),
-		UserInput:   make(chan string, 1),
 		Emitter:     emitter,
 	}
+	ctx.userInputCond = sync.NewCond(&ctx.userInputMu)
+	return ctx
 }
 
 func (c *ExecutionContext) Set(key string, value any) {
@@ -119,14 +125,48 @@ func (c *ExecutionContext) SetFormValues(values map[string]any) {
 }
 
 func (c *ExecutionContext) SendUserInput(input string) {
-	select {
-	case c.UserInput <- input:
-	default:
-	}
+	c.userInputMu.Lock()
+	c.userInputValue = input
+	c.userInputReady = true
+	c.userInputCond.Signal()
+	c.userInputMu.Unlock()
 }
 
 func (c *ExecutionContext) WaitUserInput() (string, error) {
-	return <-c.UserInput, nil
+	c.userInputMu.Lock()
+	for !c.userInputReady {
+		c.userInputCond.Wait()
+	}
+	val := c.userInputValue
+	c.userInputReady = false
+	c.userInputMu.Unlock()
+	return val, nil
+}
+
+func (c *ExecutionContext) SetCurrentNode(id uint, label, nodeType string) {
+	c.mu.Lock()
+	c.CurrentNodeId = id
+	c.CurrentNodeLabel = label
+	c.CurrentNodeType = nodeType
+	c.mu.Unlock()
+}
+
+func (c *ExecutionContext) GetCurrentNode() (uint, string, string) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.CurrentNodeId, c.CurrentNodeLabel, c.CurrentNodeType
+}
+
+func (c *ExecutionContext) SetWaitingPrompt(prompt string) {
+	c.mu.Lock()
+	c.WaitingPrompt = prompt
+	c.mu.Unlock()
+}
+
+func (c *ExecutionContext) GetWaitingPrompt() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.WaitingPrompt
 }
 
 func (c *ExecutionContext) Abort() {
@@ -147,4 +187,41 @@ func (c *ExecutionContext) InvokeFunction(name string, args map[string]any) (map
 		return nil, fmt.Errorf("function registry not initialized")
 	}
 	return c.Functions.Invoke(c, name, args)
+}
+
+// CloneForItem returns a shallow copy of the context for parallel item processing.
+// Shared registries and emitter are copied by reference; Data and NodeOutputs maps
+// are duplicated so concurrent per-item writes stay isolated.
+func (c *ExecutionContext) CloneForItem() *ExecutionContext {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	clone := &ExecutionContext{
+		FlowId:           c.FlowId,
+		ExecutionId:      c.ExecutionId,
+		SessionId:        c.SessionId,
+		Data:             make(map[string]any, len(c.Data)),
+		NodeOutputs:      make(map[string]*NodeOutput, len(c.NodeOutputs)),
+		Config:           c.Config,
+		FormValues:       c.FormValues,
+		Emitter:          c.Emitter,
+		Aborted:          c.Aborted,
+		Functions:        c.Functions,
+		Cache:            c.Cache,
+		Registry:         c.Registry,
+		Nodes:            c.Nodes,
+		Edges:            c.Edges,
+		CurrentNodeId:    c.CurrentNodeId,
+		CurrentNodeLabel: c.CurrentNodeLabel,
+		CurrentNodeType:  c.CurrentNodeType,
+		WaitingPrompt:    c.WaitingPrompt,
+	}
+	for k, v := range c.Data {
+		clone.Data[k] = v
+	}
+	for k, v := range c.NodeOutputs {
+		clone.NodeOutputs[k] = v
+	}
+	clone.userInputCond = sync.NewCond(&clone.userInputMu)
+	return clone
 }

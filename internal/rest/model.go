@@ -47,13 +47,37 @@ func (r *ModelRest) listModels(req *web.Request) (any, error) {
 		if err != nil {
 			return nil, err
 		}
+		maskModels(models)
 		return web.Data(models), nil
 	}
 	models, err := r.aiModel.WithContext(req.Ctx()).List()
 	if err != nil {
 		return nil, err
 	}
+	maskModels(models)
 	return web.Data(models), nil
+}
+
+// maskModels masks the API key on every model in the slice.
+func maskModels(models []*entity.AIModel) {
+	for _, m := range models {
+		if m != nil {
+			m.APIKey = maskAPIKey(m.APIKey)
+		}
+	}
+}
+
+// maskAPIKey masks an API key for safe display.
+// Keeps the first 4 and last 4 characters, replacing the middle with "****".
+// If the key is shorter than 12 characters it is fully masked as "****".
+func maskAPIKey(key string) string {
+	if key == "" {
+		return ""
+	}
+	if len(key) < 12 {
+		return "****"
+	}
+	return key[:4] + "****" + key[len(key)-4:]
 }
 
 func (r *ModelRest) createModel(req *web.Request) (any, error) {
@@ -91,6 +115,7 @@ func (r *ModelRest) createModel(req *web.Request) (any, error) {
 	if r.context.GetConfig().GetBoolOrDefault("system.init", false) {
 		r.activateModel(m)
 	}
+	m.APIKey = maskAPIKey(m.APIKey)
 	return web.Data(m), nil
 }
 
@@ -163,6 +188,7 @@ func (r *ModelRest) updateModel(req *web.Request) (any, error) {
 	if r.context.GetConfig().GetBoolOrDefault("system.init", false) {
 		r.chatService.ConfigureProvider(m.Id, m.Provider, m.APIKey, m.Model, m.BaseURL)
 	}
+	m.APIKey = maskAPIKey(m.APIKey)
 	return web.Data(m), nil
 }
 
@@ -186,6 +212,7 @@ func (r *ModelRest) setDefault(req *web.Request) (any, error) {
 	if err := r.aiModel.WithContext(req.Ctx()).Update(m); err != nil {
 		return nil, err
 	}
+	m.APIKey = maskAPIKey(m.APIKey)
 	return web.Data(m), nil
 }
 
@@ -200,6 +227,7 @@ func (r *ModelRest) setBase(req *web.Request) (any, error) {
 	if err := r.aiModel.WithContext(req.Ctx()).Update(m); err != nil {
 		return nil, err
 	}
+	m.APIKey = maskAPIKey(m.APIKey)
 	return web.Data(m), nil
 }
 

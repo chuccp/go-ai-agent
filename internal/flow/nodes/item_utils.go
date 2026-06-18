@@ -34,12 +34,7 @@ func parseJSONArray(v any) ([]any, error) {
 // cloneForItem creates a shallow clone of the execution context with the current item
 // injected as the "item" node output (with .output and ._json fields).
 func cloneForItem(ctx *engine.ExecutionContext, item any) *engine.ExecutionContext {
-	clone := engine.NewExecutionContext(ctx.FlowId, ctx.ExecutionId, ctx.SessionId, ctx.Emitter)
-	clone.Functions = ctx.Functions
-	clone.Cache = ctx.Cache
-	for k, v := range ctx.AllNodeOutputs() {
-		clone.SetNodeOutput(k, v)
-	}
+	clone := ctx.CloneForItem()
 
 	data := map[string]any{}
 	switch v := item.(type) {

@@ -258,6 +258,8 @@ function FlowNodeComponent({ id, data, selected }: { id: string; data: any; sele
       case 'user_input': return c.prompt_text || ''
       case 'transform': return c.template ? (c.template.substring(0, 40) + (c.template.length > 40 ? '...' : '')) : ''
       case 'script': return c.code ? (c.code.substring(0, 40) + (c.code.length > 40 ? '...' : '')) : ''
+      case 'switch': return c.script ? (c.script.substring(0, 40) + (c.script.length > 40 ? '...' : '')) : ''
+      case 'execute': return c.command || ''
       case 'split': return c.delimiter || ''
       case 'loop': return c.max_iterations ? `max: ${c.max_iterations}` : ''
       case 'for_each':
@@ -981,6 +983,37 @@ function PropertyPanel({
           </div>
         )
 
+      case 'switch':
+        return (
+          <div style={sectionStyle}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#101828', marginBottom: 10 }}>{t('nodeConfig.switchExpr')}</div>
+            <div style={{ fontSize: 11, color: '#98a2b3', marginBottom: 8 }}>{t('nodeConfig.switchHint')}</div>
+            <textarea
+              value={cfg.script || ''}
+              onChange={e => updateCfg('script', e.target.value)}
+              rows={6}
+              style={{ ...inputStyle, resize: 'vertical', fontFamily: 'monospace', fontSize: 12 }}
+              placeholder={`result = ctx["node_name.output"]`}
+            />
+          </div>
+        )
+
+      case 'execute':
+        return (
+          <div style={sectionStyle}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#101828', marginBottom: 10 }}>{t('nodeConfig.runCommand')}</div>
+            <div style={{ marginBottom: 10 }}>
+              <label style={labelStyle}>{t('nodeConfig.command')}</label>
+              <input
+                value={cfg.command || ''}
+                onChange={e => updateCfg('command', e.target.value)}
+                style={inputStyle}
+                placeholder="echo {{node_name.output}}"
+              />
+            </div>
+          </div>
+        )
+
       default:
         // start, end: no extra config
         return null
@@ -1520,7 +1553,7 @@ function FlowEditor({ flowId }: { flowId: string }) {
     const sourceNode = nodes.find(n => n.id === connection.source)
     let label: string | undefined
     if (sourceNode?.data.nodeType === 'condition') {
-      label = connection.sourceHandle === 'yes' ? 'TRUE' : connection.sourceHandle === 'no' ? 'FALSE' : undefined
+      label = connection.sourceHandle === 'true' ? 'TRUE' : connection.sourceHandle === 'false' ? 'FALSE' : undefined
     }
     setEdges(eds => addEdge({
       ...connection,
