@@ -45,3 +45,4 @@ PLAN.md
 server
 go-ai-agent-server
 /.claude
+/.qoder
