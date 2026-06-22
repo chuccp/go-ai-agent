@@ -140,16 +140,29 @@ func (r *ChatRunner) loadProvidersFromDB() {
 				zap.Error(err))
 		}
 
-		// Register generation providers (image, speech, video) - they share the same API credentials
+		// Register generation providers based on model category.
+		// Only image/voice/video models get their respective gen providers;
+		// LLM and other categories do not need generation endpoints.
 		if r.genService != nil {
-			r.genService.RegisterImageProvider(m.Id, ai.NewOpenAIImageProvider(m.Provider))
-			r.genService.RegisterSpeechProvider(m.Id, ai.NewOpenAISpeechProvider(m.Provider))
-			r.genService.RegisterVideoProvider(m.Id, ai.NewOpenAIVideoProvider(m.Provider))
-			if err := r.genService.ConfigureProvider(m.Id, m.APIKey, m.BaseURL); err != nil {
-				log.Warn("gen provider configure failed",
-					zap.Uint("id", m.Id),
-					zap.String("provider", m.Provider),
-					zap.Error(err))
+			registered := false
+			switch m.Category {
+			case aiTypes.CategoryImage:
+				r.genService.RegisterImageProvider(m.Id, ai.NewOpenAIImageProvider(m.Provider))
+				registered = true
+			case aiTypes.CategoryVoice:
+				r.genService.RegisterSpeechProvider(m.Id, ai.NewOpenAISpeechProvider(m.Provider))
+				registered = true
+			case aiTypes.CategoryVideo:
+				r.genService.RegisterVideoProvider(m.Id, ai.NewOpenAIVideoProvider(m.Provider))
+				registered = true
+			}
+			if registered {
+				if err := r.genService.ConfigureProvider(m.Id, m.APIKey, m.BaseURL); err != nil {
+					log.Warn("gen provider configure failed",
+						zap.Uint("id", m.Id),
+						zap.String("provider", m.Provider),
+						zap.Error(err))
+				}
 			}
 		}
 	}
