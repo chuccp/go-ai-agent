@@ -82,7 +82,6 @@ func Create(webMode bool) *wf.WebFrame {
 		&model.ChatMessageModel{},
 		&model.AIModelModel{},
 		&model.FlowModel{},
-		&model.FlowExecutionModel{},
 		&model.AdminUserModel{},
 	)
 	builder.Filter(cors.NewCrosFilter())
@@ -131,7 +130,6 @@ func CreateDesktop() (*wf.WebFrame, *runner.ChatRunner) {
 		&model.ChatMessageModel{},
 		&model.AIModelModel{},
 		&model.FlowModel{},
-		&model.FlowExecutionModel{},
 		&model.AdminUserModel{},
 	)
 	builder.Filter(cors.NewCrosFilter())

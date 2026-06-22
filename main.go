@@ -19,19 +19,12 @@ func main() {
 		return
 	}
 
-	// Start HTTP server in background
-	go func() {
-		if err := web.Start(); err != nil {
-			log.PanicErrors("Desktop service startup failed", err)
-		}
-	}()
-
-	// Wait for HTTP server to be ready
-	waitForReady()
-
-	// Launch native window via Wails
+	// Launch native window via Wails.
+	// HTTP server is started inside OnStartup with the Wails runtime context,
+	// so that *core.Context embeds it for wailsRuntime.EventsEmit calls.
 	win := newApp()
 	win.chatRunner = chatRunner
+	win.webFrame = web
 
 	assetOpts := &assetserver.Options{
 		Assets: assetFS(),

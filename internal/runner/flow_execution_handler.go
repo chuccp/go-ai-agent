@@ -143,13 +143,12 @@ func (r *ChatRunner) flowStatus(args map[string]any) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("execution not found: %d", executionId)
 	}
-	waitingPrompt := r.flowRunner.GetWaitingPrompt(executionId)
 	data := map[string]any{
 		"execution_id":   executionId,
 		"flow_id":        exec.FlowId,
 		"status":         exec.Status,
 		"context":        exec.Context,
-		"waiting_prompt": waitingPrompt,
+		"waiting_prompt": exec.WaitingPrompt,
 	}
 	b, _ := json.Marshal(data)
 	return string(b), nil

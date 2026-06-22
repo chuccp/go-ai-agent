@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
-	"time"
+	"sync/atomic"
 
 	"github.com/chuccp/go-ai-agent/internal/ai"
 	"github.com/chuccp/go-ai-agent/internal/ai/chat"
@@ -27,22 +27,23 @@ import (
 // FlowRunner manages flow execution via WebSocket interaction
 type FlowRunner struct {
 	core.IRunner
-	ctx            *core.Context
-	chatService    *chat.UnifiedChatService
-	genService     *ai.GenService
-	flowService    *service.FlowService
-	flowModel      *flowModel.FlowModel
-	executionModel *flowModel.FlowExecutionModel
-	appStore       *appstore.Store
-	registry       *engine.Registry // Node type registry (initialized once)
-	taskMgr        *engine.TaskManager
-	functions      *engine.FunctionRegistry
-	cacheMgr       *cache.CacheManager
+	ctx         *core.Context
+	chatService *chat.UnifiedChatService
+	genService  *ai.GenService
+	flowService *service.FlowService
+	flowModel   *flowModel.FlowModel
+	appStore    *appstore.Store
+	registry    *engine.Registry // Node type registry (initialized once)
+	taskMgr     *engine.TaskManager
+	functions   *engine.FunctionRegistry
+	cacheMgr    *cache.CacheManager
 
 	builtInFlows map[string]*BuiltInFlow // System-built-in flows, keyed by name
 
-	running map[uint]*runningExecution
-	mu      sync.Mutex
+	nextExecId uint64 // atomic counter for in-memory execution IDs
+	running    map[uint]*runningExecution
+	finished   map[uint]*finishedExecution
+	mu         sync.Mutex
 
 	sendFn func(data []byte)
 }
@@ -58,13 +59,32 @@ type runningExecution struct {
 	engine        *engine.Engine
 	ctx           *engine.ExecutionContext
 	currentNodeId uint
+	flowId        uint
+	status        string
 	waitCh        chan string   // receives waiting prompts from user_input nodes
 	doneCh        chan struct{} // closed when execution finishes
 }
 
+// finishedExecution holds the final status of a completed/errored execution.
+type finishedExecution struct {
+	flowId  uint
+	status  string
+	context string
+}
+
+// ExecutionInfo is the in-memory status snapshot returned by GetExecutionStatus.
+type ExecutionInfo struct {
+	ExecutionId   uint   `json:"execution_id"`
+	FlowId        uint   `json:"flow_id"`
+	Status        string `json:"status"`
+	Context       string `json:"context"`
+	WaitingPrompt string `json:"waiting_prompt"`
+}
+
 func NewFlowRunner() *FlowRunner {
 	return &FlowRunner{
-		running: make(map[uint]*runningExecution),
+		running:  make(map[uint]*runningExecution),
+		finished: make(map[uint]*finishedExecution),
 	}
 }
 
@@ -74,7 +94,6 @@ func (r *FlowRunner) Init(ctx *core.Context) error {
 	r.genService = core.GetService[*ai.GenService](ctx)
 	r.flowService = core.GetService[*service.FlowService](ctx)
 	r.flowModel = core.GetModel[*flowModel.FlowModel](ctx)
-	r.executionModel = core.GetModel[*flowModel.FlowExecutionModel](ctx)
 	if r.flowService != nil {
 		r.appStore = r.flowService.GetAppStore()
 	}
@@ -427,26 +446,9 @@ func (r *FlowRunner) HandleBuiltInFlowStart(name string, executionId uint, sessi
 	return r.startExecution(0, bf.Definition, bf.Nodes, bf.Edges, executionId, sessionId, opts)
 }
 
-func (r *FlowRunner) startExecution(flowId uint, flowDef *entity.FlowDefinition, flowNodes []*entity.FlowNode, flowEdges []*entity.FlowEdge, executionId uint, sessionId uint, opts FlowStartOptions) (uint, error) {
-	var exec *entity.FlowExecution
-	var err error
-	if executionId > 0 {
-		exec, err = r.executionModel.FindById(executionId)
-		if err != nil {
-			return 0, fmt.Errorf("execution not found: %w", err)
-		}
-	} else {
-		exec = &entity.FlowExecution{
-			FlowId:    flowId,
-			SessionId: sessionId,
-			Status:    engine.ExecRunning,
-			Context:   "{}",
-		}
-		if err := r.executionModel.Create(exec); err != nil {
-			return 0, fmt.Errorf("failed to create execution: %w", err)
-		}
-		executionId = exec.Id
-	}
+func (r *FlowRunner) startExecution(flowId uint, flowDef *entity.FlowDefinition, flowNodes []*entity.FlowNode, flowEdges []*entity.FlowEdge, _ uint, sessionId uint, opts FlowStartOptions) (uint, error) {
+	// Generate in-memory execution ID.
+	executionId := uint(atomic.AddUint64(&r.nextExecId, 1))
 
 	// Separate top-level nodes/edges from container children (e.g. loop bodies).
 	mainNodes, mainEdges := topLevelFlow(flowNodes, flowEdges)
@@ -495,50 +497,46 @@ func (r *FlowRunner) startExecution(flowId uint, flowDef *entity.FlowDefinition,
 		engine:        eng,
 		ctx:           execCtx,
 		currentNodeId: startId,
+		flowId:        flowId,
+		status:        engine.ExecRunning,
 		waitCh:        make(chan string, 1),
 		doneCh:        make(chan struct{}),
 	}
 	r.mu.Unlock()
 
-	exec.Status = engine.ExecRunning
-	if err := r.executionModel.Update(exec); err != nil {
-		log.Warn("Failed to update execution status", zap.Error(err))
-	}
-
-	snapshotStop := make(chan struct{})
-	go r.snapshotLoop(executionId, exec, execCtx, snapshotStop)
-
 	go func() {
-		err := eng.Run(execCtx, startId)
+		runErr := eng.Run(execCtx, startId)
 
-		close(snapshotStop)
-		r.snapshotContext(executionId, exec, execCtx)
-
-		if err != nil {
-			exec.Status = engine.ExecError
-			exec.Context = fmt.Sprintf(`{"error":"%s"}`, err.Error())
+		var status, ctxJSON string
+		if runErr != nil {
+			status = engine.ExecError
+			ctxJSON = fmt.Sprintf(`{"error":"%s"}`, runErr.Error())
 		} else {
-			exec.Status = engine.ExecCompleted
-			ctxJSON, _ := json.Marshal(map[string]any{
+			status = engine.ExecCompleted
+			b, _ := json.Marshal(map[string]any{
 				"data":         execCtx.Data,
 				"node_outputs": execCtx.NodeOutputs,
 			})
-			exec.Context = string(ctxJSON)
+			ctxJSON = string(b)
 		}
-		// Persist status before removing from running map so status checks are consistent.
-		r.executionModel.Update(exec)
 
 		r.mu.Lock()
 		if re, ok := r.running[executionId]; ok {
+			re.status = status
 			close(re.doneCh)
+			delete(r.running, executionId)
+			r.finished[executionId] = &finishedExecution{
+				flowId:  flowId,
+				status:  status,
+				context: ctxJSON,
+			}
 		}
-		delete(r.running, executionId)
 		r.mu.Unlock()
 
 		log.Info("Flow execution finished",
 			zap.Uint("executionId", executionId),
 			zap.Uint("flowId", flowId),
-			zap.String("status", exec.Status))
+			zap.String("status", status))
 	}()
 
 	return executionId, nil
@@ -559,29 +557,60 @@ func (r *FlowRunner) HandleUserResponse(executionId uint, response string) error
 
 func (r *FlowRunner) HandleFlowStop(executionId uint) error {
 	r.mu.Lock()
-	re, ok := r.running[executionId]
-	r.mu.Unlock()
+	defer r.mu.Unlock()
 
+	re, ok := r.running[executionId]
 	if !ok {
-		if exec, err := r.executionModel.FindById(executionId); err == nil {
-			exec.Status = engine.ExecError
-			r.executionModel.Update(exec)
-		}
 		return fmt.Errorf("no running execution found for id %d", executionId)
 	}
 
 	re.ctx.Abort()
-
-	if exec, err := r.executionModel.FindById(executionId); err == nil {
-		exec.Status = engine.ExecError
-		r.executionModel.Update(exec)
+	re.status = engine.ExecError
+	delete(r.running, executionId)
+	r.finished[executionId] = &finishedExecution{
+		flowId:  re.flowId,
+		status:  engine.ExecError,
+		context: `{"error":"stopped"}`,
 	}
 
 	return nil
 }
 
-func (r *FlowRunner) GetExecutionStatus(executionId uint) (*entity.FlowExecution, error) {
-	return r.executionModel.FindById(executionId)
+func (r *FlowRunner) GetExecutionStatus(executionId uint) (*ExecutionInfo, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if re, ok := r.running[executionId]; ok {
+		var ctxJSON string
+		if re.ctx != nil {
+			nodeID, _, _ := re.ctx.GetCurrentNode()
+			b, _ := json.Marshal(map[string]any{
+				"data":           re.ctx.Data,
+				"node_outputs":   re.ctx.NodeOutputs,
+				"current_node":   nodeID,
+				"waiting_prompt": re.ctx.GetWaitingPrompt(),
+			})
+			ctxJSON = string(b)
+		}
+		return &ExecutionInfo{
+			ExecutionId:   executionId,
+			FlowId:        re.flowId,
+			Status:        re.status,
+			Context:       ctxJSON,
+			WaitingPrompt: re.ctx.GetWaitingPrompt(),
+		}, nil
+	}
+
+	if fe, ok := r.finished[executionId]; ok {
+		return &ExecutionInfo{
+			ExecutionId: executionId,
+			FlowId:      fe.flowId,
+			Status:      fe.status,
+			Context:     fe.context,
+		}, nil
+	}
+
+	return nil, fmt.Errorf("execution not found: %d", executionId)
 }
 
 // GetWaitingPrompt returns the current user-input prompt for a running execution, if any.
@@ -592,43 +621,6 @@ func (r *FlowRunner) GetWaitingPrompt(executionId uint) string {
 		return re.ctx.WaitingPrompt
 	}
 	return ""
-}
-
-// snapshotContext serializes the current execution context into the FlowExecution row.
-func (r *FlowRunner) snapshotContext(executionId uint, exec *entity.FlowExecution, ctx *engine.ExecutionContext) {
-	nodeID, _, _ := ctx.GetCurrentNode()
-	ctxJSON, err := json.Marshal(map[string]any{
-		"data":          ctx.Data,
-		"node_outputs":  ctx.NodeOutputs,
-		"current_node":  nodeID,
-		"waiting_prompt": ctx.GetWaitingPrompt(),
-	})
-	if err != nil {
-		log.Warn("Failed to marshal snapshot", zap.Uint("executionId", executionId), zap.Error(err))
-		return
-	}
-	exec.Context = string(ctxJSON)
-	exec.CurrentNodeId = &nodeID
-	if err := r.executionModel.Update(exec); err != nil {
-		log.Warn("Failed to persist snapshot", zap.Uint("executionId", executionId), zap.Error(err))
-	}
-}
-
-// snapshotLoop periodically snapshots the execution context until stop is closed.
-func (r *FlowRunner) snapshotLoop(executionId uint, exec *entity.FlowExecution, ctx *engine.ExecutionContext, stop <-chan struct{}) {
-	ticker := time.NewTicker(5 * time.Second)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-stop:
-			return
-		case <-ticker.C:
-			if ctx.IsAborted() {
-				return
-			}
-			r.snapshotContext(executionId, exec, ctx)
-		}
-	}
 }
 
 // GetWaitChannels returns the wait/done channels for a running execution.

@@ -57,18 +57,3 @@ type FlowEdge struct {
 	Label        string `json:"label"`
 }
 
-// FlowExecution Flow execution instance
-type FlowExecution struct {
-	Id            uint      `gorm:"primaryKey" json:"id"`
-	FlowId        uint      `gorm:"index" json:"flow_id"`
-	SessionId     uint      `json:"session_id"`               // Associated chat session
-	Status        string    `gorm:"size:32" json:"status"`    // "running", "waiting_user", "completed", "error"
-	CurrentNodeId *uint     `json:"current_node_id"`          // Current executing node
-	Context       string    `gorm:"type:text" json:"context"` // JSON: runtime context
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
-}
-
-func (FlowExecution) TableName() string {
-	return "flow_executions"
-}

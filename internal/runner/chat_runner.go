@@ -84,6 +84,9 @@ func (r *ChatRunner) Init(ctx *core.Context) error {
 
 			if r.isDesktop {
 				// Desktop mode: emit via Wails Events
+				// r.ctx (*core.Context) embeds the Wails runtime context passed
+				// via web.Run(ctx) in App.startup(), so EventsEmit can find the
+				// "events" value stored by Wails.
 				eventName := fmt.Sprintf("flow:%d:%s", uint(executionId), eventType)
 				wailsRuntime.EventsEmit(r.ctx, eventName, event)
 				// Also emit a session-scoped generic event so the IPC adapter can subscribe once.

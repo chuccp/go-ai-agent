@@ -303,18 +303,6 @@ func (c *Chat) buildLLMMessages() []common.ChatMessage {
 	}
 
 	for _, m := range c.messages {
-		// Emit tool results as tool-role messages (native protocol)
-		if len(m.ToolResults) > 0 {
-			for _, tr := range m.ToolResults {
-				result = append(result, common.ChatMessage{
-					Role:       "tool",
-					Content:    tr.Result,
-					ToolCallID: tr.ToolID,
-					Name:       tr.Name,
-				})
-			}
-		}
-
 		msg := common.ChatMessage{
 			Role:    m.Role,
 			Content: m.Content,
@@ -330,6 +318,20 @@ func (c *Chat) buildLLMMessages() []common.ChatMessage {
 		}
 
 		result = append(result, msg)
+
+		// Emit tool results as tool-role messages AFTER the assistant
+		// message that contains the corresponding tool_use blocks.
+		// Claude API requires tool_result to follow tool_use.
+		if len(m.ToolResults) > 0 {
+			for _, tr := range m.ToolResults {
+				result = append(result, common.ChatMessage{
+					Role:       "tool",
+					Content:    tr.Result,
+					ToolCallID: tr.ToolID,
+					Name:       tr.Name,
+				})
+			}
+		}
 	}
 	return result
 }

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"strconv"
 	"strings"
 
 	"github.com/chuccp/go-ai-agent/internal/entity"
@@ -16,11 +15,10 @@ import (
 )
 
 type FlowRest struct {
-	context        *core.Context
-	flowModel      *flowModel.FlowModel
-	executionModel *flowModel.FlowExecutionModel
-	flowService    *service.FlowService
-	appStore       *appstore.Store
+	context     *core.Context
+	flowModel   *flowModel.FlowModel
+	flowService *service.FlowService
+	appStore    *appstore.Store
 }
 
 func NewFlowRest() *FlowRest { return &FlowRest{} }
@@ -34,7 +32,6 @@ type FlowDetail struct {
 func (r *FlowRest) Init(ctx *core.Context) error {
 	r.context = ctx
 	r.flowModel = core.GetModel[*flowModel.FlowModel](ctx)
-	r.executionModel = core.GetModel[*flowModel.FlowExecutionModel](ctx)
 	r.flowService = core.GetService[*service.FlowService](ctx)
 	if r.flowService != nil {
 		r.appStore = r.flowService.GetAppStore()
@@ -43,12 +40,10 @@ func (r *FlowRest) Init(ctx *core.Context) error {
 	r.context.Get("/api/flows", r.listFlows)
 	r.context.Post("/api/flows", r.createFlow)
 	r.context.Get("/api/flows/node-types", r.listNodeTypes)
-	r.context.Get("/api/flows/executions", r.listExecutions)
 	r.context.Get("/api/flows/:id", r.getFlow)
 	r.context.Put("/api/flows/:id", r.updateFlow)
 	r.context.Delete("/api/flows/:id", r.deleteFlow)
 	r.context.Post("/api/flows/:id/duplicate", r.duplicateFlow)
-	r.context.Post("/api/flows/:id/execute", r.executeFlow)
 	r.context.Get("/api/flows/:id/export", r.exportFlow)
 	r.context.Post("/api/flows/import", r.importFlow)
 	r.context.Post("/api/flows/:id/icon", r.uploadIcon)
@@ -156,34 +151,6 @@ func extractNodesAndEdges(jsonMap map[string]any) ([]*entity.FlowNode, []*entity
 	return ns, es
 }
 
-func (r *FlowRest) executeFlow(req *web.Request) (any, error) {
-	fid := req.ParamUint("id")
-	j, _ := req.Json()
-	sid := uint(j.GetInt("session_id"))
-	exec := &entity.FlowExecution{FlowId: fid, SessionId: sid, Status: "created", Context: "{}"}
-	if err := r.executionModel.WithContext(req.Ctx()).Create(exec); err != nil {
-		return nil, err
-	}
-	return web.Data(map[string]any{"execution_id": exec.Id, "flow_id": fid}), nil
-}
-
-func (r *FlowRest) listExecutions(req *web.Request) (any, error) {
-	var es []*entity.FlowExecution
-	var err error
-	if fid := req.Query("flow_id"); fid != "" {
-		id, _ := strconv.ParseUint(fid, 10, 64)
-		es, err = r.executionModel.WithContext(req.Ctx()).FindByFlowId(uint(id))
-	} else if sid := req.Query("session_id"); sid != "" {
-		id, _ := strconv.ParseUint(sid, 10, 64)
-		es, err = r.executionModel.WithContext(req.Ctx()).FindBySessionId(uint(id))
-	} else {
-		return web.Data([]any{}), nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	return web.Data(es), nil
-}
 
 // exportFlow downloads a flow as a ZIP package.
 func (r *FlowRest) exportFlow(req *web.Request) (any, error) {

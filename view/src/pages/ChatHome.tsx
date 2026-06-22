@@ -2,7 +2,6 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { API_BASE, IS_DESKTOP } from '@/constants'
 import { useFlowStore } from '@/stores/flowStore'
-import { isIconFilename } from '@/types/flow'
 import { MyRuntimeProvider, type ThreadMessageLike, type PendingFlow } from '@/components/assistant-ui/MyRuntimeProvider'
 import { Thread } from '@/components/assistant-ui/Thread'
 
@@ -11,7 +10,7 @@ interface LLMModel { id: string; name: string; provider: string; model: string; 
 
 export default function ChatHome() {
   const { t } = useTranslation()
-  const { flows, fetchFlows } = useFlowStore()
+  const { fetchFlows } = useFlowStore()
 
   // State
   const [sessions, setSessions] = useState<Session[]>([])
@@ -22,8 +21,6 @@ export default function ChatHome() {
   const [selectedModelId, setSelectedModelId] = useState('')
   const [thinkLevel, setThinkLevel] = useState('off')
   const [selectedFlowId, setSelectedFlowId] = useState<number | null>(null)
-  const [showNewSession, setShowNewSession] = useState(false)
-  const [newSessionFlowId, setNewSessionFlowId] = useState<number | null>(null)
   const [sessionToDelete, setSessionToDelete] = useState<number | null>(null)
   const [pendingFlow, setPendingFlow] = useState<PendingFlow | null>(null)
 
@@ -98,8 +95,6 @@ export default function ChatHome() {
         setSelectedFlowId(flowId || null)
       }
     } catch (e) { console.error('createSession failed:', e) }
-    setShowNewSession(false)
-    setNewSessionFlowId(null)
   }, [])
 
   const deleteSession = useCallback(async (id: number) => {
@@ -174,7 +169,7 @@ export default function ChatHome() {
         {/* ── Sidebar ── */}
         <div style={{ width: 260, minWidth: 260, background: '#f8f9fa', borderRight: '1px solid #e8eaed', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           <div style={{ padding: '16px 16px 8px' }}>
-            <button onClick={() => setShowNewSession(true)} style={{ width: '100%', padding: '10px 16px', borderRadius: 24, border: '1px solid #dadce0', background: '#fff', color: '#1a73e8', fontSize: 14, fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button onClick={() => createSession(null)} style={{ width: '100%', padding: '10px 16px', borderRadius: 24, border: '1px solid #dadce0', background: '#fff', color: '#1a73e8', fontSize: 14, fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 4v16M4 12h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
               {t('chat.newChat')}
             </button>
@@ -222,36 +217,6 @@ export default function ChatHome() {
           />
         </div>
       </div>
-
-      {/* ── New Session Modal ── */}
-      {showNewSession && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => { setShowNewSession(false); setNewSessionFlowId(null) }}>
-          <div style={{ background: '#fff', borderRadius: 20, padding: 24, width: 420, maxWidth: '90vw', boxShadow: '0 8px 32px rgba(0,0,0,0.12)' }} onClick={e => e.stopPropagation()}>
-            <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 16, color: '#202124' }}>{t('chat.newSession')}</div>
-            <div style={{ fontSize: 13, color: '#5f6368', marginBottom: 12 }}>{t('chat.selectMode')}</div>
-            <div onClick={() => setNewSessionFlowId(null)} style={{ padding: '14px 16px', borderRadius: 14, cursor: 'pointer', marginBottom: 8, border: newSessionFlowId === null ? '2px solid #1a73e8' : '1px solid #dadce0', background: newSessionFlowId === null ? '#e8f0fe' : '#fff', transition: 'all 0.15s' }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: '#202124' }}>💬 {t('chat.freeChat')}</div>
-              <div style={{ fontSize: 12, color: '#5f6368', marginTop: 2 }}>{t('chat.freeChatDesc')}</div>
-            </div>
-            {flows.map(flow => (
-              <div key={flow.id} onClick={() => setNewSessionFlowId(flow.id)} style={{ padding: '14px 16px', borderRadius: 14, cursor: 'pointer', marginBottom: 8, border: newSessionFlowId === flow.id ? '2px solid #1a73e8' : '1px solid #dadce0', background: newSessionFlowId === flow.id ? '#e8f0fe' : '#fff', transition: 'all 0.15s' }}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: '#202124', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  {isIconFilename(flow.icon)
-                    ? <img src={`${API_BASE}/api/flows/${flow.id}/icon`} alt="" style={{ width: 18, height: 18, borderRadius: 4, objectFit: 'cover' }} />
-                    : <span>{flow.icon || '⚡'}</span>
-                  }
-                  {flow.name}
-                </div>
-                {flow.description && <div style={{ fontSize: 12, color: '#5f6368', marginTop: 2 }}>{flow.description}</div>}
-              </div>
-            ))}
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
-              <button onClick={() => { setShowNewSession(false); setNewSessionFlowId(null) }} style={{ padding: '10px 24px', borderRadius: 20, border: '1px solid #dadce0', background: '#fff', color: '#3c4043', fontSize: 14, fontWeight: 500, cursor: 'pointer' }}>{t('common.cancel')}</button>
-              <button onClick={() => createSession(newSessionFlowId)} style={{ padding: '10px 24px', borderRadius: 20, border: 'none', background: '#1a73e8', color: '#fff', fontSize: 14, fontWeight: 500, cursor: 'pointer' }}>{t('common.confirm')}</button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ── Delete Confirmation Modal ── */}
       {sessionToDelete !== null && (

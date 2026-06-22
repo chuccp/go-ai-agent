@@ -26,15 +26,6 @@ func TestFlowModel_WithContext(t *testing.T) {
 	}
 }
 
-func TestFlowExecutionModel_WithContext(t *testing.T) {
-	em := fwModel.NewEntryModel[*entity.FlowExecution, uint](nil, "test")
-	m := &FlowExecutionModel{EntryModel: em}
-	m2 := m.WithContext(context.Background())
-	if m2.EntryModel == m.EntryModel {
-		t.Error("EntryModel should be a new instance after WithContext")
-	}
-}
-
 func TestAIModelModel_WithContext(t *testing.T) {
 	em := fwModel.NewEntryModel[*entity.AIModel, uint](nil, "test")
 	m := &AIModelModel{EntryModel: em}

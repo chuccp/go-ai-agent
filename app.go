@@ -12,6 +12,8 @@ import (
 	"net/url"
 
 	"github.com/chuccp/go-ai-agent/internal/runner"
+	"github.com/chuccp/go-web-frame/log"
+	wf "github.com/chuccp/go-web-frame"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -22,6 +24,7 @@ var embeddedAssets embed.FS
 type App struct {
 	ctx        context.Context
 	chatRunner *runner.ChatRunner
+	webFrame   *wf.WebFrame
 }
 
 func newApp() *App {
@@ -30,6 +33,14 @@ func newApp() *App {
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	// Start HTTP server with the Wails runtime context so that
+	// *core.Context embeds it and wailsRuntime.EventsEmit(r.ctx, ...) works.
+	go func() {
+		if err := a.webFrame.Run(ctx); err != nil {
+			log.PanicErrors("Desktop service startup failed", err)
+		}
+	}()
+	waitForReady()
 }
 
 func (a *App) shutdown(_ context.Context) {}
