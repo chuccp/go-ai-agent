@@ -2,6 +2,8 @@ import {
   ThreadPrimitive,
   MessagePrimitive,
   ComposerPrimitive,
+  useThread,
+  useComposerRuntime,
 } from '@assistant-ui/react'
 import { useTranslation } from 'react-i18next'
 
@@ -129,6 +131,12 @@ function AssistantMessage() {
 
 function Composer({ models, selectedModelId, thinkLevel, onModelChange, onThinkChange }: ThreadProps) {
   const { t } = useTranslation()
+  const isRunning = useThread((state) => state.isRunning)
+  const composerRuntime = useComposerRuntime()
+
+  const handleStop = () => {
+    composerRuntime.cancel()
+  }
 
   return (
     <div>
@@ -174,27 +182,51 @@ function Composer({ models, selectedModelId, thinkLevel, onModelChange, onThinkC
           rows={1}
         />
 
-        {/* Send button */}
-        <ComposerPrimitive.Send
-          style={{
-            width: 36, height: 36,
-            borderRadius: '50%',
-            border: 'none',
-            background: '#1a73e8',
-            color: '#fff',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-            transition: 'background 0.15s',
-          }}
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-            <path d="M22 2L11 13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        </ComposerPrimitive.Send>
+        {/* Send / Stop button */}
+        {isRunning ? (
+          <button
+            onClick={handleStop}
+            style={{
+              width: 36, height: 36,
+              borderRadius: '50%',
+              border: 'none',
+              background: '#ea4335',
+              color: '#fff',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+              transition: 'background 0.15s',
+            }}
+            title="Stop"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <rect x="6" y="6" width="12" height="12" rx="2" />
+            </svg>
+          </button>
+        ) : (
+          <ComposerPrimitive.Send
+            style={{
+              width: 36, height: 36,
+              borderRadius: '50%',
+              border: 'none',
+              background: '#1a73e8',
+              color: '#fff',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+              transition: 'background 0.15s',
+            }}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+              <path d="M22 2L11 13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </ComposerPrimitive.Send>
+        )}
       </ComposerPrimitive.Root>
 
       {/* Bottom bar: hint + selectors */}

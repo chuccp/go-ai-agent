@@ -249,6 +249,13 @@ export function createIpcAdapter(opts: IpcAdapterOptions): ChatModelAdapter {
       })
 
       abortSignal.addEventListener('abort', () => {
+        // Notify the backend to cancel the active agent chat
+        if (activeSessionId > 0) {
+          const app = wailsApp()
+          if (app?.AgentStop) {
+            try { app.AgentStop(activeSessionId) } catch {}
+          }
+        }
         done = true
       })
 
