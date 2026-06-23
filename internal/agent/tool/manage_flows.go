@@ -48,7 +48,7 @@ WORKFLOW for editing/deleting by name:
 Node types (REQUIRED fields are marked):
 - start: Entry point, no config
 - end: Exit point, no config
-- llm: LLM call. REQUIRED: {prompt, model}. Optional: {system, temperature(0-2, default 0.7), top_p(0-1, default 0.9), max_tokens, thinking_level(off|low|medium|high|max), output_format_type(empty|json_auto|json_object|json_array|custom)}. Prompt supports {{NodeLabel.output}} templates. NEVER create an llm node without prompt and model.
+- llm: LLM call. REQUIRED: {prompt, model}. Optional: {system, history, temperature(0-2, default 0.7), top_p(0-1, default 0.9), max_tokens, thinking_level(off|low|medium|high|max), output_format_type(empty|json_auto|json_object|json_array|custom)}. Prompt supports {{NodeLabel.output}} templates. history accepts a {{NodeLabel.output}} template that resolves to a JSON array of [{"role":"user","content":"..."},{"role":"assistant","content":"..."}] for multi-turn chat history (enables API prefix caching). NEVER create an llm node without prompt and model.
 - user_input: Pause and wait for user input. REQUIRED: {prompt (the question or instruction shown to the user)}. Optional: {confirm_only(bool)}.
 - split: Split text into items. REQUIRED: {source_key (which upstream output to split), delimiter: one of paragraph|line|，|。}.
 - condition: Conditional branch (yes/no). REQUIRED: {script (Starlark expression, MUST assign a bool to the variable 'result')}. Access upstream data via ctx["node_label"]["field"]. Built-ins: json_parse(s), split(s, sep). Route from "yes"/"no" output handles.

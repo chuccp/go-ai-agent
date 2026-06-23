@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/chuccp/go-ai-agent/internal/ai/chat/common"
 	"github.com/chuccp/go-ai-agent/internal/flow/cache"
 	"github.com/chuccp/go-ai-agent/internal/flow/engine"
 	"github.com/chuccp/go-ai-agent/internal/flow/out"
@@ -14,6 +15,7 @@ type LLMNodeConfig struct {
 	Model         string  `json:"model"`
 	Prompt        string  `json:"prompt"`
 	System        string  `json:"system"`
+	History       string  `json:"history"`
 	Temperature   float64 `json:"temperature"`
 	TopP          float64 `json:"top_p"`
 	MaxTokens     int     `json:"max_tokens"`
@@ -66,6 +68,15 @@ func (n *LLMNode) Execute(ctx *engine.ExecutionContext, config string) (*engine.
 	prompt := renderPrompt(cfg.Prompt, ctx)
 	system := renderPrompt(cfg.System, ctx)
 
+	// Parse history: render template, then unmarshal JSON string into []ChatMessage
+	var chatHistory []common.ChatMessage
+	historyJSON := renderPrompt(cfg.History, ctx)
+	if historyJSON != "" {
+		if err := json.Unmarshal([]byte(historyJSON), &chatHistory); err != nil {
+			return nil, fmt.Errorf("llm: failed to parse history JSON: %w", err)
+		}
+	}
+
 	// Structured output
 	if cfg.OutputFormat != "" {
 		var of out.OutFormat
@@ -82,7 +93,13 @@ func (n *LLMNode) Execute(ctx *engine.ExecutionContext, config string) (*engine.
 	// Cache check
 	cacheEnabled := isCacheEnabled(ctx, cfg.CacheEnabled)
 	if cacheEnabled && ctx.Cache != nil {
-		cacheKey := cache.GenerateKey(cfg.Model, system, prompt, strconv.Itoa(cfg.MaxTokens),
+		historyKey := ""
+		if len(chatHistory) > 0 {
+			if b, err := json.Marshal(chatHistory); err == nil {
+				historyKey = string(b)
+			}
+		}
+		cacheKey := cache.GenerateKey(cfg.Model, system, prompt, historyKey, strconv.Itoa(cfg.MaxTokens),
 			fmt.Sprintf("%f", cfg.Temperature), fmt.Sprintf("%f", cfg.TopP), cfg.ThinkingLevel)
 		if cached, ok := ctx.Cache.Get(cacheKey); ok {
 			if ctx.Emitter != nil {
@@ -104,6 +121,7 @@ func (n *LLMNode) Execute(ctx *engine.ExecutionContext, config string) (*engine.
 		"model":          cfg.Model,
 		"prompt":         prompt,
 		"system":         system,
+		"history":        chatHistory,
 		"max_tokens":     cfg.MaxTokens,
 		"json_mode":      cfg.OutputFormat != "",
 		"stream":         true,
@@ -121,7 +139,13 @@ func (n *LLMNode) Execute(ctx *engine.ExecutionContext, config string) (*engine.
 
 	// Write cache
 	if cacheEnabled && ctx.Cache != nil {
-		cacheKey := cache.GenerateKey(cfg.Model, system, prompt, strconv.Itoa(cfg.MaxTokens),
+		historyKey := ""
+		if len(chatHistory) > 0 {
+			if b, err := json.Marshal(chatHistory); err == nil {
+				historyKey = string(b)
+			}
+		}
+		cacheKey := cache.GenerateKey(cfg.Model, system, prompt, historyKey, strconv.Itoa(cfg.MaxTokens),
 			fmt.Sprintf("%f", cfg.Temperature), fmt.Sprintf("%f", cfg.TopP), cfg.ThinkingLevel)
 		_ = ctx.Cache.Set(cacheKey, output)
 	}

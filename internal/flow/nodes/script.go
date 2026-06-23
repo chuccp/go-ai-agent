@@ -122,11 +122,18 @@ func (n *ScriptNode) Execute(ctx *engine.ExecutionContext, config string) (*engi
 		return nil, fmt.Errorf("script: result variable not set, assign to 'result'")
 	}
 
-	resultStr := resultVal.String()
+	// For starlark.String, use type assertion to get the raw string content.
+	// .String() returns the repr (quoted/escaped), which would double-encode JSON.
+	var resultStr string
 	isJSON := false
-	switch resultVal.(type) {
+	switch v := resultVal.(type) {
+	case starlark.String:
+		resultStr = string(v)
 	case *starlark.Dict, *starlark.List:
+		resultStr = v.String()
 		isJSON = true
+	default:
+		resultStr = resultVal.String()
 	}
 
 	return &engine.NodeOutput{

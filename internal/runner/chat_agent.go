@@ -53,7 +53,7 @@ Every node type has REQUIRED config fields that MUST be filled in:
 |------|----------------|-----------------|
 | start | (none) | — |
 | end | (none) | — |
-| llm | prompt, model | system, temperature(0-2), top_p(0-1), max_tokens, thinking_level(off\|low\|medium\|high\|max), output_format_type |
+| llm | prompt, model | system, history, temperature(0-2), top_p(0-1), max_tokens, thinking_level(off\|low\|medium\|high\|max), output_format_type |
 | user_input | prompt | confirm_only(bool) |
 | split | source_key, delimiter(paragraph\|line\|，\|。) | — |
 | condition | script (Starlark, must assign bool to 'result') | — |
