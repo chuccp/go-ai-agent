@@ -147,24 +147,52 @@ func (r *FlowRunner) registerBuiltInFlows() {
 }
 
 // builtInCreateFlow returns the "create flow" meta-flow definition.
-// Structure: Start → UserInput → Loop[LLM ask → UserInput confirm] → LLM generate JSON → create_flow → End
+// Structure: Start → UserInput → Loop[Script(accumulate) → LLM ask → UserInput confirm] → LLM generate JSON → create_flow → End
+//
+// The accumulate_context script node runs at the START of each loop iteration.
+// It reads the previous ask_design/user_response outputs (preserved across
+// iterations by the shared ExecutionContext) and builds a growing conversation
+// history. This gives the LLM full context of the design dialogue so far,
+// preventing it from repeating the same questions.
 func builtInCreateFlow(defaultModel string) *BuiltInFlow {
 	if defaultModel == "" {
 		defaultModel = "1.default"
 	}
 
 	const (
-		startID     = 1
-		inputID     = 2
-		loopID      = 3
-		loopLLMID   = 4
-		loopInputID = 5
-		genJSONID   = 6
-		saveID      = 7
-		endID       = 8
+		startID      = 1
+		inputID      = 2
+		loopID       = 3
+		accumID      = 4 // script: accumulate conversation history
+		loopLLMID    = 5
+		loopInputID  = 6
+		genJSONID    = 7
+		saveID       = 8
+		endID        = 9
 	)
 
 	groupID := uint(loopID)
+
+	// Starlark script: accumulates Q&A history across loop iterations.
+	// Starlark doesn't allow top-level if/for statements, so wrap in a function.
+	// Iteration 1: no previous context → start with user's initial description.
+	// Iteration 2+: append previous ask_design + user_response to growing history.
+	accumScript := `def build():
+    desc = ctx["describe_flow"]["output"]
+    prev = ""
+    if "accumulate_context" in ctx:
+        prev = ctx["accumulate_context"]["output"]
+    if prev:
+        ask = ""
+        if "ask_design" in ctx:
+            ask = ctx["ask_design"]["output"]
+        resp = ""
+        if "user_response" in ctx:
+            resp = ctx["user_response"]["output"]
+        return prev + "\n设计助手: " + ask + "\n用户: " + resp + "\n"
+    return "用户需求: " + desc + "\n"
+
+result = build()`
 
 	nodes := []*entity.FlowNode{
 		{Id: startID, Type: flownodes.TypeStart, Label: "start", Config: "{}", PositionX: 80, PositionY: 200},
@@ -175,24 +203,29 @@ func builtInCreateFlow(defaultModel string) *BuiltInFlow {
 			PositionX: 480, PositionY: 200,
 		},
 		{
+			Id: accumID, Type: flownodes.TypeScript, Label: "accumulate_context", GroupId: &groupID,
+			Config:    mustJSON(map[string]any{"script": accumScript}),
+			PositionX: 380, PositionY: 80,
+		},
+		{
 			Id: loopLLMID, Type: flownodes.TypeLLM, Label: "ask_design", GroupId: &groupID,
 			Config: mustJSON(map[string]any{
 				"model":  defaultModel,
-				"prompt": "你是流程设计助手。用户想创建一个新流程。\n用户需求：{{describe_flow.output}}\n如果信息还不够，请提出一个最需要的追问；如果已经足够，请直接回复 'READY' 并给出简短设计方案。",
+				"prompt": "你是流程设计助手。以下是与用户的对话历史：\n{{accumulate_context.output}}\n\n如果信息还不够，请提出一个最需要的追问；如果已经足够，请直接回复 'READY' 并给出简短设计方案。",
 			}),
-			PositionX: 480, PositionY: 80,
+			PositionX: 580, PositionY: 80,
 		},
 		{
 			Id: loopInputID, Type: flownodes.TypeUserInput, Label: "user_response", GroupId: &groupID,
 			Config:    `{"prompt":"请回复"}`,
-			PositionX: 680, PositionY: 80,
+			PositionX: 780, PositionY: 80,
 		},
 		{
 			Id: genJSONID, Type: flownodes.TypeLLM, Label: "generate_json",
 			Config: mustJSON(map[string]any{
 				"model":      defaultModel,
 				"max_tokens": 2000,
-				"prompt":     "根据用户需求生成一个流程的 JSON 定义。\n需求：{{describe_flow.output}}\nLLM 与用户的确认对话：{{user_response.output}}\n\n请输出标准 JSON，字段如下：\n{\"name\":\"流程名称\",\"description\":\"描述\",\"category\":\"分类\",\"icon\":\"📖\",\"nodes\":[{\"type\":\"start\",\"label\":\"start\",\"config\":{},\"position_x\":100,\"position_y\":200}],\"edges\":[]}\n\n重要规则（必须遵守，否则流程无法运行）：\n1. 必须包含一个 type=\"user_input\"、label=\"user_input\" 的节点，用于接收用户输入的一句话。\n2. LLM 节点的 model 字段必须使用 'id.model' 格式，例如 '1.deepseek-v4-flash'，不要只写模型名。\n3. LLM 节点的 prompt 字段引用用户输入时，必须原样包含字面量模板占位符 `{{user_input.output}}`（包括双花括号）。运行时系统会自动把它替换为用户的实际输入。\n   错误示例（会导致运行失败）：{{user_input}}、{{node_0.output}}、把 {{user_input.output}} 替换成示例句子。\n   正确示例：\"prompt\":\"请根据以下句子写一篇300字的故事：{{user_input.output}}\"\n4. edges 使用 source/target（或 from/to）0-based 索引。\n5. 节点 label 必须使用英文或中文名称，prompt 模板中引用节点时必须使用 label，不能使用 node_0 这类索引。\n\n示例（一句话生成故事）：\n{\"name\":\"一句话故事生成\",\"description\":\"输入一句话，生成300字故事\",\"category\":\"写作\",\"icon\":\"📖\",\"nodes\":[{\"type\":\"start\",\"label\":\"start\",\"config\":{},\"position_x\":100,\"position_y\":200},{\"type\":\"user_input\",\"label\":\"user_input\",\"config\":{\"prompt\":\"请输入一句话\"},\"position_x\":300,\"position_y\":200},{\"type\":\"llm\",\"label\":\"generate_story\",\"config\":{\"model\":\"1.deepseek-v4-flash\",\"prompt\":\"请根据以下句子写一篇300字的故事：{{user_input.output}}\"},\"position_x\":500,\"position_y\":200},{\"type\":\"end\",\"label\":\"end\",\"config\":{},\"position_x\":700,\"position_y\":200}],\"edges\":[{\"source\":0,\"target\":1},{\"source\":1,\"target\":2},{\"source\":2,\"target\":3}]}\n\n只输出 JSON，不要解释。",
+				"prompt":     "根据以下对话历史生成一个流程的 JSON 定义。\n对话历史：\n{{accumulate_context.output}}\n\n请输出标准 JSON，字段如下：\n{\"name\":\"流程名称\",\"description\":\"描述\",\"category\":\"分类\",\"icon\":\"📖\",\"nodes\":[{\"type\":\"start\",\"label\":\"start\",\"config\":{},\"position_x\":100,\"position_y\":200}],\"edges\":[]}\n\n重要规则（必须遵守，否则流程无法运行）：\n1. 必须包含一个 type=\"user_input\"、label=\"user_input\" 的节点，用于接收用户输入的一句话。\n2. LLM 节点的 model 字段必须使用 'id.model' 格式，例如 '1.deepseek-v4-flash'，不要只写模型名。\n3. LLM 节点的 prompt 字段引用用户输入时，必须原样包含字面量模板占位符 `{{user_input.output}}`（包括双花括号）。运行时系统会自动把它替换为用户的实际输入。\n   错误示例（会导致运行失败）：{{user_input}}、{{node_0.output}}、把 {{user_input.output}} 替换成示例句子。\n   正确示例：\"prompt\":\"请根据以下句子写一篇300字的故事：{{user_input.output}}\"\n4. edges 使用 source/target（或 from/to）0-based 索引。\n5. 节点 label 必须使用英文或中文名称，prompt 模板中引用节点时必须使用 label，不能使用 node_0 这类索引。\n\n示例（一句话生成故事）：\n{\"name\":\"一句话故事生成\",\"description\":\"输入一句话，生成300字故事\",\"category\":\"写作\",\"icon\":\"📖\",\"nodes\":[{\"type\":\"start\",\"label\":\"start\",\"config\":{},\"position_x\":100,\"position_y\":200},{\"type\":\"user_input\",\"label\":\"user_input\",\"config\":{\"prompt\":\"请输入一句话\"},\"position_x\":300,\"position_y\":200},{\"type\":\"llm\",\"label\":\"generate_story\",\"config\":{\"model\":\"1.deepseek-v4-flash\",\"prompt\":\"请根据以下句子写一篇300字的故事：{{user_input.output}}\"},\"position_x\":500,\"position_y\":200},{\"type\":\"end\",\"label\":\"end\",\"config\":{},\"position_x\":700,\"position_y\":200}],\"edges\":[{\"source\":0,\"target\":1},{\"source\":1,\"target\":2},{\"source\":2,\"target\":3}]}\n\n只输出 JSON，不要解释。",
 			}),
 			PositionX: 680, PositionY: 200,
 		},
@@ -210,7 +243,8 @@ func builtInCreateFlow(defaultModel string) *BuiltInFlow {
 		{SourceNodeId: loopID, TargetNodeId: genJSONID, SourceHandle: "output", TargetHandle: "input"},
 		{SourceNodeId: genJSONID, TargetNodeId: saveID, SourceHandle: "output", TargetHandle: "input"},
 		{SourceNodeId: saveID, TargetNodeId: endID, SourceHandle: "output", TargetHandle: "input"},
-		// loop body edges
+		// loop body edges: accumulate_context → ask_design → user_response
+		{SourceNodeId: accumID, TargetNodeId: loopLLMID, SourceHandle: "output", TargetHandle: "input"},
 		{SourceNodeId: loopLLMID, TargetNodeId: loopInputID, SourceHandle: "output", TargetHandle: "input"},
 	}
 
