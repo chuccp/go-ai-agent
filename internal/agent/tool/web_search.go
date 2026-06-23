@@ -1,6 +1,7 @@
 package tool
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -41,7 +42,7 @@ var (
 	reSnippet = regexp.MustCompile(`class="result__snippet"[^>]*>((?s:.*?))</a>`)
 )
 
-func (t *WebSearch) Execute(call Call) (string, error) {
+func (t *WebSearch) Execute(ctx context.Context, call Call) (string, error) {
 	query := ""
 	if args := parseArgs(call.Arguments); args != nil {
 		query = args["query"]

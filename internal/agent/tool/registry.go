@@ -1,6 +1,7 @@
 package tool
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/chuccp/go-web-frame/core"
@@ -14,6 +15,7 @@ type Registry struct {
 	flowHandler          FlowActionHandler
 	flowExecutionHandler FlowExecutionHandler
 	modelHandler         ModelActionHandler
+	questionSvc          QuestionService
 }
 
 // NewRegistry creates a new tool registry.
@@ -54,6 +56,17 @@ func (r *Registry) SetFlowExecutionHandler(h FlowExecutionHandler) {
 	}
 }
 
+// SetQuestionService sets the question service and pushes it to any tool that
+// implements QuestionServiceSetter (e.g. ask_user).
+func (r *Registry) SetQuestionService(svc QuestionService) {
+	r.questionSvc = svc
+	for _, e := range r.registry {
+		if s, ok := e.(QuestionServiceSetter); ok {
+			s.SetQuestionService(svc)
+		}
+	}
+}
+
 func (r *Registry) Init(ctx *core.Context) error {
 	r.Register(&ExecuteCommand{})
 	r.Register(&ReadDocument{})
@@ -62,11 +75,12 @@ func (r *Registry) Init(ctx *core.Context) error {
 	r.Register(&RunFlow{})
 	r.Register(&CreateFlowConversation{})
 	r.Register(&ManageModels{})
+	r.Register(&AskUser{})
 	return nil
 }
 
 // Register adds an executor to the registry and auto-injects handlers
-// if the executor implements FlowHandlerSetter / ModelHandlerSetter / FlowExecutionHandlerSetter.
+// if the executor implements FlowHandlerSetter / ModelHandlerSetter / FlowExecutionHandlerSetter / QuestionServiceSetter.
 func (r *Registry) Register(e Executor) {
 	def := e.Definition()
 	r.registry[def.Name] = e
@@ -83,6 +97,11 @@ func (r *Registry) Register(e Executor) {
 	if r.modelHandler != nil {
 		if s, ok := e.(ModelHandlerSetter); ok {
 			s.SetModelHandler(r.modelHandler)
+		}
+	}
+	if r.questionSvc != nil {
+		if s, ok := e.(QuestionServiceSetter); ok {
+			s.SetQuestionService(r.questionSvc)
 		}
 	}
 }
@@ -106,12 +125,12 @@ func (r *Registry) List() []Definition {
 }
 
 // Execute dispatches a tool call and returns the result.
-func (r *Registry) Execute(call Call) Result {
+func (r *Registry) Execute(ctx context.Context, call Call) Result {
 	e, err := r.Get(call.Name)
 	if err != nil {
 		return Result{CallID: call.ID, Output: fmt.Sprintf("error: %v", err), Success: false, Error: err.Error()}
 	}
-	output, err := e.Execute(call)
+	output, err := e.Execute(ctx, call)
 	if err != nil {
 		return Result{CallID: call.ID, Output: fmt.Sprintf("execute failed: %v", err), Success: false, Error: err.Error()}
 	}

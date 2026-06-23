@@ -1,5 +1,5 @@
 import type { ChatModelAdapter, ChatModelRunResult } from '@assistant-ui/react'
-import type { PendingFlow } from './MyRuntimeProvider'
+import type { PendingFlow, PendingQuestion } from './MyRuntimeProvider'
 
 // Wails runtime globals — injected into the webview by Wails, not available in web mode.
 const wailsRuntime = (window as any).runtime
@@ -17,6 +17,9 @@ interface IpcAdapterOptions {
   onFlowResponseSent?: () => void
   onFlowWaiting?: (executionId: number, question: string) => void
   onFlowEnded?: () => void
+  pendingQuestion?: () => PendingQuestion | null
+  onQuestionAsked?: (q: PendingQuestion) => void
+  onQuestionAnswered?: () => void
 }
 
 export function createIpcAdapter(opts: IpcAdapterOptions): ChatModelAdapter {
@@ -46,10 +49,25 @@ export function createIpcAdapter(opts: IpcAdapterOptions): ChatModelAdapter {
       }
 
       const pending = opts.pendingFlow ? opts.pendingFlow() : null
+      const pendingQ = opts.pendingQuestion ? opts.pendingQuestion() : null
       let activeExecutionId = pending?.executionId ?? 0
       let activeSessionId = opts.sessionId() ?? 0
 
-      if (pending?.executionId) {
+      if (pendingQ) {
+        // User answered a previous ask_user question — send the reply via IPC.
+        const answersJSON = JSON.stringify(extractAnswersIPC(messages, pendingQ))
+        const raw: string = await app.QuestionReply(pendingQ.id, answersJSON)
+        let resp: any = {}
+        try { resp = JSON.parse(raw) } catch {}
+        if (resp.error) {
+          yield { content: [{ type: 'text', text: `Question error: ${resp.error}` }] }
+          return
+        }
+        if (opts.onQuestionAnswered) opts.onQuestionAnswered()
+        // The agent is still blocked on the tool; it will resume and emit
+        // chunk events. We don't yield anything here — the event listeners
+        // below will pick up the agent's subsequent output.
+      } else if (pending?.executionId) {
         // Continue a paused flow via IPC bridge
         const raw: string = await app.FlowRespond(pending.executionId, textContent.trim())
         let resp: any = {}
@@ -132,12 +150,14 @@ export function createIpcAdapter(opts: IpcAdapterOptions): ChatModelAdapter {
           args: {},
           argsText: event.tool_input || '',
         })
+        flush()
       })
 
       const unsubToolResult = wailsEventsOn(`${eventPrefix}tool_result`, (event: any) => {
         if (event.message || event.tool_output) {
           accumulatedText += `\n\n📋 ${event.message || event.tool_output}`
         }
+        flush()
       })
 
       const unsubError = wailsEventsOn(`${eventPrefix}error`, (event: any) => {
@@ -153,7 +173,9 @@ export function createIpcAdapter(opts: IpcAdapterOptions): ChatModelAdapter {
 
       // In desktop mode flow events are delivered via Wails runtime events.
       const flowEventName = `chat:${activeSessionId}:flow_event`
+      console.log('[IPC] subscribing to flow events on:', flowEventName)
       const unsubFlow = wailsEventsOn(flowEventName, (msg: any) => {
+        console.log('[IPC] flow event received:', msg?.type, msg)
         try {
           if (msg.type === 'flow_started' && activeExecutionId === 0 && msg.execution_id) {
             activeExecutionId = Number(msg.execution_id)
@@ -167,8 +189,20 @@ export function createIpcAdapter(opts: IpcAdapterOptions): ChatModelAdapter {
               flush()
               break
             case 'flow_node_start':
+              if (msg.node_label && msg.node_type) {
+                accumulatedText += `\n⚙️ [${msg.node_label}] (${msg.node_type})`
+                flush()
+              }
+              break
+            case 'flow_node_chunk':
+              // Flow's internal LLM streaming output
+              if (msg.content) {
+                accumulatedText += msg.content
+                flush()
+              }
+              break
             case 'flow_node_done':
-              // Low-noise progress; skip by default.
+              // Node finished
               break
             case 'flow_waiting_user':
               if (msg.message) {
@@ -186,16 +220,32 @@ export function createIpcAdapter(opts: IpcAdapterOptions): ChatModelAdapter {
                 flush()
               }
               if (opts.onFlowEnded) opts.onFlowEnded()
-              done = true
+              // Do NOT set done=true: the agent is still processing the tool
+              // result and will emit its own chunk{done:true} to end the turn.
               break
             case 'flow_error':
               accumulatedText += `\n❌ ${msg.message || msg.content || 'Flow error'}`
               flush()
               if (opts.onFlowEnded) opts.onFlowEnded()
-              done = true
+              // Do NOT set done=true: let the agent handle the error.
               break
           }
         } catch (e) { console.error('IPC flow event handler error:', e) }
+      })
+
+      // ask_user questions are delivered via a session-scoped Wails event.
+      const questionEventName = `chat:${activeSessionId}:question_asked`
+      const unsubQuestion = wailsEventsOn(questionEventName, (req: any) => {
+        try {
+          if (req && opts.onQuestionAsked) {
+            opts.onQuestionAsked({
+              id: Number(req.id),
+              sessionId: Number(req.session_id ?? req.sessionId ?? activeSessionId),
+              questions: req.questions || [],
+            })
+          }
+          done = true
+        } catch (e) { console.error('IPC question event handler error:', e) }
       })
 
       abortSignal.addEventListener('abort', () => {
@@ -224,6 +274,7 @@ export function createIpcAdapter(opts: IpcAdapterOptions): ChatModelAdapter {
       unsubError()
       unsubSessionCreated()
       unsubFlow()
+      unsubQuestion()
       wailsEventsOff(
         `${eventPrefix}chunk`,
         `${eventPrefix}tool_call`,
@@ -231,7 +282,29 @@ export function createIpcAdapter(opts: IpcAdapterOptions): ChatModelAdapter {
         `${eventPrefix}error`,
         `${eventPrefix}session_created`,
         flowEventName,
+        questionEventName,
       )
     },
   }
+}
+
+// extractAnswersIPC builds the Answer payload for a QuestionReply IPC call
+// from the user's latest text input (treated as a custom answer to the first
+// question). A richer UI would render option buttons and build the array from
+// selected labels.
+function extractAnswersIPC(messages: readonly any[], pendingQ: PendingQuestion): string[][] {
+  const lastMsg = messages[messages.length - 1]
+  let text = ''
+  if (Array.isArray(lastMsg?.content)) {
+    for (const part of lastMsg.content) {
+      if (part?.type === 'text' && part.text) text += part.text
+    }
+  } else if (typeof lastMsg?.content === 'string') {
+    text = lastMsg.content
+  }
+  const answers: string[][] = []
+  for (let i = 0; i < (pendingQ.questions?.length || 0); i++) {
+    answers.push(i === 0 ? [text.trim()] : [])
+  }
+  return answers
 }

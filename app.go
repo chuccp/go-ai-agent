@@ -5,12 +5,14 @@ package main
 import (
 	"context"
 	"embed"
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 
+	"github.com/chuccp/go-ai-agent/internal/agent/question"
 	"github.com/chuccp/go-ai-agent/internal/runner"
 	"github.com/chuccp/go-web-frame/log"
 	wf "github.com/chuccp/go-web-frame"
@@ -100,6 +102,43 @@ func (a *App) FlowStop(executionID uint) string {
 		return `{"error":"ChatRunner not initialized"}`
 	}
 	if err := a.chatRunner.StopFlowIPC(executionID); err != nil {
+		return fmt.Sprintf(`{"error":"%s"}`, err.Error())
+	}
+	return `{"ok":true}`
+}
+
+// AgentStop cancels the active agent chat for the given session (desktop IPC).
+func (a *App) AgentStop(sessionID uint) string {
+	if a.chatRunner == nil {
+		return `{"error":"ChatRunner not initialized"}`
+	}
+	a.chatRunner.StopAgentIPC(sessionID)
+	return `{"ok":true}`
+}
+
+// QuestionReply delivers the user's answers to a blocked ask_user tool call (desktop IPC).
+func (a *App) QuestionReply(questionID uint64, answersJSON string) string {
+	svc := a.chatRunner.QuestionService()
+	if svc == nil {
+		return `{"error":"QuestionService not initialized"}`
+	}
+	var answers question.Answer
+	if answersJSON != "" {
+		_ = json.Unmarshal([]byte(answersJSON), &answers)
+	}
+	if err := svc.Reply(questionID, answers); err != nil {
+		return fmt.Sprintf(`{"error":"%s"}`, err.Error())
+	}
+	return `{"ok":true}`
+}
+
+// QuestionReject dismisses a pending question (desktop IPC).
+func (a *App) QuestionReject(questionID uint64) string {
+	svc := a.chatRunner.QuestionService()
+	if svc == nil {
+		return `{"error":"QuestionService not initialized"}`
+	}
+	if err := svc.Reject(questionID); err != nil {
 		return fmt.Sprintf(`{"error":"%s"}`, err.Error())
 	}
 	return `{"ok":true}`

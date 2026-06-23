@@ -14,7 +14,7 @@ import (
 	"go.uber.org/zap"
 )
 
-const MaxIterations = 10
+const MaxIterations = 1000
 
 // ==================== Message ====================
 
@@ -74,15 +74,15 @@ type Sender interface {
 
 // Chat manages the agent state for a single conversation
 type Chat struct {
-	ctx            context.Context
-	id             string   // Conversation ID
-	path           string   // provider.model
-	opts           *common.LLMOptions
-	svc            *chat.UnifiedChatService
-	conn           Sender
-	toolRegistry    *tool.Registry
+	ctx          context.Context
+	id           string // Conversation ID
+	path         string // provider.model
+	opts         *common.LLMOptions
+	svc          *chat.UnifiedChatService
+	conn         Sender
+	toolRegistry *tool.Registry
 
-	messages []Message   // Full message history
+	messages []Message // Full message history
 	mu       sync.Mutex
 
 	iteration    int
@@ -91,9 +91,18 @@ type Chat struct {
 
 // NewChat creates a new agent conversation.
 // It resolves UnifiedChatService and ToolRegistry from the given core.Context.
-func NewChat(appCtx *core.Context, id string, path string, opts *common.LLMOptions, conn Sender) *Chat {
+// The ctx parameter provides cancellation control (e.g. when the user clicks stop
+// or the WebSocket disconnects). Tools receive this context via Execute, enabling
+// blocking operations like run_flow to be cancelled cleanly. The sessionID is
+// embedded in the context so tools like ask_user can route frontend events.
+func NewChat(appCtx *core.Context, ctx context.Context, sessionID uint, id string, path string, opts *common.LLMOptions, conn Sender) *Chat {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	// Embed session ID for tools (ask_user) to read via tool.SessionIDFrom.
+	ctx = tool.WithSessionID(ctx, sessionID)
 	return &Chat{
-		ctx:          context.Background(),
+		ctx:          ctx,
 		id:           id,
 		path:         path,
 		svc:          core.GetService[*chat.UnifiedChatService](appCtx),
@@ -248,7 +257,7 @@ func (c *Chat) addToolCalls(resp *common.ChatResponse) {
 
 		start := time.Now()
 		call := tool.Call{ID: tc.ID, Name: tc.Name, Arguments: tc.Arguments}
-		result := c.toolRegistry.Execute(call)
+		result := c.toolRegistry.Execute(c.ctx, call)
 		duration := time.Since(start).Milliseconds()
 
 		tr := ToolResult{

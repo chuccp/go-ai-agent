@@ -1,6 +1,6 @@
 import type { ChatModelAdapter, ChatModelRunResult } from '@assistant-ui/react'
 
-import type { PendingFlow } from './MyRuntimeProvider'
+import type { PendingFlow, PendingQuestion } from './MyRuntimeProvider'
 
 interface WebSocketAdapterOptions {
   getWs: () => WebSocket | null
@@ -13,6 +13,9 @@ interface WebSocketAdapterOptions {
   onFlowResponseSent?: () => void
   onFlowWaiting?: (executionId: number, question: string) => void
   onFlowEnded?: () => void
+  pendingQuestion?: () => PendingQuestion | null
+  onQuestionAsked?: (q: PendingQuestion) => void
+  onQuestionAnswered?: () => void
 }
 
 export function createStreamingWebSocketAdapter(opts: WebSocketAdapterOptions): ChatModelAdapter {
@@ -75,11 +78,20 @@ export function createStreamingWebSocketAdapter(opts: WebSocketAdapterOptions): 
       }
 
       const pending = opts.pendingFlow ? opts.pendingFlow() : null
+      const pendingQ = opts.pendingQuestion ? opts.pendingQuestion() : null
       const flowId = opts.flowId()
 
       // Build payload — backend expects "messages" array, not standalone "content"
       let payload: any
-      if (pending?.executionId) {
+      if (pendingQ) {
+        // User answered a previous ask_user question — send the reply.
+        payload = {
+          type: 'question_reply',
+          session_id: opts.sessionId(),
+          options: { question_id: pendingQ.id, answers: extractAnswers(messages, pendingQ) },
+        }
+        if (opts.onQuestionAnswered) opts.onQuestionAnswered()
+      } else if (pending?.executionId) {
         payload = {
           type: 'flow_user_response',
           session_id: opts.sessionId(),
@@ -136,8 +148,22 @@ export function createStreamingWebSocketAdapter(opts: WebSocketAdapterOptions): 
               break
 
             case 'flow_node_start':
+              if (msg.node_label && msg.node_type) {
+                accumulatedText += `\n⚙️ [${msg.node_label}] (${msg.node_type})`
+                flush()
+              }
+              break
+
+            case 'flow_node_chunk':
+              // Flow's internal LLM streaming output
+              if (msg.content) {
+                accumulatedText += msg.content
+                flush()
+              }
+              break
+
             case 'flow_node_done':
-              // Optional low-noise progress; skip by default.
+              // Node finished — no special action needed
               break
 
             case 'flow_waiting_user':
@@ -157,15 +183,33 @@ export function createStreamingWebSocketAdapter(opts: WebSocketAdapterOptions): 
                 flush()
               }
               if (opts.onFlowEnded) opts.onFlowEnded()
-              done = true
+              // Do NOT set done=true: the agent is still processing the tool
+              // result and will emit its own chunk{done:true} to end the turn.
               return
 
             case 'flow_error':
               accumulatedText += `\n❌ ${msg.message || msg.content || 'Flow error'}`
               flush()
               if (opts.onFlowEnded) opts.onFlowEnded()
+              // Do NOT set done=true: let the agent handle the error and
+              // emit its own chunk{done:true}.
+              return
+
+            case 'question_asked': {
+              // The agent called ask_user and is blocked waiting. Show the
+              // question to the user via the callback; the user's next input
+              // will be sent as a question_reply (handled above).
+              const q = msg.question || msg
+              if (q && opts.onQuestionAsked) {
+                opts.onQuestionAsked({
+                  id: Number(q.id),
+                  sessionId: Number(q.session_id ?? q.sessionId ?? opts.sessionId() ?? 0),
+                  questions: q.questions || [],
+                })
+              }
               done = true
               return
+            }
 
             case 'chunk':
               if (msg.done) {
@@ -230,4 +274,25 @@ export function createStreamingWebSocketAdapter(opts: WebSocketAdapterOptions): 
       ws.removeEventListener('message', handler)
     },
   }
+}
+
+// extractAnswers builds the Answer payload for a question_reply from the user's
+// latest text input. For the minimal UI, the user's text is treated as a custom
+// answer to the first question. A richer UI would render option buttons and
+// construct the answers array from selected labels.
+function extractAnswers(messages: readonly any[], pendingQ: PendingQuestion): string[][] {
+  const lastMsg = messages[messages.length - 1]
+  let text = ''
+  if (Array.isArray(lastMsg?.content)) {
+    for (const part of lastMsg.content) {
+      if (part?.type === 'text' && part.text) text += part.text
+    }
+  } else if (typeof lastMsg?.content === 'string') {
+    text = lastMsg.content
+  }
+  const answers: string[][] = []
+  for (let i = 0; i < (pendingQ.questions?.length || 0); i++) {
+    answers.push(i === 0 ? [text.trim()] : [])
+  }
+  return answers
 }

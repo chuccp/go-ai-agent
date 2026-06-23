@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/chuccp/go-ai-agent/internal/agent"
 	"github.com/chuccp/go-ai-agent/internal/ai/chat/common"
@@ -14,6 +15,28 @@ import (
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 	"go.uber.org/zap"
 )
+
+// ipcCancels stores per-session cancel functions for IPC agent chats,
+// enabling stop/cancel from the desktop UI.
+var ipcCancels sync.Map // map[uint]context.CancelFunc
+
+func (r *ChatRunner) storeIPCCancel(sessionID uint, cancel context.CancelFunc) {
+	ipcCancels.Store(sessionID, cancel)
+}
+
+func (r *ChatRunner) clearIPCCancel(sessionID uint) {
+	ipcCancels.Delete(sessionID)
+}
+
+// StopAgentIPC cancels the active agent chat for the given session (desktop IPC).
+func (r *ChatRunner) StopAgentIPC(sessionID uint) {
+	if v, ok := ipcCancels.Load(sessionID); ok {
+		if cancel, ok := v.(context.CancelFunc); ok {
+			cancel()
+		}
+		ipcCancels.Delete(sessionID)
+	}
+}
 
 // ── IPC Sender (agent.Sender via Wails runtime events) ──
 
@@ -51,6 +74,7 @@ func (s *ipcSender) Send(event agent.Event) {
 
 // StartAgentIPC runs the agent loop and streams results via Wails runtime events.
 // sessionID=0 will auto-create a new session. Returns the session ID.
+// The agent runs in a goroutine; the context enables cancellation via FlowStop/stop.
 func (r *ChatRunner) StartAgentIPC(ctx context.Context, sessionID uint, modelPath string, userMessage string, thinkLevel string, flowID uint) (uint, error) {
 	var history []common.ChatMessage
 	if sessionID > 0 {
@@ -97,9 +121,13 @@ func (r *ChatRunner) StartAgentIPC(ctx context.Context, sessionID uint, modelPat
 		opts.SetThinkingLevel(thinkLevel)
 	}
 
+	// Cancellable context for the agent — enables stop/cancel.
+	agentCtx, cancel := context.WithCancel(context.Background())
+	r.storeIPCCancel(sessionID, cancel)
+
 	sender := newIpcSender(ctx, sessionID)
 	chatID := fmt.Sprintf("%d", sessionID)
-	c := agent.NewChat(r.ctx, chatID, modelPath, opts, sender)
+	c := agent.NewChat(r.ctx, agentCtx, sessionID, chatID, modelPath, opts, sender)
 	c.SetSystemPrompt(agentSystemPrompt)
 
 	startIter := len(history) / 2
@@ -123,6 +151,7 @@ func (r *ChatRunner) StartAgentIPC(ctx context.Context, sessionID uint, modelPat
 				Content:   assistantContent.String(),
 			})
 		}
+		r.clearIPCCancel(sessionID)
 	}
 
 	go c.Process()

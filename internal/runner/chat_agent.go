@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -18,6 +19,7 @@ const agentSystemPrompt = `You are go-ai-agent, an AI assistant that helps users
 
 | Tool | Purpose |
 |------|---------|
+| ask_user | Ask the user questions and block until they answer (clarify, confirm, offer choices) |
 | create_flow_conversation | Start the conversational assistant to create a flow by chatting |
 | manage_flows | Create, list, search, get, update, delete flows manually |
 | manage_models | List, get, create, update, delete AI model credentials |
@@ -26,14 +28,20 @@ const agentSystemPrompt = `You are go-ai-agent, an AI assistant that helps users
 | read_document | Extract text from uploaded files (TXT, DOCX, XLSX, PDF) |
 | execute_command | Run local shell commands (open apps, manage files, etc.) |
 
+## Asking the User
+
+Whenever you need clarification, confirmation, a choice, or any user input, call
+the **ask_user** tool. It BLOCKS until the user responds — the frontend shows the
+question UI automatically, so do NOT relay the question yourself or end your turn.
+This is the canonical way to get user input; prefer it over guessing.
+
 ## Flow Creation Rules
 
 When the user wants to create a new flow, ALWAYS call create_flow_conversation first. This is the preferred method. Pass the user's description as initial_input.
 
 1. **START** — Call create_flow_conversation with initial_input set to the user's description.
-2. **RELAY** — If the tool result contains waiting_prompt, show that exact question to the user and end your turn.
-3. **RESPOND** — When the user answers, call run_flow action="respond" with execution_id and their answer.
-4. **COMPLETE** — The assistant will generate and save the flow automatically. Summarize the result for the user.
+2. **BLOCKING** — The tool runs the built-in flow-creation assistant to completion. If the flow needs user input, a prompt is shown to the user automatically via the frontend. The tool blocks until the flow is fully created — you do NOT need to relay questions or end your turn early.
+3. **COMPLETE** — When the tool returns, summarize the result for the user.
 
 Only use manage_flows create if the user explicitly says they want manual control over every node and edge, or if create_flow_conversation cannot satisfy the request.
 
@@ -80,10 +88,9 @@ Every node type has REQUIRED config fields that MUST be filled in:
 When a user wants to run a flow:
 1. If you know the flow_id, call run_flow action="run" with flow_id (and optional initial_input / form_values).
 2. If you only have a name, call action="search" with query first.
-3. After calling action="run" or action="respond", the tool result may contain a waiting_prompt. If waiting_prompt is present, you MUST stop calling tools, relay that exact question to the user, and end your turn. Do NOT repeatedly call action="status".
-4. When the user replies to a waiting prompt, call run_flow action="respond" with execution_id and the user's answer.
-5. If a respond result has no waiting_prompt and status is completed, summarize the result for the user.
-6. Use action="stop" to cancel a running flow.
+3. The tool BLOCKS until the flow completes. If the flow requires user input, prompts are shown to the user automatically via the frontend — you do NOT need to relay them or end your turn. When the flow finishes, the tool returns the final result.
+4. Summarize the result for the user.
+5. Use action="stop" to cancel a running flow.
 
 ## General Behavior
 
@@ -152,12 +159,21 @@ func (r *ChatRunner) handleChat(conn *websocket.Conn, req WSRequest) {
 	}
 }
 
+// handleAgent runs the agent loop. It blocks until the agent completes.
+// Callers should run this in a goroutine so the WebSocket read loop stays
+// responsive for flow_user_response and stop messages.
 func (r *ChatRunner) handleAgent(conn *websocket.Conn, req WSRequest) {
 	cp := r.prepareChat(conn, req)
 
+	// Cancellable context — allows stop/disconnect to abort the agent loop
+	// and any blocking tool calls (e.g. run_flow waiting for user input).
+	ctx, cancel := context.WithCancel(context.Background())
+	r.setAgentCancel(conn, cancel)
+	defer r.setAgentCancel(conn, nil)
+
 	sender := &wsSender{conn: conn, runner: r}
 	chatID := fmt.Sprintf("%d", cp.sessionID)
-	c := agent.NewChat(r.ctx, chatID, cp.modelPath, cp.opts, sender)
+	c := agent.NewChat(r.ctx, ctx, cp.sessionID, chatID, cp.modelPath, cp.opts, sender)
 	c.SetSystemPrompt(agentSystemPrompt)
 
 	startIter := len(cp.history) / 2
@@ -197,16 +213,4 @@ func (r *ChatRunner) handleAgent(conn *websocket.Conn, req WSRequest) {
 		}
 	}
 	c.Process()
-}
-
-// ── JSON helpers ──
-
-func (r *ChatRunner) sendJSON(conn *websocket.Conn, resp WSResponse) {
-	data, err := json.Marshal(resp)
-	if err != nil {
-		return
-	}
-	if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
-		return
-	}
 }

@@ -1,6 +1,7 @@
 package tool
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
@@ -133,7 +134,7 @@ For creating a model, you need: name (display name), provider (e.g. openai, deep
 	}
 }
 
-func (t *ManageModels) Execute(call Call) (string, error) {
+func (t *ManageModels) Execute(ctx context.Context, call Call) (string, error) {
 	if t.modelHandler == nil {
 		return "", fmt.Errorf("model handler not initialized")
 	}

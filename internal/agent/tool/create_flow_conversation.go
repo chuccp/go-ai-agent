@@ -1,6 +1,7 @@
 package tool
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 )
@@ -42,7 +43,7 @@ Parameters:
 	}
 }
 
-func (t *CreateFlowConversation) Execute(call Call) (string, error) {
+func (t *CreateFlowConversation) Execute(ctx context.Context, call Call) (string, error) {
 	if t.flowExecutionHandler == nil {
 		return "", fmt.Errorf("flow execution handler not initialized")
 	}
@@ -57,7 +58,7 @@ func (t *CreateFlowConversation) Execute(call Call) (string, error) {
 		return "", fmt.Errorf("initial_input is required")
 	}
 
-	return t.flowExecutionHandler("run", map[string]any{
+	return t.flowExecutionHandler(ctx, "run", map[string]any{
 		"builtin_flow":  "create_flow",
 		"initial_input": initialInput,
 	})

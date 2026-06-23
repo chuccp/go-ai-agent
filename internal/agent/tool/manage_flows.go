@@ -1,6 +1,7 @@
 package tool
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 )
@@ -122,7 +123,7 @@ Creation rules: nodes must include start and end nodes. edges use source_index/t
 	}
 }
 
-func (t *ManageFlows) Execute(call Call) (string, error) {
+func (t *ManageFlows) Execute(ctx context.Context, call Call) (string, error) {
 	if t.flowHandler == nil {
 		return "", fmt.Errorf("flow handler not initialized")
 	}

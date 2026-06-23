@@ -2,6 +2,7 @@ package tool
 
 import (
 	"archive/zip"
+	"context"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -40,7 +41,7 @@ Use this tool when the user uploads a document and you need to read its contents
 	}
 }
 
-func (t *ReadDocument) Execute(call Call) (string, error) {
+func (t *ReadDocument) Execute(ctx context.Context, call Call) (string, error) {
 	var params struct {
 		FilePath string `json:"file_path"`
 		FileType string `json:"file_type"`

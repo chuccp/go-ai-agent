@@ -23,6 +23,7 @@ export default function ChatHome() {
   const [selectedFlowId, setSelectedFlowId] = useState<number | null>(null)
   const [sessionToDelete, setSessionToDelete] = useState<number | null>(null)
   const [pendingFlow, setPendingFlow] = useState<PendingFlow | null>(null)
+  const [pendingQuestion, setPendingQuestion] = useState<import('@/components/assistant-ui/MyRuntimeProvider').PendingQuestion | null>(null)
 
   // WebSocket
   const wsRef = useRef<WebSocket | null>(null)
@@ -91,6 +92,8 @@ export default function ChatHome() {
       if (data.data) {
         const s = data.data as Session
         setSessions(prev => [s, ...prev])
+        setSessionMessages([])
+        setSessionKey(k => k + 1)
         setActiveSessionId(s.id)
         setSelectedFlowId(flowId || null)
       }
@@ -129,6 +132,7 @@ export default function ChatHome() {
   const getThinkLevel = useCallback(() => thinkLevel, [thinkLevel])
   const getFlowId = useCallback(() => selectedFlowId, [selectedFlowId])
   const getPendingFlow = useCallback(() => pendingFlow, [pendingFlow])
+  const getPendingQuestion = useCallback(() => pendingQuestion, [pendingQuestion])
 
   const handleSessionCreated = useCallback((sessionId: number) => {
     setActiveSessionId(sessionId)
@@ -150,6 +154,14 @@ export default function ChatHome() {
     setPendingFlow(null)
   }, [])
 
+  const handleQuestionAsked = useCallback((q: import('@/components/assistant-ui/MyRuntimeProvider').PendingQuestion) => {
+    setPendingQuestion(q)
+  }, [])
+
+  const handleQuestionAnswered = useCallback(() => {
+    setPendingQuestion(null)
+  }, [])
+
   return (
     <MyRuntimeProvider
       key={sessionKey}
@@ -163,6 +175,9 @@ export default function ChatHome() {
       onFlowResponseSent={handleFlowResponseSent}
       onFlowWaiting={handleFlowWaiting}
       onFlowEnded={handleFlowEnded}
+      pendingQuestion={getPendingQuestion}
+      onQuestionAsked={handleQuestionAsked}
+      onQuestionAnswered={handleQuestionAnswered}
       initialMessages={sessionMessages}
     >
       <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: '#fff' }}>

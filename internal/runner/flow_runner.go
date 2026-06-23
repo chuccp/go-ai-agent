@@ -652,6 +652,9 @@ func (r *FlowRunner) Emit(event engine.FlowEvent) {
 	r.mu.Unlock()
 
 	if r.sendFn == nil {
+		log.Warn("FlowRunner sendFn is nil, event dropped",
+			zap.String("type", event.Type),
+			zap.Uint("executionId", event.ExecutionId))
 		return
 	}
 	data, err := json.Marshal(event)
@@ -659,7 +662,7 @@ func (r *FlowRunner) Emit(event engine.FlowEvent) {
 		log.Error("Failed to serialize flow event", zap.Error(err))
 		return
 	}
-	// Enrich event with session_id so desktop IPC can route it.
+	// Enrich event with session_id so frontend can route it.
 	if sessionId > 0 {
 		var eventMap map[string]any
 		if err := json.Unmarshal(data, &eventMap); err == nil {
@@ -667,5 +670,10 @@ func (r *FlowRunner) Emit(event engine.FlowEvent) {
 			data, _ = json.Marshal(eventMap)
 		}
 	}
+	log.Info("Flow event emitting",
+		zap.String("type", event.Type),
+		zap.Uint("executionId", event.ExecutionId),
+		zap.Uint("sessionId", sessionId),
+		zap.String("message", event.Message))
 	r.sendFn(data)
 }

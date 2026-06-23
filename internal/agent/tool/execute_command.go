@@ -1,6 +1,7 @@
 package tool
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os/exec"
@@ -30,7 +31,7 @@ func (t *ExecuteCommand) Definition() Definition {
 	}
 }
 
-func (t *ExecuteCommand) Execute(call Call) (string, error) {
+func (t *ExecuteCommand) Execute(ctx context.Context, call Call) (string, error) {
 	var params struct {
 		Command string `json:"command"`
 	}
