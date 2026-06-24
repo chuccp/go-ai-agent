@@ -56,6 +56,32 @@ func (n *CreateFlowNode) Execute(ctx *engine.ExecutionContext, config string) (*
 		return nil, fmt.Errorf("create_flow: invalid flow json: %w", err)
 	}
 
+	// If payload has an ID, update the existing flow; otherwise create a new one.
+	if payload.Id > 0 {
+		if err := n.flowService.UpdateFlow(
+			payload.Id,
+			payload.Name,
+			payload.Description,
+			payload.Category,
+			payload.Config,
+			payload.FormSchema,
+			payload.Settings,
+			payload.Icon,
+			payload.Nodes,
+			payload.Edges,
+		); err != nil {
+			return nil, fmt.Errorf("create_flow: failed to update flow: %w", err)
+		}
+		return &engine.NodeOutput{
+			Data: map[string]any{
+				KeyOutput: fmt.Sprintf("Flow updated: %s (id=%d)", payload.Name, payload.Id),
+				"flow_id": payload.Id,
+				"name":    payload.Name,
+			},
+			Status: engine.StatusSuccess,
+		}, nil
+	}
+
 	f, err := n.flowService.CreateFlow(
 		payload.Name,
 		payload.Description,
@@ -111,6 +137,7 @@ func parseFlowPayload(raw string) (*flowPayload, error) {
 	jsonStr := stripMarkdownCodeBlock(raw)
 
 	var flexible struct {
+		Id          uint   `json:"id"`
 		Name        string `json:"name"`
 		Description string `json:"description"`
 		Category    string `json:"category"`
@@ -141,6 +168,7 @@ func parseFlowPayload(raw string) (*flowPayload, error) {
 	}
 
 	payload := &flowPayload{
+		Id:          flexible.Id,
 		Name:        flexible.Name,
 		Description: flexible.Description,
 		Category:    flexible.Category,
@@ -386,6 +414,7 @@ func ensureUserInputPlaceholder(cfgStr string) string {
 
 // flowPayload mirrors the REST create-flow payload.
 type flowPayload struct {
+	Id          uint               `json:"id"`
 	Name        string             `json:"name"`
 	Description string             `json:"description"`
 	Category    string             `json:"category"`

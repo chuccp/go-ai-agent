@@ -31,8 +31,9 @@ Workflow:
 1. If the user mentions a flow by name but you don't have the ID, call action="search" with the query.
 2. If exactly one flow matches, call action="run" with flow_id and any initial_input or form_values.
 3. To start the special built-in "create flow" assistant, call action="run" with builtin_flow="create_flow" and an initial_input describing what the user wants.
-4. The tool blocks until completion. Summarize the result for the user when it returns.
-5. To stop a running flow, call action="stop" with execution_id.
+4. To modify an existing flow, first get the flow JSON via manage_flows (action="get", format="json"), then call action="run" with builtin_flow="modify_flow" and initial_input containing the existing flow JSON + the user's modification request.
+5. The tool blocks until completion. Summarize the result for the user when it returns.
+6. To stop a running flow, call action="stop" with execution_id.
 
 Actions:
 - search: find flows by name/description. Required: query.
@@ -58,8 +59,8 @@ Actions:
 				},
 				"builtin_flow": map[string]any{
 					"type":        "string",
-					"enum":        []string{"create_flow"},
-					"description": "Built-in flow name. Use 'create_flow' to start the conversational flow-creation assistant.",
+					"enum":        []string{"create_flow", "modify_flow"},
+					"description": "Built-in flow name. Use 'create_flow' to start the conversational flow-creation assistant, 'modify_flow' to modify an existing flow.",
 				},
 				"execution_id": map[string]any{
 					"type":        "integer",

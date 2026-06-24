@@ -93,6 +93,78 @@ func (r *ChatRunner) flowGet(args map[string]any) (string, error) {
 		return "", fmt.Errorf("flow not found: ID=%d", id)
 	}
 
+	// format=json returns the full flow definition as JSON (used by modify_flow).
+	format, _ := args["format"].(string)
+	if format == "json" {
+		type nodeOut struct {
+			Type      string  `json:"type"`
+			Label     string  `json:"label"`
+			Config    string  `json:"config"`
+			PositionX float64 `json:"position_x"`
+			PositionY float64 `json:"position_y"`
+		}
+		type edgeOut struct {
+			Source      int    `json:"source"`
+			Target      int    `json:"target"`
+			SourceHandle string `json:"source_handle"`
+		}
+		type flowOut struct {
+			Id          uint      `json:"id"`
+			Name        string    `json:"name"`
+			Description string    `json:"description"`
+			Category    string    `json:"category"`
+			Icon        string    `json:"icon"`
+			Nodes       []nodeOut `json:"nodes"`
+			Edges       []edgeOut `json:"edges"`
+		}
+
+		// Map node IDs to 0-based indices for the JSON output.
+		idxMap := make(map[uint]int)
+		nodeList := make([]nodeOut, 0, len(nodes))
+		for i, n := range nodes {
+			idxMap[n.Id] = i
+			var px, py float64
+			if n.PositionX > 0 {
+				px = n.PositionX
+			}
+			if n.PositionY > 0 {
+				py = n.PositionY
+			}
+			nodeList = append(nodeList, nodeOut{
+				Type:      n.Type,
+				Label:     n.Label,
+				Config:    n.Config,
+				PositionX: px,
+				PositionY: py,
+			})
+		}
+		edgeList := make([]edgeOut, 0, len(edges))
+		for _, e := range edges {
+			srcIdx, ok1 := idxMap[e.SourceNodeId]
+			tgtIdx, ok2 := idxMap[e.TargetNodeId]
+			if !ok1 || !ok2 {
+				continue
+			}
+			edgeList = append(edgeList, edgeOut{
+				Source:       srcIdx,
+				Target:       tgtIdx,
+				SourceHandle: e.SourceHandle,
+			})
+		}
+
+		out := flowOut{
+			Id:          f.Id,
+			Name:        f.Name,
+			Description: f.Description,
+			Category:    f.Category,
+			Icon:        f.Icon,
+			Nodes:       nodeList,
+			Edges:       edgeList,
+		}
+		b, _ := json.Marshal(out)
+		return string(b), nil
+	}
+
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("Flow [ID:%d] %s | %s | %d nodes %d edges\n",
 		f.Id, f.Name, f.Category, len(nodes), len(edges)))

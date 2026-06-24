@@ -7,8 +7,6 @@ const (
 	TypeLLM       = "llm"
 	TypeUserInput = "user_input"
 	TypeForEach   = "for_each"
-	TypeSplit     = "split"
-	TypeTransform = "transform"
 	TypeCondition = "condition"
 	TypeScript    = "script"
 	TypeIterator  = "iterator"

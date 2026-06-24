@@ -105,8 +105,6 @@ func (r *FlowRunner) Init(ctx *core.Context) error {
 	r.registry.Register(flownodes.NewLLMNode())
 	r.registry.Register(&flownodes.UserInputNode{})
 	r.registry.Register(flownodes.NewForEachNode())
-	r.registry.Register(flownodes.NewSplitNode())
-	r.registry.Register(flownodes.NewTransformNode())
 	r.registry.Register(flownodes.NewConditionNode())
 	r.registry.Register(flownodes.NewSwitchNode())
 	r.registry.Register(flownodes.NewExecuteNode())
@@ -144,6 +142,7 @@ func (r *FlowRunner) Init(ctx *core.Context) error {
 // registerBuiltInFlows defines system flows that live in memory, not in the database.
 func (r *FlowRunner) registerBuiltInFlows() {
 	r.builtInFlows["create_flow"] = builtInCreateFlow(r.chatService.GetDefaultPath())
+	r.builtInFlows["modify_flow"] = builtInModifyFlow(r.chatService.GetDefaultPath())
 }
 
 // builtInCreateFlow returns the "create flow" meta-flow definition.
@@ -273,6 +272,87 @@ func mustJSON(v any) string {
 		panic(err)
 	}
 	return string(b)
+}
+
+// flowDesignRules is the shared system prompt fragment containing all node type
+// rules and JSON format requirements. Used by both builtInCreateFlow and builtInModifyFlow.
+const flowDesignRules = `
+
+节点类型说明：
+- start/end: 起止节点，config 为空
+- user_input: 接收用户输入。config: {prompt}
+- llm: LLM调用。config: {prompt, model, system?, history?, temperature?, max_tokens?, output_format_type?}
+  - prompt 中引用其他节点输出用 {{NodeLabel.output}} 模板占位符
+  - model 必须用 'id.model' 格式，如 '1.deepseek-v4-flash'
+- condition: 条件分支。config: {script}，Starlark 表达式，须给 result 赋 bool 值。出边用 yes/no
+- switch: 多分支。config: {script}，须给 result 赋 string 值。出边 source_handle 匹配 case 值
+- loop: 循环。config: {max_iterations, break_field?, break_operator?, break_value?}
+- for_each: 并行批量。config: {items_key, function?, args?}
+- iterator: 顺序迭代。config: {items_key, function?, args?}
+- script: Starlark 脚本。config: {script}。通过 ctx["label"]["field"] 访问上游数据
+- execute: 执行命令。config: {command, timeout?}
+- image_gen/audio_gen/video_gen: 多媒体生成
+
+edges 用 source/target 0-based 索引。source_handle: output(默认), yes/no(condition), case值(switch)。
+
+只输出 JSON，不要解释。`
+
+// builtInModifyFlow returns the "modify flow" meta-flow definition.
+// Structure: Start → LLM(modify_json) → create_flow(update) → End
+//
+// The initial_input (seeded into user_input.output) should contain both
+// the existing flow JSON and the user's modification request. The LLM
+// generates the complete modified flow JSON, and create_flow saves it
+// (as an update when the JSON includes an "id" field).
+func builtInModifyFlow(defaultModel string) *BuiltInFlow {
+	if defaultModel == "" {
+		defaultModel = "1.default"
+	}
+
+	const (
+		startID = 1
+		llmID   = 2
+		saveID  = 3
+		endID   = 4
+	)
+
+	nodes := []*entity.FlowNode{
+		{Id: startID, Type: flownodes.TypeStart, Label: "start", Config: "{}", PositionX: 80, PositionY: 200},
+		{
+			Id: llmID, Type: flownodes.TypeLLM, Label: "modify_json",
+			Config: mustJSON(map[string]any{
+				"model":      defaultModel,
+				"max_tokens": 2000,
+				"system":     "你是一个流程设计专家。你的任务是根据用户的修改请求，修改现有的流程 JSON 定义，并输出修改后的完整 JSON。\n\n重要规则：\n1. 必须保留原有流程的 id 字段，这样系统会执行更新而非新建。\n2. 只修改用户要求的部分，其余保持不变。" + flowDesignRules,
+				"prompt":     "以下是现有流程 JSON 和用户的修改请求，请输出修改后的完整 JSON：\n\n{{user_input.output}}",
+			}),
+			PositionX: 300, PositionY: 200,
+		},
+		{
+			Id: saveID, Type: flownodes.TypeCreateFlow, Label: "save_flow",
+			Config:    `{"source":"modify_json"}`,
+			PositionX: 520, PositionY: 200,
+		},
+		{Id: endID, Type: flownodes.TypeEnd, Label: "end", Config: "{}", PositionX: 720, PositionY: 200},
+	}
+
+	edges := []*entity.FlowEdge{
+		{SourceNodeId: startID, TargetNodeId: llmID, SourceHandle: "output", TargetHandle: "input"},
+		{SourceNodeId: llmID, TargetNodeId: saveID, SourceHandle: "output", TargetHandle: "input"},
+		{SourceNodeId: saveID, TargetNodeId: endID, SourceHandle: "output", TargetHandle: "input"},
+	}
+
+	return &BuiltInFlow{
+		Definition: &entity.FlowDefinition{
+			Name:        "修改流程",
+			Description: "通过对话修改已有流程（系统内置）",
+			Category:    "system",
+			Config:      "{}",
+			Icon:        "✏️",
+		},
+		Nodes: nodes,
+		Edges: edges,
+	}
 }
 
 // topLevelFlow returns only top-level nodes and edges, filtering out children of container nodes (loop, etc.).

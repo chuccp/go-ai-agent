@@ -192,12 +192,6 @@ func (r *ChatRunner) parseFlowNodesEdges(flowId uint, args map[string]any) flowN
 				res.err = fmt.Errorf("Switch node '%s': script is required (Starlark expression, assign string to 'result').", label)
 				return res
 			}
-		case "transform":
-			template, _ := ni.Config["template"].(string)
-			if template == "" {
-				res.err = fmt.Errorf("Transform node '%s': template is required.", label)
-				return res
-			}
 		case "for_each", "iterator":
 			itemsKey, _ := ni.Config["items_key"].(string)
 			if itemsKey == "" {
@@ -220,12 +214,6 @@ func (r *ChatRunner) parseFlowNodesEdges(flowId uint, args map[string]any) flowN
 			command, _ := ni.Config["command"].(string)
 			if command == "" {
 				res.err = fmt.Errorf("Execute node '%s': command is required.", label)
-				return res
-			}
-		case "split":
-			sourceKey, _ := ni.Config["source_key"].(string)
-			if sourceKey == "" {
-				res.err = fmt.Errorf("Split node '%s': source_key is required (which upstream output to split).", label)
 				return res
 			}
 		case "image_gen", "video_gen":
