@@ -30,7 +30,9 @@
     "error": "错误",
     "warning": "警告",
     "showPassword": "显示密码",
-    "hidePassword": "隐藏密码"
+    "hidePassword": "隐藏密码",
+    "select": "请选择",
+    "optional": "可选"
   },
   "nav": {
     "chat": "聊天",
@@ -151,7 +153,11 @@
     "zoomIn": "放大",
     "fitView": "适应视图",
     "custom": "自定义",
-    "customDelimiter": "自定义分隔符"
+    "customDelimiter": "自定义分隔符",
+    "flowList": "流程列表",
+    "exportFailed": "导出失败",
+    "importFailed": "导入失败",
+    "saveFirst": "请先保存流程"
   },
   "settings": {
     "general": "通用",

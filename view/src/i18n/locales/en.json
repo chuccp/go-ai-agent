@@ -30,7 +30,9 @@
     "error": "Error",
     "warning": "Warning",
     "showPassword": "Show password",
-    "hidePassword": "Hide password"
+    "hidePassword": "Hide password",
+    "select": "Select",
+    "optional": "Optional"
   },
   "nav": {
     "chat": "Chat",
@@ -151,7 +153,11 @@
     "zoomIn": "Zoom In",
     "fitView": "Fit View",
     "custom": "Custom",
-    "customDelimiter": "Custom Delimiter"
+    "customDelimiter": "Custom Delimiter",
+    "flowList": "Flow List",
+    "exportFailed": "Export failed",
+    "importFailed": "Import failed",
+    "saveFirst": "Please save the flow first"
   },
   "settings": {
     "general": "General",

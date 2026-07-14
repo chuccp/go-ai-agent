@@ -1155,7 +1155,7 @@ function FlowListView() {
   const handleExportCard = async (id: number, name: string) => {
     try {
       const res = await fetch(`${API_BASE}/api/flows/${id}/export`)
-      if (!res.ok) { alert('Export failed'); return }
+      if (!res.ok) { alert(t('flow.exportFailed')); return }
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -1192,7 +1192,7 @@ function FlowListView() {
         const res = await fetch(`${API_BASE}/api/flows/import`, { method: 'POST', body: form })
         if (!res.ok) { const err = await res.json(); alert(err?.msg || 'Import failed'); return }
         fetchFlows()
-      } catch { alert('Import failed') }
+      } catch { alert(t('flow.importFailed')) }
       finally { setImporting(false) }
     }
     input.click()
@@ -1842,7 +1842,7 @@ function FlowEditor({ flowId }: { flowId: string }) {
 
   /* ---- Export ---- */
   const handleExport = useCallback(async () => {
-    if (!dbFlowId) { alert('Please save the flow first'); return }
+    if (!dbFlowId) { alert(t('flow.saveFirst')); return }
     // Save first, then download via backend ZIP endpoint
     const saved = await saveFlow({
       name: flowName, description: '', category: flowCategory,
@@ -1855,7 +1855,7 @@ function FlowEditor({ flowId }: { flowId: string }) {
     if (!saved?.id) return
     try {
       const res = await fetch(`${API_BASE}/api/flows/${saved.id}/export`)
-      if (!res.ok) { alert('Export failed'); return }
+      if (!res.ok) { alert(t('flow.exportFailed')); return }
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')

@@ -30,7 +30,9 @@
     "error": "エラー",
     "warning": "警告",
     "showPassword": "パスワードを表示",
-    "hidePassword": "パスワードを非表示"
+    "hidePassword": "パスワードを非表示",
+    "select": "選択",
+    "optional": "任意"
   },
   "nav": {
     "chat": "チャット",
@@ -148,7 +150,11 @@
     "zoomIn": "ズームイン",
     "fitView": "ビューに合わせる",
     "custom": "カスタム",
-    "customDelimiter": "カスタム区切り文字"
+    "customDelimiter": "カスタム区切り文字",
+    "flowList": "フローリスト",
+    "exportFailed": "エクスポートに失敗しました",
+    "importFailed": "インポートに失敗しました",
+    "saveFirst": "先にフローを保存してください"
   },
   "settings": {
     "general": "一般",
