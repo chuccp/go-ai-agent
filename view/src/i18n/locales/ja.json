@@ -142,7 +142,13 @@
     "notFound": "フローが見つかりません",
     "wsError": "WebSocket エラー",
     "ipcError": "IPC は利用できません",
-    "sendResponse": "送信"
+    "sendResponse": "送信",
+    "insertNode": "ノードを挿入",
+    "zoomOut": "ズームアウト",
+    "zoomIn": "ズームイン",
+    "fitView": "ビューに合わせる",
+    "custom": "カスタム",
+    "customDelimiter": "カスタム区切り文字"
   },
   "settings": {
     "general": "一般",
@@ -292,6 +298,14 @@
     "confirmOnly": "確認のみ（テキスト入力不要）",
     "waitingInput": "ユーザー入力待ち",
     "conditionJudge": "条件判定",
-    "loopBody": "ループ本文"
+    "loopBody": "ループ本文",
+    "function": "関数",
+    "functionArgs": "関数引数",
+    "itemsKey": "リストフィールド",
+    "switchExpr": "Switch 式",
+    "switchHint": "文字列を \"result\" に代入します。一致する出力エッジ (source_handle) にルーティングされ、一致しない場合は \"default\" にフォールバックします。"
+  },
+  "package": {
+    "confirmDelete": "このパッケージを削除しますか？"
   }
 }

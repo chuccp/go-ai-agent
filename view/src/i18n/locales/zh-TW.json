@@ -142,7 +142,13 @@
     "notFound": "找不到流程",
     "wsError": "WebSocket 錯誤",
     "ipcError": "IPC 不可用",
-    "sendResponse": "傳送"
+    "sendResponse": "傳送",
+    "insertNode": "插入節點",
+    "zoomOut": "縮小",
+    "zoomIn": "放大",
+    "fitView": "適應視圖",
+    "custom": "自訂",
+    "customDelimiter": "自訂分隔符"
   },
   "settings": {
     "general": "一般",
@@ -226,7 +232,8 @@
     "script": "腳本",
     "imageGen": "圖片生成",
     "audioGen": "音訊生成",
-    "videoGen": "影片生成"
+    "videoGen": "影片生成",
+    "switch": "Switch"
   },
   "nodeCategories": {
     "basic": "基礎",
@@ -291,6 +298,14 @@
     "confirmOnly": "僅確認（無需輸入文字）",
     "waitingInput": "等待使用者輸入",
     "conditionJudge": "條件判斷",
-    "loopBody": "迴圈主體"
+    "loopBody": "迴圈主體",
+    "function": "函數",
+    "functionArgs": "函數參數",
+    "itemsKey": "列表欄位",
+    "switchExpr": "Switch 運算式",
+    "switchHint": "將字串指派給 \"result\"。根據值路由到對應的輸出邊 (source_handle)，無匹配時走 \"default\"。"
+  },
+  "package": {
+    "confirmDelete": "刪除此套件？"
   }
 }

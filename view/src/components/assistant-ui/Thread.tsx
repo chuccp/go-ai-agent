@@ -199,7 +199,7 @@ function Composer({ models, selectedModelId, thinkLevel, onModelChange, onThinkC
               flexShrink: 0,
               transition: 'background 0.15s',
             }}
-            title="Stop"
+            title={t('chat.stop')}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
               <rect x="6" y="6" width="12" height="12" rx="2" />

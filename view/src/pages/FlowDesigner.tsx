@@ -133,6 +133,7 @@ const ICONS = {
    ============================================================ */
 
 function CustomEdgeWithAddButton(props: EdgeProps) {
+  const { t } = useTranslation()
   const { sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, id, markerEnd, style, data } = props
   const [edgePath, labelX, labelY] = getBezierPath({
     sourceX: sourceX - 8,
@@ -194,7 +195,7 @@ function CustomEdgeWithAddButton(props: EdgeProps) {
             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = 'scale(1.3)' }}
             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = 'scale(1)' }}
             onClick={handleClick}
-            title="Insert node"
+            title={t('flow.insertNode')}
           >
             +
           </button>
@@ -308,14 +309,14 @@ function FlowNodeComponent({ id, data, selected }: { id: string; data: any; sele
         >
           <button
             style={{ width: 22, height: 22, borderRadius: 4, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#676f83' }}
-            title="Duplicate"
+            title={t('common.duplicate')}
             onClick={() => data.onDuplicate?.(id)}
           >
             <Icon d={ICONS.copy} size={12} />
           </button>
           <button
             style={{ width: 22, height: 22, borderRadius: 4, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f04438' }}
-            title="Delete"
+            title={t('common.delete')}
             onClick={() => data.onDelete?.(id)}
           >
             <Icon d={ICONS.trash} size={12} color="#f04438" />
@@ -753,12 +754,12 @@ function PropertyPanel({
                 <option value="line">{t('nodeConfig.byLine')}</option>
                 <option value="comma">{t('nodeConfig.byComma')}</option>
                 <option value="period">{t('nodeConfig.byPeriod')}</option>
-                <option value="custom">Custom</option>
+                <option value="custom">{t('flow.custom')}</option>
               </select>
             </div>
             {cfg.delimiter === 'custom' && (
               <div style={{ marginBottom: 10 }}>
-                <label style={labelStyle}>Custom Delimiter</label>
+                <label style={labelStyle}>{t('flow.customDelimiter')}</label>
                 <input
                   value={cfg.custom_delimiter || ''}
                   onChange={e => updateCfg('custom_delimiter', e.target.value)}
@@ -1415,6 +1416,7 @@ function FlowListView() {
    ============================================================ */
 
 function ZoomControls() {
+  const { t } = useTranslation()
   const { zoomIn, zoomOut, fitView } = useReactFlow()
   const btnStyle: React.CSSProperties = {
     width: 28, height: 28, borderRadius: 6, border: 'none',
@@ -1424,9 +1426,9 @@ function ZoomControls() {
   }
   return (
     <>
-      <button onClick={() => zoomOut()} style={btnStyle} title="Zoom Out">−</button>
-      <button onClick={() => zoomIn()} style={btnStyle} title="Zoom In">+</button>
-      <button onClick={() => fitView({ padding: 0.2 })} style={btnStyle} title="Fit View">⊡</button>
+      <button onClick={() => zoomOut()} style={btnStyle} title={t('flow.zoomOut')}>−</button>
+      <button onClick={() => zoomIn()} style={btnStyle} title={t('flow.zoomIn')}>+</button>
+      <button onClick={() => fitView({ padding: 0.2 })} style={btnStyle} title={t('flow.fitView')}>⊡</button>
     </>
   )
 }
@@ -2430,7 +2432,7 @@ function FlowEditor({ flowId }: { flowId: string }) {
               </div>
               <div style={{ padding: 20, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div>
-                  <label style={{ fontSize: 12, color: '#354052', fontWeight: 500, marginBottom: 4, display: 'block' }}>Icon</label>
+                  <label style={{ fontSize: 12, color: '#354052', fontWeight: 500, marginBottom: 4, display: 'block' }}>{t('flow.flowIcon')}</label>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     <div style={{ width: 40, height: 40, borderRadius: 8, background: '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0, overflow: 'hidden' }}>
                       {dbFlowId && isIconFilename(flowIcon)
@@ -2490,8 +2492,8 @@ function FlowEditor({ flowId }: { flowId: string }) {
                 </div>
               </div>
               <div style={{ padding: '12px 20px', borderTop: '1px solid #f2f4f7', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-                <button onClick={() => setShowSettings(false)} style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #d0d5dd', background: '#fff', color: '#354052', fontSize: 13, cursor: 'pointer' }}>Close</button>
-                <button onClick={() => { handleSave(); setShowSettings(false) }} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#155aef', color: '#fff', fontSize: 13, cursor: 'pointer' }}>Save</button>
+                <button onClick={() => setShowSettings(false)} style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #d0d5dd', background: '#fff', color: '#354052', fontSize: 13, cursor: 'pointer' }}>{t('common.close')}</button>
+                <button onClick={() => { handleSave(); setShowSettings(false) }} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#155aef', color: '#fff', fontSize: 13, cursor: 'pointer' }}>{t('common.save')}</button>
               </div>
             </div>
           </>

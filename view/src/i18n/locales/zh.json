@@ -145,7 +145,13 @@
     "notFound": "流程未找到",
     "wsError": "WebSocket 错误",
     "ipcError": "IPC 不可用",
-    "sendResponse": "发送"
+    "sendResponse": "发送",
+    "insertNode": "插入节点",
+    "zoomOut": "缩小",
+    "zoomIn": "放大",
+    "fitView": "适应视图",
+    "custom": "自定义",
+    "customDelimiter": "自定义分隔符"
   },
   "settings": {
     "general": "通用",
@@ -297,6 +303,9 @@
     "conditionJudge": "条件判断",
     "switchExpr": "分支表达式",
     "loopBody": "循环体",
-    "switchHint": "将字符串赋值给 'result'，根据值路由到对应 source_handle 的连线，空值使用 'default'"
+    "switchHint": "将字符串赋值给 'result'，根据值路由到对应 source_handle 的连线，空值使用 'default'",
+    "function": "函数",
+    "functionArgs": "函数参数",
+    "itemsKey": "列表字段"
   }
 }

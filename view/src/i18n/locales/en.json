@@ -145,7 +145,13 @@
     "notFound": "Flow not found",
     "wsError": "WebSocket error",
     "ipcError": "IPC not available",
-    "sendResponse": "Send"
+    "sendResponse": "Send",
+    "insertNode": "Insert node",
+    "zoomOut": "Zoom Out",
+    "zoomIn": "Zoom In",
+    "fitView": "Fit View",
+    "custom": "Custom",
+    "customDelimiter": "Custom Delimiter"
   },
   "settings": {
     "general": "General",
