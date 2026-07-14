@@ -7,7 +7,7 @@ import (
 
 	"github.com/chuccp/go-ai-agent/internal/ai/chat/common"
 	"github.com/chuccp/go-ai-agent/internal/entity"
-	"github.com/gorilla/websocket"
+	"github.com/chuccp/go-web-frame/web"
 )
 
 type chatPrep struct {
@@ -19,7 +19,7 @@ type chatPrep struct {
 	contentParts []common.ContentPart
 }
 
-func (r *ChatRunner) prepareChat(conn *websocket.Conn, req WSRequest) chatPrep {
+func (r *ChatRunner) prepareChat(stream *web.WebSocketStream, req WSRequest) chatPrep {
 	cp := chatPrep{}
 
 	cp.modelPath = req.Model
@@ -38,7 +38,7 @@ func (r *ChatRunner) prepareChat(conn *websocket.Conn, req WSRequest) chatPrep {
 		var err error
 		cp.contentParts, extraText, err = r.processAttachments(req.Attachments, cp.modelPath)
 		if err != nil {
-			r.sendJSON(conn, WSResponse{Type: "error", Message: err.Error()})
+			r.sendJSON(stream, WSResponse{Type: "error", Message: err.Error()})
 			return cp
 		}
 		if extraText != "" {
@@ -67,7 +67,7 @@ func (r *ChatRunner) prepareChat(conn *websocket.Conn, req WSRequest) chatPrep {
 		session := &entity.ChatSession{Title: r.generateTitle(cp.userMessage)}
 		if err := r.sessionModel.Create(session); err == nil {
 			cp.sessionID = session.Id
-			r.sendJSON(conn, WSResponse{Type: "session_created", SessionID: cp.sessionID})
+			r.sendJSON(stream, WSResponse{Type: "session_created", SessionID: cp.sessionID})
 		}
 	}
 

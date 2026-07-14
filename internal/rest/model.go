@@ -82,8 +82,6 @@ func maskAPIKey(key string) string {
 
 func (r *ModelRest) createModel(req *web.Request) (any, error) {
 	j, _ := req.Json()
-	isDefault := jsonBool(j, "is_default")
-	isBase := jsonBool(j, "is_base")
 	m := &entity.AIModel{
 		Name:               j.GetString("name"),
 		Provider:           j.GetString("provider"),
@@ -91,12 +89,12 @@ func (r *ModelRest) createModel(req *web.Request) (any, error) {
 		Category:           j.GetString("category"),
 		APIKey:             j.GetString("api_key"),
 		BaseURL:            j.GetString("base_url"),
-		IsDefault:          isDefault,
-		IsBase:             isBase,
+		IsDefault:          j.GetBool("is_default"),
+		IsBase:             j.GetBool("is_base"),
 		Description:        j.GetString("description"),
 		InputTypes:         j.GetString("input_types"),
 		OutputTypes:        j.GetString("output_types"),
-		SupportsMultimodal: jsonBool(j, "supports_multimodal"),
+		SupportsMultimodal: j.GetBool("supports_multimodal"),
 		ThinkingLevel:      j.GetString("thinking_level"),
 	}
 	if m.Category == "" {
@@ -165,21 +163,21 @@ func (r *ModelRest) updateModel(req *web.Request) (any, error) {
 	if v := j.GetString("output_types"); v != "" {
 		m.OutputTypes = v
 	}
-	if _, ok := (*j)["supports_multimodal"]; ok {
-		m.SupportsMultimodal = jsonBool(j, "supports_multimodal")
+	if j.Has("supports_multimodal") {
+		m.SupportsMultimodal = j.GetBool("supports_multimodal")
 	}
 	if v := j.GetString("thinking_level"); v != "" {
 		m.ThinkingLevel = v
 	}
-	if isDefault := jsonBool(j, "is_default"); isDefault {
+	if j.GetBool("is_default") {
 		r.aiModel.WithContext(req.Ctx()).ClearDefaultByCategory(m.Category)
 		m.IsDefault = true
 	}
-	if _, ok := (*j)["is_base"]; ok {
-		if isBase := jsonBool(j, "is_base"); isBase {
+	if j.Has("is_base") {
+		if j.GetBool("is_base") {
 			r.aiModel.WithContext(req.Ctx()).ClearBase()
 		}
-		m.IsBase = jsonBool(j, "is_base")
+		m.IsBase = j.GetBool("is_base")
 	}
 	if err := r.aiModel.WithContext(req.Ctx()).Update(m); err != nil {
 		return nil, err
@@ -229,19 +227,4 @@ func (r *ModelRest) setBase(req *web.Request) (any, error) {
 	}
 	m.APIKey = maskAPIKey(m.APIKey)
 	return web.Data(m), nil
-}
-
-func jsonBool(j *web.JsonObject, key string) bool {
-	if j == nil {
-		return false
-	}
-	v := (*j)[key]
-	if v == nil {
-		return false
-	}
-	b, ok := v.(bool)
-	if !ok {
-		return false
-	}
-	return b
 }

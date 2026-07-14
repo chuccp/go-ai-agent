@@ -5,14 +5,14 @@ import (
 
 	"encoding/json"
 	"github.com/chuccp/go-ai-agent/internal/entity"
-	"github.com/gorilla/websocket"
+	"github.com/chuccp/go-web-frame/web"
 )
 
 // ==================== Flow message handling ====================
 
-func (r *ChatRunner) handleFlowStart(conn *websocket.Conn, req WSRequest) {
+func (r *ChatRunner) handleFlowStart(stream *web.WebSocketStream, req WSRequest) {
 	if r.flowRunner == nil {
-		r.sendJSON(conn, WSResponse{Type: "error", Message: "FlowRunner not initialized"})
+		r.sendJSON(stream, WSResponse{Type: "error", Message: "FlowRunner not initialized"})
 		return
 	}
 
@@ -57,15 +57,15 @@ func (r *ChatRunner) handleFlowStart(conn *websocket.Conn, req WSRequest) {
 		newExecId, err = r.flowRunner.HandleFlowStart(flowId, executionId, req.SessionID, opts)
 	}
 	if err != nil {
-		r.sendJSON(conn, WSResponse{Type: "error", Message: err.Error()})
+		r.sendJSON(stream, WSResponse{Type: "error", Message: err.Error()})
 	} else if newExecId > 0 {
-		r.sendJSON(conn, WSResponse{Type: "flow_started", Message: fmt.Sprintf("flow started: %d", newExecId)})
+		r.sendJSON(stream, WSResponse{Type: "flow_started", Message: fmt.Sprintf("flow started: %d", newExecId)})
 	}
 }
 
-func (r *ChatRunner) handleFlowUserResponse(conn *websocket.Conn, req WSRequest) {
+func (r *ChatRunner) handleFlowUserResponse(stream *web.WebSocketStream, req WSRequest) {
 	if r.flowRunner == nil {
-		r.sendJSON(conn, WSResponse{Type: "error", Message: "FlowRunner not initialized"})
+		r.sendJSON(stream, WSResponse{Type: "error", Message: "FlowRunner not initialized"})
 		return
 	}
 
@@ -83,13 +83,13 @@ func (r *ChatRunner) handleFlowUserResponse(conn *websocket.Conn, req WSRequest)
 	}
 
 	if err := r.flowRunner.HandleUserResponse(executionId, response); err != nil {
-		r.sendJSON(conn, WSResponse{Type: "error", Message: err.Error()})
+		r.sendJSON(stream, WSResponse{Type: "error", Message: err.Error()})
 	}
 }
 
-func (r *ChatRunner) handleFlowStop(conn *websocket.Conn, req WSRequest) {
+func (r *ChatRunner) handleFlowStop(stream *web.WebSocketStream, req WSRequest) {
 	if r.flowRunner == nil {
-		r.sendJSON(conn, WSResponse{Type: "error", Message: "FlowRunner not initialized"})
+		r.sendJSON(stream, WSResponse{Type: "error", Message: "FlowRunner not initialized"})
 		return
 	}
 
@@ -103,7 +103,7 @@ func (r *ChatRunner) handleFlowStop(conn *websocket.Conn, req WSRequest) {
 	}
 
 	if err := r.flowRunner.HandleFlowStop(executionId); err != nil {
-		r.sendJSON(conn, WSResponse{Type: "error", Message: err.Error()})
+		r.sendJSON(stream, WSResponse{Type: "error", Message: err.Error()})
 	}
 }
 

@@ -9,7 +9,7 @@ import (
 	"github.com/chuccp/go-ai-agent/internal/agent"
 	"github.com/chuccp/go-ai-agent/internal/ai/chat/common"
 	"github.com/chuccp/go-ai-agent/internal/entity"
-	"github.com/gorilla/websocket"
+	"github.com/chuccp/go-web-frame/web"
 )
 
 // agentSystemPrompt is the system prompt for the agent in both WebSocket and IPC modes.
@@ -82,7 +82,7 @@ When a user wants to run a flow:
 // ── wsSender (agent → WebSocket bridge) ──
 
 type wsSender struct {
-	conn       *websocket.Conn
+	stream   *web.WebSocketStream
 	runner     *ChatRunner
 	onChunk    func(content string, reasoning bool)
 	onDone     func()
@@ -115,13 +115,13 @@ func (s *wsSender) Send(event agent.Event) {
 	case "tool_result":
 		resp.Message = fmt.Sprintf("📋 %s", event.Message)
 	}
-	s.runner.sendJSON(s.conn, resp)
+	s.runner.sendJSON(s.stream, resp)
 }
 
 // ── Chat / Agent handlers ──
 
-func (r *ChatRunner) handleChat(conn *websocket.Conn, req WSRequest) {
-	cp := r.prepareChat(conn, req)
+func (r *ChatRunner) handleChat(stream *web.WebSocketStream, req WSRequest) {
+	cp := r.prepareChat(stream, req)
 
 	userMsg := common.ChatMessage{
 		Role:         "user",
@@ -131,25 +131,25 @@ func (r *ChatRunner) handleChat(conn *websocket.Conn, req WSRequest) {
 	history := append(cp.history, userMsg)
 
 	if req.Stream {
-		r.handleStreamChatFull(conn, cp.modelPath, history, cp.opts, cp.sessionID)
+		r.handleStreamChatFull(stream, cp.modelPath, history, cp.opts, cp.sessionID)
 	} else {
-		r.handleNonStreamChatFull(conn, cp.modelPath, history, cp.opts, cp.sessionID)
+		r.handleNonStreamChatFull(stream, cp.modelPath, history, cp.opts, cp.sessionID)
 	}
 }
 
 // handleAgent runs the agent loop. It blocks until the agent completes.
 // Callers should run this in a goroutine so the WebSocket read loop stays
 // responsive for flow_user_response and stop messages.
-func (r *ChatRunner) handleAgent(conn *websocket.Conn, req WSRequest) {
-	cp := r.prepareChat(conn, req)
+func (r *ChatRunner) handleAgent(stream *web.WebSocketStream, req WSRequest) {
+	cp := r.prepareChat(stream, req)
 
 	// Cancellable context — allows stop/disconnect to abort the agent loop
 	// and any blocking tool calls (e.g. run_flow waiting for user input).
 	ctx, cancel := context.WithCancel(context.Background())
-	r.setAgentCancel(conn, cancel)
-	defer r.setAgentCancel(conn, nil)
+	r.setAgentCancel(stream, cancel)
+	defer r.setAgentCancel(stream, nil)
 
-	sender := &wsSender{conn: conn, runner: r}
+	sender := &wsSender{stream: stream, runner: r}
 	chatID := fmt.Sprintf("%d", cp.sessionID)
 	c := agent.NewChat(r.ctx, ctx, cp.sessionID, chatID, cp.modelPath, cp.opts, sender)
 	c.SetSystemPrompt(agentSystemPrompt)

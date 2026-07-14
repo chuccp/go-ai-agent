@@ -18,15 +18,15 @@ import (
 	"github.com/chuccp/go-ai-agent/internal/service"
 	"github.com/chuccp/go-web-frame/core"
 	"github.com/chuccp/go-web-frame/log"
-	"github.com/gorilla/websocket"
+	"github.com/chuccp/go-web-frame/web"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 	"go.uber.org/zap"
 )
 
 // connState holds per-connection state for thread-safe WebSocket writes
-// and agent cancellation. gorilla/websocket requires all writes to a
-// connection to be serialized, so the mutex protects concurrent writes
-// from the agent goroutine, flow event broadcaster, and ping ticker.
+// and agent cancellation. All writes to a WebSocket connection must be
+// serialized, so the mutex protects concurrent writes from the agent
+// goroutine, flow event broadcaster, and ping ticker.
 type connState struct {
 	mu     sync.Mutex
 	cancel context.CancelFunc // cancels the active agent chat (nil if idle)
@@ -43,7 +43,7 @@ type ChatRunner struct {
 	flowService      *service.FlowService
 	flowRunner       *FlowRunner
 	questionSvc      *question.Service
-	activeConns      map[*websocket.Conn]*connState
+	activeConns      map[*web.WebSocketStream]*connState
 	defaultModelPath string
 	providersLoaded  bool
 	isDesktop        bool
@@ -51,7 +51,7 @@ type ChatRunner struct {
 }
 
 func NewChatRunner() *ChatRunner {
-	return &ChatRunner{activeConns: make(map[*websocket.Conn]*connState)}
+	return &ChatRunner{activeConns: make(map[*web.WebSocketStream]*connState)}
 }
 
 // QuestionService returns the question service (for desktop IPC bindings).
@@ -90,13 +90,13 @@ func (r *ChatRunner) Init(ctx *core.Context) error {
 				"question":   req,
 			})
 			r.mu.Lock()
-			conns := make([]*websocket.Conn, 0, len(r.activeConns))
-			for conn := range r.activeConns {
-				conns = append(conns, conn)
+			streams := make([]*web.WebSocketStream, 0, len(r.activeConns))
+			for s := range r.activeConns {
+				streams = append(streams, s)
 			}
 			r.mu.Unlock()
-			for _, conn := range conns {
-				r.sendRaw(conn, data)
+			for _, s := range streams {
+				r.sendRaw(s, data)
 			}
 		}
 	})
@@ -126,18 +126,18 @@ func (r *ChatRunner) Init(ctx *core.Context) error {
 			// desktop-dev mode). In pure desktop mode with no WS connections,
 			// this is a no-op.
 			r.mu.Lock()
-			conns := make([]*websocket.Conn, 0, len(r.activeConns))
-			for conn := range r.activeConns {
-				conns = append(conns, conn)
+			streams := make([]*web.WebSocketStream, 0, len(r.activeConns))
+			for s := range r.activeConns {
+				streams = append(streams, s)
 			}
 			r.mu.Unlock()
-			if len(conns) > 0 {
+			if len(streams) > 0 {
 				log.Info("flow event broadcasting to WS",
-					zap.Int("conns", len(conns)),
+					zap.Int("conns", len(streams)),
 					zap.String("type", eventType),
 					zap.Uint("execID", uint(executionId)))
-				for _, conn := range conns {
-					r.sendRaw(conn, data)
+				for _, s := range streams {
+					r.sendRaw(s, data)
 				}
 			}
 
@@ -326,69 +326,68 @@ func (r *ChatRunner) StopFlowIPC(executionID uint) error {
 	return r.flowRunner.HandleFlowStop(executionID)
 }
 
-func (r *ChatRunner) HandleWebSocket(conn *websocket.Conn) error {
+func (r *ChatRunner) HandleWebSocket(stream *web.WebSocketStream) error {
 	r.mu.Lock()
 	if len(r.activeConns) >= maxActiveConns {
 		r.mu.Unlock()
-		_ = conn.WriteJSON(WSResponse{Type: "error", Message: "Too many concurrent connections. Please try again later."})
-		conn.Close()
+		resp, _ := json.Marshal(WSResponse{Type: "error", Message: "Too many concurrent connections. Please try again later."})
+		_ = stream.WriteText(context.Background(), resp)
+		stream.Close()
 		log.Warn("websocket connection rejected: max connections reached", zap.Int("limit", maxActiveConns))
 		return nil
 	}
 	state := &connState{}
-	r.activeConns[conn] = state
+	r.activeConns[stream] = state
 	r.mu.Unlock()
 
 	defer func() {
 		// Cancel any active agent chat on this connection
-		r.stopAgent(conn)
+		r.stopAgent(stream)
 		r.mu.Lock()
-		delete(r.activeConns, conn)
+		delete(r.activeConns, stream)
 		r.mu.Unlock()
-		conn.Close()
+		stream.Close()
 	}()
 
-	conn.SetReadLimit(10 * 1024 * 1024)
+	stream.Conn().SetReadLimit(10 * 1024 * 1024)
 
 	for {
-		_, message, err := conn.ReadMessage()
+		_, message, err := stream.Read(stream.Context())
 		if err != nil {
-			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
-				log.Error("WebSocket read error", zap.Error(err))
-			}
+			log.Debug("WebSocket read ended", zap.Error(err))
 			break
 		}
 
 		var req WSRequest
 		if err := json.Unmarshal(message, &req); err != nil {
-			r.sendJSON(conn, WSResponse{Type: "error", Message: "Invalid request format: " + err.Error()})
+			r.sendJSON(stream, WSResponse{Type: "error", Message: "Invalid request format: " + err.Error()})
 			continue
 		}
 
 		switch req.Type {
 		case "ping":
-			r.sendJSON(conn, WSResponse{Type: "pong"})
+			r.sendJSON(stream, WSResponse{Type: "pong"})
 		case "chat":
-			r.handleChat(conn, req)
+			r.handleChat(stream, req)
 		case "agent":
 			// Run agent in a goroutine so the WS read loop stays responsive.
 			// This allows flow_user_response and stop messages to be processed
 			// while the agent (and its blocking tool calls) is still running.
-			go r.handleAgent(conn, req)
+			go r.handleAgent(stream, req)
 		case "stop":
-			r.stopAgent(conn)
+			r.stopAgent(stream)
 		case "flow_start":
-			r.handleFlowStart(conn, req)
+			r.handleFlowStart(stream, req)
 		case "flow_user_response":
-			r.handleFlowUserResponse(conn, req)
+			r.handleFlowUserResponse(stream, req)
 		case "flow_stop":
-			r.handleFlowStop(conn, req)
+			r.handleFlowStop(stream, req)
 		case "question_reply":
-			r.handleQuestionReply(conn, req)
+			r.handleQuestionReply(stream, req)
 		case "question_reject":
-			r.handleQuestionReject(conn, req)
+			r.handleQuestionReject(stream, req)
 		default:
-			r.sendJSON(conn, WSResponse{Type: "error", Message: "Unknown request type: " + req.Type})
+			r.sendJSON(stream, WSResponse{Type: "error", Message: "Unknown request type: " + req.Type})
 		}
 	}
 	return nil
@@ -397,9 +396,9 @@ func (r *ChatRunner) HandleWebSocket(conn *websocket.Conn) error {
 // ── per-conn helpers ──
 
 // handleQuestionReply delivers the user's answers to a blocked ask_user tool call.
-func (r *ChatRunner) handleQuestionReply(conn *websocket.Conn, req WSRequest) {
+func (r *ChatRunner) handleQuestionReply(stream *web.WebSocketStream, req WSRequest) {
 	if r.questionSvc == nil {
-		r.sendJSON(conn, WSResponse{Type: "error", Message: "QuestionService not initialized"})
+		r.sendJSON(stream, WSResponse{Type: "error", Message: "QuestionService not initialized"})
 		return
 	}
 	var id uint64
@@ -429,18 +428,18 @@ func (r *ChatRunner) handleQuestionReply(conn *websocket.Conn, req WSRequest) {
 		}
 	}
 	if id == 0 {
-		r.sendJSON(conn, WSResponse{Type: "error", Message: "question_id is required"})
+		r.sendJSON(stream, WSResponse{Type: "error", Message: "question_id is required"})
 		return
 	}
 	if err := r.questionSvc.Reply(id, answers); err != nil {
-		r.sendJSON(conn, WSResponse{Type: "error", Message: err.Error()})
+		r.sendJSON(stream, WSResponse{Type: "error", Message: err.Error()})
 	}
 }
 
 // handleQuestionReject cancels a pending question (user dismissed it).
-func (r *ChatRunner) handleQuestionReject(conn *websocket.Conn, req WSRequest) {
+func (r *ChatRunner) handleQuestionReject(stream *web.WebSocketStream, req WSRequest) {
 	if r.questionSvc == nil {
-		r.sendJSON(conn, WSResponse{Type: "error", Message: "QuestionService not initialized"})
+		r.sendJSON(stream, WSResponse{Type: "error", Message: "QuestionService not initialized"})
 		return
 	}
 	var id uint64
@@ -455,25 +454,25 @@ func (r *ChatRunner) handleQuestionReject(conn *websocket.Conn, req WSRequest) {
 		}
 	}
 	if id == 0 {
-		r.sendJSON(conn, WSResponse{Type: "error", Message: "question_id is required"})
+		r.sendJSON(stream, WSResponse{Type: "error", Message: "question_id is required"})
 		return
 	}
 	if err := r.questionSvc.Reject(id); err != nil {
-		r.sendJSON(conn, WSResponse{Type: "error", Message: err.Error()})
+		r.sendJSON(stream, WSResponse{Type: "error", Message: err.Error()})
 	}
 }
 
-// getConnState returns the connState for a connection, or nil if not tracked.
-func (r *ChatRunner) getConnState(conn *websocket.Conn) *connState {
+// getConnState returns the connState for a stream, or nil if not tracked.
+func (r *ChatRunner) getConnState(stream *web.WebSocketStream) *connState {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return r.activeConns[conn]
+	return r.activeConns[stream]
 }
 
 // setAgentCancel stores/clears the cancel function for the active agent chat
-// on this connection. Called by handleAgent.
-func (r *ChatRunner) setAgentCancel(conn *websocket.Conn, cancel context.CancelFunc) {
-	state := r.getConnState(conn)
+// on this stream. Called by handleAgent.
+func (r *ChatRunner) setAgentCancel(stream *web.WebSocketStream, cancel context.CancelFunc) {
+	state := r.getConnState(stream)
 	if state == nil {
 		return
 	}
@@ -482,9 +481,9 @@ func (r *ChatRunner) setAgentCancel(conn *websocket.Conn, cancel context.CancelF
 	state.mu.Unlock()
 }
 
-// stopAgent cancels the active agent chat on this connection (if any).
-func (r *ChatRunner) stopAgent(conn *websocket.Conn) {
-	state := r.getConnState(conn)
+// stopAgent cancels the active agent chat on this stream (if any).
+func (r *ChatRunner) stopAgent(stream *web.WebSocketStream) {
+	state := r.getConnState(stream)
 	if state == nil {
 		return
 	}
@@ -497,44 +496,44 @@ func (r *ChatRunner) stopAgent(conn *websocket.Conn) {
 	}
 }
 
-// sendRaw writes raw bytes to a connection under the per-conn write mutex.
-func (r *ChatRunner) sendRaw(conn *websocket.Conn, data []byte) {
-	state := r.getConnState(conn)
+// sendRaw writes raw bytes to a stream under the per-conn write mutex.
+func (r *ChatRunner) sendRaw(stream *web.WebSocketStream, data []byte) {
+	state := r.getConnState(stream)
 	if state == nil {
-		log.Warn("sendRaw: conn not in activeConns, dropping message",
+		log.Warn("sendRaw: stream not in activeConns, dropping message",
 			zap.Int("dataLen", len(data)))
 		return
 	}
 	state.mu.Lock()
 	defer state.mu.Unlock()
-	if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
+	if err := stream.WriteText(context.Background(), data); err != nil {
 		log.Warn("websocket write failed", zap.Error(err))
 	}
 }
 
-// sendJSON marshals and sends a WSResponse to a connection (thread-safe).
-func (r *ChatRunner) sendJSON(conn *websocket.Conn, resp WSResponse) {
+// sendJSON marshals and sends a WSResponse to a stream (thread-safe).
+func (r *ChatRunner) sendJSON(stream *web.WebSocketStream, resp WSResponse) {
 	data, err := json.Marshal(resp)
 	if err != nil {
 		return
 	}
-	r.sendRaw(conn, data)
+	r.sendRaw(stream, data)
 }
 
 func (r *ChatRunner) sendPing() {
 	r.mu.Lock()
-	conns := make([]*websocket.Conn, 0, len(r.activeConns))
-	for conn := range r.activeConns {
-		conns = append(conns, conn)
+	streams := make([]*web.WebSocketStream, 0, len(r.activeConns))
+	for s := range r.activeConns {
+		streams = append(streams, s)
 	}
 	r.mu.Unlock()
-	for _, conn := range conns {
-		state := r.getConnState(conn)
+	for _, s := range streams {
+		state := r.getConnState(s)
 		if state == nil {
 			continue
 		}
 		state.mu.Lock()
-		conn.WriteMessage(websocket.PingMessage, nil)
+		_ = s.Ping(context.Background())
 		state.mu.Unlock()
 	}
 }
@@ -542,12 +541,12 @@ func (r *ChatRunner) sendPing() {
 func (r *ChatRunner) closeAll() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	for conn, state := range r.activeConns {
+	for stream, state := range r.activeConns {
 		state.mu.Lock()
 		if state.cancel != nil {
 			state.cancel()
 		}
 		state.mu.Unlock()
-		conn.Close()
+		stream.Close()
 	}
 }
