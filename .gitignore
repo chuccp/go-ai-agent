@@ -46,3 +46,4 @@ server
 go-ai-agent-server
 /.claude
 /.qoder
+go-ai-agent-desktop
