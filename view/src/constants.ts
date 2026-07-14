@@ -1,8 +1,12 @@
 // In Wails dev mode, the webview loads from wails.localhost but the Go backend
 // runs on its own port (19009). Point API calls directly to the Go backend.
 export const API_BASE = (() => {
-  if (typeof window !== 'undefined' && window.location.hostname === 'wails.localhost') {
-    return 'http://localhost:19009'
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname
+    // Wails dev mode: wails.localhost; Wails production: wails
+    if (host === 'wails.localhost' || host === 'wails') {
+      return 'http://localhost:19009'
+    }
   }
   return ''
 })()
