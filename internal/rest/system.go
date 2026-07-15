@@ -6,10 +6,7 @@ import (
 	"path/filepath"
 
 	appconfig "github.com/chuccp/go-ai-agent/internal/config"
-	"github.com/chuccp/go-ai-agent/internal/entity"
-	"github.com/chuccp/go-ai-agent/internal/model"
 	"github.com/chuccp/go-ai-agent/internal/runner"
-	"github.com/chuccp/go-ai-agent/internal/util"
 	"github.com/chuccp/go-web-frame/core"
 	"github.com/chuccp/go-web-frame/log"
 	"github.com/chuccp/go-web-frame/web"
@@ -84,12 +81,6 @@ func (s *SystemRest) performClear(clearAppData bool) error {
 		chatRunner.ResetProviders()
 	}
 
-	// In desktop mode, auto-create the default admin user (same as DesktopInitService)
-	// so the setup wizard skips the admin step and goes straight to model configuration.
-	if cfg.GetBoolOrDefault("system.desktop", false) {
-		s.autoCreateDesktopAdmin()
-	}
-
 	// Optionally clear app data directories
 	if clearAppData {
 		appsPath := cfg.GetStringOrDefault("flow.appsPath", "./data/apps")
@@ -112,38 +103,6 @@ func (s *SystemRest) performClear(clearAppData bool) error {
 
 	log.Info("clear complete", zap.Bool("clearAppData", clearAppData))
 	return nil
-}
-
-// autoCreateDesktopAdmin creates the default admin/admin account if it doesn't exist.
-// This mirrors the logic in DesktopInitService.Init() so that after a database
-// clear in desktop mode, the setup wizard can skip the admin step.
-func (s *SystemRest) autoCreateDesktopAdmin() {
-	adminModel := core.GetModel[*model.AdminUserModel](s.context)
-	if adminModel == nil {
-		return
-	}
-	hasAdmin, err := adminModel.HasAdminUser()
-	if err != nil {
-		log.Warn("[system] failed to check admin user after clear", zap.Error(err))
-		return
-	}
-	if hasAdmin {
-		return
-	}
-	hash, err := util.HashPassword("admin")
-	if err != nil {
-		log.Warn("[system] failed to hash default admin password", zap.Error(err))
-		return
-	}
-	if err := adminModel.Create(&entity.AdminUser{
-		Username:     "admin",
-		PasswordHash: hash,
-		IsAdmin:      true,
-	}); err != nil {
-		log.Warn("[system] failed to create default admin after clear", zap.Error(err))
-	} else {
-		log.Info("[system] default admin account created (admin/admin)")
-	}
 }
 
 // clearDirContents removes all files and subdirectories inside the given

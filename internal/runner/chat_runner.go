@@ -3,13 +3,12 @@ package runner
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"strconv"
 	"sync"
 	"time"
 
-	"github.com/chuccp/go-ai-agent/internal/agent/tool"
 	"github.com/chuccp/go-ai-agent/internal/agent/question"
+	"github.com/chuccp/go-ai-agent/internal/agent/tool"
 	"github.com/chuccp/go-ai-agent/internal/ai"
 	"github.com/chuccp/go-ai-agent/internal/ai/chat"
 	"github.com/chuccp/go-ai-agent/internal/ai/chat/common"
@@ -19,7 +18,6 @@ import (
 	"github.com/chuccp/go-web-frame/core"
 	"github.com/chuccp/go-web-frame/log"
 	"github.com/chuccp/go-web-frame/web"
-	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 	"go.uber.org/zap"
 )
 
@@ -46,17 +44,11 @@ type ChatRunner struct {
 	activeConns      map[*web.WebSocketStream]*connState
 	defaultModelPath string
 	providersLoaded  bool
-	isDesktop        bool
 	mu               sync.Mutex
 }
 
 func NewChatRunner() *ChatRunner {
 	return &ChatRunner{activeConns: make(map[*web.WebSocketStream]*connState)}
-}
-
-// QuestionService returns the question service (for desktop IPC bindings).
-func (r *ChatRunner) QuestionService() *question.Service {
-	return r.questionSvc
 }
 
 // maxActiveConns is the maximum number of simultaneous WebSocket connections
@@ -73,31 +65,22 @@ func (r *ChatRunner) Init(ctx *core.Context) error {
 	r.flowModel = core.GetModel[*model.FlowModel](ctx)
 	r.flowService = core.GetService[*service.FlowService](ctx)
 
-	// Check if running in desktop mode
-	r.isDesktop = ctx.GetConfig().GetBoolOrDefault("system.desktop", false)
-
 	// Question service (opencode-style ask/reply). The onAsk callback broadcasts
-	// "question_asked" events to the frontend so the UI can render the question.
-	// In desktop mode this is emitted via Wails events; in web mode via WS.
+	// "question_asked" events to the frontend via WebSocket.
 	r.questionSvc = question.NewService(func(req question.Request) {
-		if r.isDesktop {
-			eventName := fmt.Sprintf("chat:%d:question_asked", req.SessionID)
-			wailsRuntime.EventsEmit(r.ctx, eventName, req)
-		} else {
-			data, _ := json.Marshal(map[string]any{
-				"type":       "question_asked",
-				"session_id": req.SessionID,
-				"question":   req,
-			})
-			r.mu.Lock()
-			streams := make([]*web.WebSocketStream, 0, len(r.activeConns))
-			for s := range r.activeConns {
-				streams = append(streams, s)
-			}
-			r.mu.Unlock()
-			for _, s := range streams {
-				r.sendRaw(s, data)
-			}
+		data, _ := json.Marshal(map[string]any{
+			"type":       "question_asked",
+			"session_id": req.SessionID,
+			"question":   req,
+		})
+		r.mu.Lock()
+		streams := make([]*web.WebSocketStream, 0, len(r.activeConns))
+		for s := range r.activeConns {
+			streams = append(streams, s)
+		}
+		r.mu.Unlock()
+		for _, s := range streams {
+			r.sendRaw(s, data)
 		}
 	})
 
@@ -141,25 +124,7 @@ func (r *ChatRunner) Init(ctx *core.Context) error {
 				}
 			}
 
-			// Additionally emit via Wails events in desktop mode (for the
-			// webview IPC adapter that listens on Wails event channels).
-			if r.isDesktop {
-				eventName := fmt.Sprintf("flow:%d:%s", uint(executionId), eventType)
-				wailsRuntime.EventsEmit(r.ctx, eventName, event)
-				sessionId, _ := event["session_id"].(float64)
-				if sessionId > 0 {
-					genericName := fmt.Sprintf("chat:%d:flow_event", uint(sessionId))
-					log.Info("flow event emitting via Wails",
-						zap.String("event", genericName),
-						zap.String("type", eventType),
-						zap.Uint("execID", uint(executionId)))
-					wailsRuntime.EventsEmit(r.ctx, genericName, event)
-				} else {
-					log.Warn("flow event has no session_id, cannot route via Wails",
-						zap.String("type", eventType),
-						zap.Uint("execID", uint(executionId)))
-				}
-			}
+			// Flow events are broadcast to WebSocket connections above.
 		})
 	}
 	// If system is already initialized, load providers from DB immediately.
@@ -294,39 +259,8 @@ type WSResponse struct {
 
 // ==================== WebSocket entry point ====================
 
-func (r *ChatRunner) HandleFlowUserResponse(executionId uint, response string) error {
-	if r.flowRunner == nil {
-		return fmt.Errorf("FlowRunner not initialized")
-	}
-	return r.flowRunner.HandleUserResponse(executionId, response)
-}
-
-// StartFlowIPC starts a flow execution from desktop IPC (no WebSocket connection).
-// formValuesJSON is an optional JSON string of form values; pass "" for none.
-// The caller is responsible for creating or reusing a chat session.
-func (r *ChatRunner) StartFlowIPC(flowID uint, sessionID uint, initialInput string, formValuesJSON string) (uint, error) {
-	if r.flowRunner == nil {
-		return 0, fmt.Errorf("FlowRunner not initialized")
-	}
-	opts := FlowStartOptions{InitialInput: initialInput}
-	if formValuesJSON != "" {
-		var fv map[string]any
-		if err := json.Unmarshal([]byte(formValuesJSON), &fv); err == nil {
-			opts.FormValues = fv
-		}
-	}
-	return r.flowRunner.HandleFlowStart(flowID, 0, sessionID, opts)
-}
-
-// StopFlowIPC aborts a running flow execution from desktop IPC.
-func (r *ChatRunner) StopFlowIPC(executionID uint) error {
-	if r.flowRunner == nil {
-		return fmt.Errorf("FlowRunner not initialized")
-	}
-	return r.flowRunner.HandleFlowStop(executionID)
-}
-
 func (r *ChatRunner) HandleWebSocket(stream *web.WebSocketStream) error {
+	stream.AcceptOptions.OriginPatterns = append(stream.AcceptOptions.OriginPatterns, "*")
 	r.mu.Lock()
 	if len(r.activeConns) >= maxActiveConns {
 		r.mu.Unlock()

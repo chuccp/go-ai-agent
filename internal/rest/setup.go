@@ -361,16 +361,10 @@ func (s *SetupRest) getSetupStatus(req *web.Request) (any, error) {
 		}
 	}
 
-	mode := "web"
-	if cfg.GetBoolOrDefault("system.desktop", false) {
-		mode = "desktop"
-	}
-
 	return web.Data(map[string]interface{}{
 		"initialized":      initialized,
 		"db_configured":    dbConfigured,
 		"admin_configured": adminConfigured,
-		"mode":             mode,
 	}), nil
 }
 

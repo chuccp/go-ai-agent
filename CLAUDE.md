@@ -5,49 +5,32 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Build & Run
 
 ```bash
-# Desktop dev (Windows, Wails + Vite)
-dev.bat                        # one-click: kill old procs, start wails dev
-wails dev                      # manual start from project root
+# Build & run the server (port 19009)
+go build -o go-ai-agent ./main.go
+./go-ai-agent
 
-# Web/Server mode (port 19009, no GUI)
-go build -o go-ai-agent.exe ./cmd/server/   # pure server entry
-./go-ai-agent.exe
-
-# Frontend (port 5173, proxies /api → 19009)
+# Frontend dev (port 5173, proxies /api → 19009)
 cd view && pnpm dev
 cd view && pnpm build        # production build into view/dist/
 ```
 
 The Go module depends on a local replacement: `go-web-frame` at `../go-web-frame`.
 
-## Multi-Entry Architecture
-
-```
-main.go              → Desktop entry (Wails, embeds view/dist/)
-cmd/server/main.go   → Pure web server entry (no Wails dependency)
-internal/app/        → Shared setup: Create(webMode), CreateDesktop(), DesktopInitService
-```
-
-Desktop mode auto-configures SQLite at `./data/go-ai-agent.db` and creates a default admin (admin/admin). It also sets `system.desktop=true` in the config and registers CORS middleware for cross-origin requests from the Wails webview.
-
-The frontend detects Wails dev mode (`wails.localhost` hostname) and points API_BASE to `http://localhost:19009` directly, relying on the Go server's CORS headers. In web mode, API_BASE is empty (relative paths through Vite proxy).
-
 ## Architecture
 
 ```
-main.go / cmd/server/main.go → go-web-frame Builder
-  ├─ Services:  UnifiedChatService, DesktopInitService (desktop only), CorsFilter
+main.go → go-web-frame Builder
+  ├─ Services:  UnifiedChatService, GenService, FlowService, ToolRegistry
   ├─ Models:    ChatSession, ChatMessage, AIModel, Flow*, AdminUser
   ├─ Runners:   ChatRunner (WebSocket + agent), FlowRunner (DAG executor)
-  └─ REST:      Api, SetupRest, ModelRest, ChatRest, FlowRest
+  └─ REST:      Api, SetupRest, ModelRest, ChatRest, FlowRest, SystemRest
 ```
 
 **Key design decisions:**
 
 - **First-run mode**: `loadOrCreateConfig()` checks `system.init`. If false, registers `SetupRest` endpoints. After setup completes, writes `application.yml` with `system.init: true`. On next restart, SetupRest is not registered — only `Api.getSetupStatus()` remains for status checks.
 - **Model config**: AI model credentials live in the DB (`ai_models` table), NOT in `application.yml`. On startup, `ChatRunner.Init()` loads all `AIModel` records and calls `ConfigureProvider()`.
-- **Desktop auto-init**: `DesktopInitService` auto-creates SQLite DB + default admin when `system.desktop=true` and `system.init=false`. The frontend setup wizard then shows only the model configuration step (DB and admin steps are pre-completed).
-- **CORS**: `go-web-frame/component/cors` filter is always registered for Wails desktop dev compatibility.
+- **CORS**: `go-web-frame/component/cors` filter is registered for dev compatibility with the Vite frontend on a different port.
 
 ## Frontend (React + Vite + Zustand)
 
@@ -57,11 +40,11 @@ main.go / cmd/server/main.go → go-web-frame Builder
 | `/designer` | FlowDesigner (list view) |
 | `/designer/:id` | FlowDesigner (canvas editor, @vue-flow) |
 | `/models` | ModelManager |
-| `/setup` | SetupWizard (first-run, desktop skips DB/admin steps) |
+| `/setup` | SetupWizard (first-run, 3-step: DB → Admin → Model) |
 
 Hash-based routing via react-router-dom. State management with Zustand (`flowStore.ts`, `setupStore.ts`, `modelStore.ts`). Shared `ModelForm` component used by both `SetupWizard` and `ModelManager`.
 
-Vite config proxies `/api` → `localhost:19009` and `/ws` → `ws://localhost:19009` for web dev mode. In Wails dev mode, `constants.ts` detects the `wails.localhost` hostname and returns `http://localhost:19009` as `API_BASE`.
+Vite config proxies `/api` → `localhost:19009` and `/ws` → `ws://localhost:19009` for web dev mode. In production, API_BASE is empty (relative paths through same origin).
 
 ## Flow Engine
 
@@ -96,6 +79,8 @@ UnifiedChatService → map[string]ChatProvider
   ├─ claude.*   (Anthropic Messages protocol)
   └─ native.*   (gemini, volcengine — custom protocols)
 ```
+
+All communication is via WebSocket. The frontend connects to `/ws/chat` and sends/receives JSON messages.
 
 ## Agent Loop
 

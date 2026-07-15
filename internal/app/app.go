@@ -1,9 +1,6 @@
 package app
 
 import (
-	"os"
-	"path/filepath"
-
 	"github.com/chuccp/go-ai-agent/internal/agent/tool"
 	"github.com/chuccp/go-ai-agent/internal/ai"
 	"github.com/chuccp/go-ai-agent/internal/ai/chat"
@@ -22,29 +19,9 @@ import (
 
 const configFilePath = "application.yml"
 
-// getDataDir returns the absolute path to the data directory.
-// For desktop mode, it uses the executable's directory.
-// For web mode, it uses the current working directory.
-func getDataDir(webMode bool) string {
-	if webMode {
-		// Web mode: use current working directory
-		return "./data"
-	}
-	
-	// Desktop mode: use executable's directory
-	execPath, err := os.Executable()
-	if err != nil {
-		log.Warn("Failed to get executable path, using current directory", zap.Error(err))
-		return "./data"
-	}
-	
-	return filepath.Join(filepath.Dir(execPath), "data")
-}
-
 // Create builds the web framework with all services and REST endpoints.
-// webMode=true skips desktop-specific services.
-func Create(webMode bool) *wf.WebFrame {
-	loadConfig, isFirstRun := loadOrCreateConfig(webMode)
+func Create() *wf.WebFrame {
+	loadConfig, isFirstRun := loadOrCreateConfig()
 
 	builder := wf.NewBuilder(loadConfig)
 
@@ -88,61 +65,9 @@ func Create(webMode bool) *wf.WebFrame {
 	return builder.Build()
 }
 
-// CreateDesktop builds the web framework for desktop mode (with desktop services).
-// Also returns the ChatRunner for Wails IPC binding.
-func CreateDesktop() (*wf.WebFrame, *runner.ChatRunner) {
-	loadConfig, isFirstRun := loadOrCreateConfig(false)
-
-	builder := wf.NewBuilder(loadConfig)
-
-	services := []core.IService{
-		&cache.Cache{},
-		chat.NewDefaultChatService(),
-		ai.NewGenService(),
-		tool.NewRegistry(),
-		&DesktopInitService{},
-		&service.FlowService{},
-	}
-
-	builder.Service(services...)
-
-	chatRunner := runner.NewChatRunner()
-	builder.Runner(chatRunner)
-	builder.Runner(runner.NewFlowRunner())
-
-	rests := []core.IRest{
-		&rest.Api{},
-		rest.NewChatRest(),
-		rest.NewSetupRest(configFilePath),
-		rest.NewFlowRest(),
-		rest.NewModelRest(),
-		&rest.SystemRest{},
-	}
-
-	if isFirstRun {
-		log.Info("First run detected, enabling setup wizard", zap.String("configPath", configFilePath))
-	}
-
-	builder.Rest(rests...)
-
-	builder.Model(
-		&model.ChatSessionModel{},
-		&model.ChatMessageModel{},
-		&model.AIModelModel{},
-		&model.FlowModel{},
-		&model.AdminUserModel{},
-	)
-	builder.Filter(cors.NewCrosFilter())
-	return builder.Build(), chatRunner
-}
-
-func loadOrCreateConfig(webMode bool) (*config.Config, bool) {
+func loadOrCreateConfig() (*config.Config, bool) {
 	loadConfig, err := config.LoadConfig(configFilePath)
 	if err == nil {
-		// Desktop mode: always ensure desktop flag is set
-		if !webMode {
-			loadConfig.Put("system.desktop", true)
-		}
 		init := loadConfig.GetBoolOrDefault("system.init", false)
 		if init {
 			return loadConfig, false
@@ -150,28 +75,10 @@ func loadOrCreateConfig(webMode bool) (*config.Config, bool) {
 		log.Info("Config file exists but system not initialized, entering setup mode")
 		return loadConfig, true
 	}
-
 	log.Info("No application.yml found, entering first-run initialization mode")
 	cfg := config.NewConfig()
-	cfg.Put("system.apiPrefix", "/api")
 	cfg.Put("system.debug", true)
 	cfg.Put("system.init", false)
-
-	// Desktop mode: pre-configure SQLite for auto-initialization
-	if !webMode {
-		// Get absolute data directory path based on executable location
-		dataDir := getDataDir(webMode)
-		
-		// Create data directory if it doesn't exist
-		if err := os.MkdirAll(dataDir, 0755); err != nil {
-			log.Warn("Failed to create data directory", zap.Error(err))
-		}
-		
-		dbPath := filepath.Join(dataDir, "go-ai-agent.db")
-		cfg.Put("web.db.type", "sqlite")
-		cfg.Put("web.db.path", dbPath)
-		cfg.Put("system.desktop", true)
-	}
 
 	return cfg, true
 }

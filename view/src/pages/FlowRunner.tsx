@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { API_BASE, IS_DESKTOP } from '@/constants'
+import { API_BASE } from '@/constants'
 import FlowForm from '@/components/FlowForm'
 import { isIconFilename } from '@/types/flow'
 import type { FlowDetail, FlowEvent as IFlowEvent, FormSchema } from '@/types/flow'
@@ -17,11 +17,7 @@ interface FlowEvent {
   form_schema?: FormSchema
 }
 
-// Wails runtime globals (desktop mode only).
-const wailsRuntime = (window as any).runtime
-const wailsEventsOn = (name: string, cb: (...args: any[]) => void) => wailsRuntime?.EventsOn(name, cb) ?? (() => {})
-const wailsEventsOff = (...names: string[]) => { if (wailsRuntime) wailsRuntime.EventsOff(...names) }
-const wailsApp = () => (window as any).go?.main?.App
+// WebSocket-only mode.
 
 export default function FlowRunner() {
   const { t } = useTranslation()
@@ -43,8 +39,6 @@ export default function FlowRunner() {
 
   const wsRef = useRef<WebSocket | null>(null)
   const eventsEndRef = useRef<HTMLDivElement | null>(null)
-  const wailsUnsubsRef = useRef<Array<() => void>>([])
-  const sessionIdRef = useRef<number>(0)
 
   useEffect(() => {
     eventsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -65,15 +59,12 @@ export default function FlowRunner() {
   }, [flowId])
 
   const connectWS = useCallback(() => {
-    let wsUrl: string
-    if (API_BASE) {
-      wsUrl = API_BASE.replace(/^http/, 'ws') + '/ws/chat'
-    } else {
-      const proto = location.protocol === 'https:' ? 'wss' : 'ws'
-      const isDev = location.port === '5173'
-      const wsHost = isDev ? `${location.hostname}:19009` : location.host
-      wsUrl = `${proto}://${wsHost}/ws/chat`
-    }
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws'
+    const isDev = location.port === '5173'
+    // In Vite dev mode connect directly to the Go backend (port 19009).
+    // The Go server has CORS enabled for this.
+    const wsHost = isDev ? `${location.hostname}:19009` : location.host
+    const wsUrl = `${proto}://${wsHost}/ws/chat`
     const ws = new WebSocket(wsUrl)
     wsRef.current = ws
     return ws
@@ -133,95 +124,24 @@ export default function FlowRunner() {
     }
   }, [connectWS, flowId, finished, pushEvent])
 
-  const startFlowIPC = useCallback(async (formValues?: Record<string, any>) => {
-    const app = wailsApp()
-    if (!app) {
-      setError(t('flow.ipcError'))
-      return
-    }
-
-    setRunning(true)
-    setFinished(false)
-    setEvents([])
-
-    // Create a session so flow events are delivered on a known channel.
-    let sessionId = 0
-    try {
-      const res = await fetch(`${API_BASE}/api/sessions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: 'Flow Session', flow_id: flowId }),
-      })
-      const data = await res.json()
-      if (data.data?.id) {
-        sessionId = data.data.id
-        sessionIdRef.current = sessionId
-      }
-    } catch (e) { console.error('FlowRunner session creation failed:', e) }
-
-    // Subscribe to session-scoped flow events BEFORE starting the flow.
-    const flowEventName = `chat:${sessionId}:flow_event`
-    let activeExecId = 0
-    wailsEventsOn(flowEventName, (msg: any) => {
-      try {
-        if (msg.execution_id) {
-          const msgExecId = Number(msg.execution_id)
-          if (activeExecId && msgExecId !== activeExecId) return
-          if (!activeExecId) activeExecId = msgExecId
-        }
-        pushEvent(msg as FlowEvent)
-      } catch (e) { console.error('FlowRunner IPC event handler error:', e) }
-    })
-
-    const formValuesJSON = formValues && Object.keys(formValues).length > 0 ? JSON.stringify(formValues) : ''
-    const raw: string = await app.FlowStart(flowId, sessionId, '', formValuesJSON)
-    let result: any = {}
-    try { result = JSON.parse(raw) } catch {}
-    if (result.error) {
-      setError(result.error)
-      setRunning(false)
-      wailsEventsOff(flowEventName)
-      return
-    }
-    if (result.execution_id) {
-      activeExecId = result.execution_id
-      setExecutionId(result.execution_id)
-    }
-  }, [flowId, pushEvent])
-
   const startFlow = useCallback((formValues?: Record<string, any>) => {
     if (running) return
-    if (IS_DESKTOP) {
-      startFlowIPC(formValues)
-    } else {
-      startFlowWS(formValues)
-    }
-  }, [running, IS_DESKTOP, startFlowIPC, startFlowWS])
+    startFlowWS(formValues)
+  }, [running, startFlowWS])
 
   const sendUserResponse = useCallback(() => {
-    if (!executionId) return
-    if (IS_DESKTOP) {
-      const app = wailsApp()
-      if (app) {
-        app.FlowRespond(executionId, response)
-      }
-    } else if (wsRef.current) {
-      wsRef.current.send(JSON.stringify({
-        type: 'flow_user_response',
-        options: { execution_id: executionId, response: response },
-      }))
-    }
+    if (!executionId || !wsRef.current) return
+    wsRef.current.send(JSON.stringify({
+      type: 'flow_user_response',
+      options: { execution_id: executionId, response: response },
+    }))
     setWaitingUser(false)
     setResponse('')
-  }, [executionId, response, IS_DESKTOP])
+  }, [executionId, response])
 
   useEffect(() => {
     return () => {
       wsRef.current?.close()
-      if (wailsUnsubsRef.current.length > 0) {
-        wailsEventsOff(...wailsUnsubsRef.current.map(() => ''))
-        wailsUnsubsRef.current = []
-      }
     }
   }, [])
 

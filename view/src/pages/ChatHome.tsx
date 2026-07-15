@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { API_BASE, IS_DESKTOP } from '@/constants'
+import { API_BASE } from '@/constants'
 import { useFlowStore } from '@/stores/flowStore'
 import { MyRuntimeProvider, type ThreadMessageLike, type PendingFlow } from '@/components/assistant-ui/MyRuntimeProvider'
 import { Thread } from '@/components/assistant-ui/Thread'
@@ -50,22 +50,18 @@ export default function ChatHome() {
 
   useEffect(() => { fetchSessions(); fetchModels(); fetchFlows() }, [fetchSessions, fetchModels, fetchFlows])
 
-  // WebSocket connection (web mode only; desktop uses IPC)
+  // WebSocket connection
   useEffect(() => {
-    if (IS_DESKTOP) return
     let ws: WebSocket | null = null
     let reconnecting = false
     const connect = () => {
-      let wsUrl: string
-      if (API_BASE) {
-        // Wails dev mode: API_BASE is a full URL like http://localhost:19009
-        wsUrl = API_BASE.replace(/^http/, 'ws') + '/ws/chat'
-      } else {
-        const proto = location.protocol === 'https:' ? 'wss' : 'ws'
-        const isDev = location.port === '5173'
-        const wsHost = isDev ? `${location.hostname}:19009` : location.host
-        wsUrl = `${proto}://${wsHost}/ws/chat`
-      }
+      const proto = location.protocol === 'https:' ? 'wss' : 'ws'
+      const isDev = location.port === '5173'
+      // In Vite dev mode connect directly to the Go backend (port 19009).
+      // The Go server has CORS enabled for this.
+      // In production, the Go server serves the frontend on the same port.
+      const wsHost = isDev ? `${location.hostname}:19009` : location.host
+      const wsUrl = `${proto}://${wsHost}/ws/chat`
       ws = new WebSocket(wsUrl)
       wsRef.current = ws
       ws.onclose = () => {

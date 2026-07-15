@@ -1,8 +1,6 @@
 import { type ReactNode, useMemo } from 'react'
 import { AssistantRuntimeProvider, useLocalRuntime } from '@assistant-ui/react'
 import { createStreamingWebSocketAdapter } from './WebSocketAdapter'
-import { createIpcAdapter } from './IpcAdapter'
-import { IS_DESKTOP } from '@/constants'
 
 export interface ThreadMessageLike {
   role: 'assistant' | 'user' | 'system'
@@ -68,9 +66,6 @@ export function MyRuntimeProvider({
   const adapter = useMemo(
     () => {
       const base = { sessionId, modelId, thinkLevel, flowId, onSessionCreated, pendingFlow, onFlowResponseSent, onFlowWaiting, onFlowEnded, pendingQuestion, onQuestionAsked, onQuestionAnswered }
-      if (IS_DESKTOP) {
-        return createIpcAdapter(base)
-      }
       return createStreamingWebSocketAdapter({ getWs: getWs!, ...base })
     },
     [getWs, sessionId, modelId, thinkLevel, flowId, onSessionCreated, pendingFlow, onFlowResponseSent, onFlowWaiting, onFlowEnded, pendingQuestion, onQuestionAsked, onQuestionAnswered]

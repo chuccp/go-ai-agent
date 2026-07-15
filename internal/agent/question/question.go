@@ -70,7 +70,7 @@ type Service struct {
 
 // NewService creates a QuestionService. onAsk is invoked whenever a new
 // question is registered; the callback is responsible for forwarding the
-// request to the frontend (via WebSocket or Wails event).
+// request to the frontend via WebSocket.
 func NewService(onAsk func(req Request)) *Service {
 	return &Service{
 		pending: make(map[uint64]*pendingEntry),

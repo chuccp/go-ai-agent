@@ -22,7 +22,6 @@ export default function SetupWizard() {
   const [error, setError] = useState('')
   const [done, setDone] = useState(false)
   const [adminExists, setAdminExists] = useState(false)
-  const [isDesktop, setIsDesktop] = useState(false)
   const [dbConfigured, setDbConfigured] = useState(false)
   const [adminConfigured, setAdminConfigured] = useState(false)
 
@@ -40,9 +39,7 @@ export default function SetupWizard() {
     store.getSetupStatus().then((s: any) => {
       setDbConfigured(s.db_configured)
       setAdminConfigured(s.admin_configured)
-      setIsDesktop(s.mode === 'desktop')
       if (s.admin_configured) setAdminExists(true)
-      // Desktop mode: skip DB and admin steps entirely
       if (s.db_configured && s.admin_configured) setStep(2)
       else if (s.db_configured) setStep(1)
     })
@@ -134,28 +131,26 @@ export default function SetupWizard() {
         </div>
       </div>
 
-      {/* Steps indicator — web mode only */}
-      {!isDesktop && (
-        <div style={{ display: 'flex', gap: 32, marginBottom: 24, alignItems: 'center' }}>
-          {['database', 'admin', 'model'].map((s, i) => {
-            const done = (i === 0 && dbConfigured) || (i === 1 && adminConfigured)
-            const active = i === step
-            return (
-              <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={stepDot(active)}>{done ? '✓' : i + 1}</div>
-                <span style={done ? stepDone : stepLabel}>{t(`setup.steps.${s}`)}</span>
-                {i < 2 && <span style={{ color: '#d0d5dd' }}>—</span>}
-              </div>
-            )
-          })}
-        </div>
-      )}
+      {/* Steps indicator */}
+      <div style={{ display: 'flex', gap: 32, marginBottom: 24, alignItems: 'center' }}>
+        {['database', 'admin', 'model'].map((s, i) => {
+          const done = (i === 0 && dbConfigured) || (i === 1 && adminConfigured)
+          const active = i === step
+          return (
+            <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={stepDot(active)}>{done ? '✓' : i + 1}</div>
+              <span style={done ? stepDone : stepLabel}>{t(`setup.steps.${s}`)}</span>
+              {i < 2 && <span style={{ color: '#d0d5dd' }}>—</span>}
+            </div>
+          )
+        })}
+      </div>
 
       <div style={card}>
         {error && <div style={{ background: '#fef3f2', color: '#d92d20', padding: '8px 12px', borderRadius: 8, fontSize: 13, marginBottom: 12 }}>{error}</div>}
 
         {/* Step 0: Database */}
-        {step === 0 && !isDesktop && (
+        {step === 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div><label style={labelStyle}>{t('setup.db.dbType')}</label>
               <select value={dbType} onChange={e => setDbType(e.target.value)} style={inputStyle}>
@@ -199,7 +194,7 @@ export default function SetupWizard() {
         )}
 
         {/* Step 1: Admin */}
-        {step === 1 && !isDesktop && (
+        {step === 1 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div style={{ fontSize: 14, fontWeight: 600 }}>{t('setup.admin.createAdmin')}</div>
             <div style={{ fontSize: 13, color: '#676f83' }}>{adminExists ? t('setup.admin.existsHint') : t('setup.admin.adminHint')}</div>
@@ -225,7 +220,7 @@ export default function SetupWizard() {
             <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>{t('setup.model.configBase')}</div>
             <ModelForm form={modelForm} onChange={setModelForm} />
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
-              {!isDesktop && <button onClick={() => setStep(1)} style={btnStyle()}>{t('common.prev')}</button>}
+              <button onClick={() => setStep(1)} style={btnStyle()}>{t('common.prev')}</button>
               <button onClick={() => { store.completeSetup().then(() => nav('/')) }} style={btnStyle()}>{t('setup.skip')}</button>
               <button onClick={handleModelComplete} disabled={saving} style={btnStyle(true)}>
                 {saving ? t('setup.initializing') : t('setup.completeSetup')}
