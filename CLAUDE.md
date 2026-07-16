@@ -6,12 +6,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 # Build & run the server (port 19009)
-go build -o go-ai-agent ./main.go
+go build -o go-ai-agent ./cmd/server/
 ./go-ai-agent
 
 # Frontend dev (port 5173, proxies /api → 19009)
-cd view && pnpm dev
-cd view && pnpm build        # production build into view/dist/
+cd cmd/server/view && pnpm dev
+cd cmd/server/view && pnpm build        # production build into cmd/server/view/dist/
 ```
 
 The Go module depends on a local replacement: `go-web-frame` at `../go-web-frame`.
@@ -19,7 +19,7 @@ The Go module depends on a local replacement: `go-web-frame` at `../go-web-frame
 ## Architecture
 
 ```
-main.go → go-web-frame Builder
+cmd/server/main.go → go-web-frame Builder
   ├─ Services:  UnifiedChatService, GenService, FlowService, ToolRegistry
   ├─ Models:    ChatSession, ChatMessage, AIModel, Flow*, AdminUser
   ├─ Runners:   ChatRunner (WebSocket + agent), FlowRunner (DAG executor)

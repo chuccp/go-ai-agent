@@ -12,16 +12,16 @@ _desktop-dev-server:
 	CGO_LDFLAGS="-framework UniformTypeIdentifiers" go build -tags "wails dev" -o go-ai-agent-desktop . && ./go-ai-agent-desktop
 
 _desktop-dev-frontend:
-	cd view && pnpm dev
+	cd cmd/server/view && pnpm dev
 
 desktop-build:
-	cd view && pnpm build
+	cd cmd/server/view && pnpm build
 	CGO_LDFLAGS="-framework UniformTypeIdentifiers" go build -tags "wails production" -o go-ai-agent-desktop .
 
 # ── Server (web) ─────────────────────────────────────────────────────
 
 server-build:
-	cd view && pnpm build
+	cd cmd/server/view && pnpm build
 	go build -o go-ai-agent-server.exe ./cmd/server/
 
 server-run: server-build

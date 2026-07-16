@@ -30,20 +30,20 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
-/view/node_modules
+/cmd/server/view/node_modules
 /.idea
 *.yml
 /data
 go-ai-agent
 /build
-/view/wailsjs
-/view/package.json.md5
-/view/tsconfig.tsbuildinfo
-/view/dist
-/view/build
+/cmd/server/view/wailsjs
+/cmd/server/view/package.json.md5
+/cmd/server/view/tsconfig.tsbuildinfo
+/cmd/server/view/dist
+/cmd/server/view/build
 PLAN.md
-server
-go-ai-agent-server
+/server
+/go-ai-agent-server
 /.claude
 /.qoder
 go-ai-agent-desktop
