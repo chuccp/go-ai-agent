@@ -7,6 +7,7 @@ replace github.com/chuccp/go-web-frame => ../go-web-frame
 require (
 	github.com/chuccp/go-web-frame v1.0.12
 	github.com/chuccp/go-web-frame/component/cache v1.0.8
+	github.com/chuccp/go-web-frame/component/cors v1.0.14
 	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728
 	github.com/spf13/cast v1.10.0
 	github.com/xuri/excelize/v2 v2.11.0

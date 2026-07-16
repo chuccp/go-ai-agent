@@ -259,8 +259,11 @@ type WSResponse struct {
 
 // ==================== WebSocket entry point ====================
 
-func (r *ChatRunner) HandleWebSocket(stream *web.WebSocketStream) error {
-	stream.AcceptOptions.OriginPatterns = append(stream.AcceptOptions.OriginPatterns, "*")
+func (r *ChatRunner) HandleWebSocket(webSocket *web.WebSocket) error {
+	stream, err := webSocket.OpenStream(web.WithOriginPatterns("*"))
+	if err != nil {
+		return err
+	}
 	r.mu.Lock()
 	if len(r.activeConns) >= maxActiveConns {
 		r.mu.Unlock()
