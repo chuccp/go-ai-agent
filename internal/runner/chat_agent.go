@@ -82,7 +82,7 @@ When a user wants to run a flow:
 // ── wsSender (agent → WebSocket bridge) ──
 
 type wsSender struct {
-	stream   *web.WebSocketStream
+	stream     *web.WebSocketStream
 	runner     *ChatRunner
 	onChunk    func(content string, reasoning bool)
 	onDone     func()
@@ -145,7 +145,7 @@ func (r *ChatRunner) handleAgent(stream *web.WebSocketStream, req WSRequest) {
 
 	// Cancellable context — allows stop/disconnect to abort the agent loop
 	// and any blocking tool calls (e.g. run_flow waiting for user input).
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(stream.Context())
 	r.setAgentCancel(stream, cancel)
 	defer r.setAgentCancel(stream, nil)
 
