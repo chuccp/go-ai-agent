@@ -20,6 +20,13 @@ type ChatMessage struct {
 	ToolCallID   string        `json:"tool_call_id,omitempty"`  // Tool result message: ID of the tool call this responds to
 	Name         string        `json:"name,omitempty"`          // Tool result message: name of the tool
 }
+type ChatStreamMessage struct {
+	*ChatMessage
+}
+
+type Event struct {
+	Type string `json:"type"`
+}
 
 type ChatMessages struct {
 	model string
