@@ -1,4 +1,4 @@
-package llm
+package chat
 
 import (
 	"sync"
@@ -11,12 +11,19 @@ type LLMOptions struct {
 }
 
 type IChatService interface {
-	ChatWithStream(chatMessages *ChatMessages) (*ChatResponse, error)
+	ChatWithStream(chatMessages *Messages) (*Response, error)
 }
 
 type UnifiedChatService struct {
 	providerMap map[string]IChatService
-	rLock       sync.RWMutex
+	rLock       *sync.RWMutex
+}
+
+func NewUnifiedChatService() *UnifiedChatService {
+	return &UnifiedChatService{
+		providerMap: make(map[string]IChatService),
+		rLock:       new(sync.RWMutex),
+	}
 }
 
 func (service *UnifiedChatService) getProvider(provider string) IChatService {
@@ -28,7 +35,7 @@ func (service *UnifiedChatService) getProvider(provider string) IChatService {
 	return service.providerMap[provider]
 }
 
-func (service *UnifiedChatService) ChatWithStream(provider string, chatMessages *ChatMessages) (*ChatResponse, error) {
+func (service *UnifiedChatService) ChatWithStream(provider string, chatMessages *Messages) (*Response, error) {
 	chatService := service.getProvider(provider)
 	if chatService == nil {
 		return nil, errors.New("no such provider: " + provider)
