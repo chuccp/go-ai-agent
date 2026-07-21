@@ -1,103 +1,115 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
+	"os"
 	"strings"
-
-	tea "charm.land/bubbletea/v2"
 )
 
-// Model 是 Bubble Tea 的状态模型
 type Model struct {
-	messages []string // 已提交的消息列表
-	input    string   // 当前输入框内容
-	width    int      // 终端宽度
-	height   int      // 终端高度
+	messages []string
+	scanner  *bufio.Scanner
+	running  bool
+	handlers map[string]func(args []string) bool
 }
 
-func (m Model) Init() tea.Cmd {
-	return nil
+func New() *Model {
+	m := &Model{
+		scanner: bufio.NewScanner(os.Stdin),
+		running: true,
+	}
+	m.handlers = map[string]func(args []string) bool{
+		"/help":    m.cmdHelp,
+		"/history": m.cmdHistory,
+		"/clear":   m.cmdClear,
+		"/models":  m.cmdModels,
+		"/quit":    m.cmdQuit,
+	}
+	return m
 }
 
-func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
+func (m *Model) Run() {
+	fmt.Println("💬 Chat CLI  (type /help for commands, /quit to exit)")
+	fmt.Println(strings.Repeat("─", 60))
 
-	case tea.KeyPressMsg:
-		switch msg.String() {
-		case "ctrl+c", "esc":
-			return m, tea.Quit
-
-		case "enter":
-			if strings.TrimSpace(m.input) != "" {
-				m.messages = append(m.messages, m.input)
-				m.input = ""
-			}
-
-		case "backspace":
-			if len(m.input) > 0 {
-				m.input = m.input[:len(m.input)-1]
-			}
-
-		default:
-			// KeyPressMsg.Text 包含实际输入的字符
-			if msg.Text != "" {
-				m.input += msg.Text
-			}
+	for m.running {
+		fmt.Print("> ")
+		if !m.scanner.Scan() {
+			break
 		}
+		m.handle(m.scanner.Text())
 	}
 
-	return m, nil
+	if err := m.scanner.Err(); err != nil {
+		fmt.Println("Error:", err)
+	}
 }
 
-func (m Model) View() tea.View {
-	var b strings.Builder
-
-	// 标题
-	b.WriteString("💬 Bubble Tea Chat\n")
-	b.WriteString("Type a message and press Enter. Ctrl+C to quit.\n")
-	b.WriteString(strings.Repeat("─", m.width) + "\n")
-
-	// 消息列表（只显示最近的消息，适配窗口高度）
-	visibleLines := m.height - 6
-	if visibleLines < 1 {
-		visibleLines = 1
-	}
-	start := 0
-	if len(m.messages) > visibleLines {
-		start = len(m.messages) - visibleLines
-	}
-	for _, msg := range m.messages[start:] {
-		b.WriteString(fmt.Sprintf("  → %s\n", msg))
+func (m *Model) handle(line string) {
+	text := strings.TrimSpace(line)
+	if text == "" {
+		return
 	}
 
-	// 填充空白行
-	for i := len(m.messages[start:]); i < visibleLines; i++ {
-		b.WriteString("\n")
+	// 斜杠命令
+	if strings.HasPrefix(text, "/") {
+		parts := strings.Fields(text)
+		cmd := parts[0]
+		if fn, ok := m.handlers[cmd]; ok {
+			fn(parts[1:])
+		} else {
+			fmt.Printf("  Unknown command: %s (type /help)\n", cmd)
+		}
+		return
 	}
 
-	// 分隔线
-	divider := strings.Repeat("─", m.width)
-	if divider == "" {
-		divider = "────────────────────────────────────────"
-	}
-	b.WriteString(divider + "\n")
+	// 普通消息
+	m.messages = append(m.messages, text)
+	fmt.Printf("  → %s\n\n", text)
+}
 
-	// 输入行
-	if m.input == "" {
-		b.WriteString("> _\n")
-	} else {
-		b.WriteString(fmt.Sprintf("> %s\n", m.input))
-	}
+func (m *Model) cmdHelp(_ []string) bool {
+	fmt.Println("  Commands:")
+	fmt.Println("    /help       Show this help")
+	fmt.Println("    /history    Show chat history")
+	fmt.Println("    /clear      Clear chat history")
+	fmt.Println("    /models     List available AI models")
+	fmt.Println("    /quit       Exit program")
+	return true
+}
 
-	return tea.NewView(b.String())
+func (m *Model) cmdHistory(_ []string) bool {
+	if len(m.messages) == 0 {
+		fmt.Println("  (no messages yet)")
+		return true
+	}
+	for i, msg := range m.messages {
+		fmt.Printf("  [%d] %s\n", i+1, msg)
+	}
+	return true
+}
+
+func (m *Model) cmdClear(_ []string) bool {
+	m.messages = nil
+	fmt.Println("  ✓ Chat history cleared.")
+	return true
+}
+
+func (m *Model) cmdModels(_ []string) bool {
+	fmt.Println("  Available models:")
+	fmt.Println("    deepseek-v4-flash")
+	fmt.Println("    claude-opus-4-8")
+	fmt.Println("    gpt-4o")
+	return true
+}
+
+func (m *Model) cmdQuit(_ []string) bool {
+	fmt.Println("Bye!")
+	m.running = false
+	return false
 }
 
 func main() {
-	p := tea.NewProgram(Model{})
-	if _, err := p.Run(); err != nil {
-		fmt.Println("Error:", err)
-	}
+	New().Run()
 }
