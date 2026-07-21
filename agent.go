@@ -21,7 +21,7 @@ type innerChat struct {
 func (c *innerChat) getNewChat() *Chat {
 	return &Chat{}
 }
-func (c *innerChat) SendMessage(message *chat.ChatMessage) {
+func (c *innerChat) SendMessage(message *chat.Message) {
 
 }
 func (c *innerChat) process() {
@@ -60,26 +60,6 @@ func (m *ChatManager) GetChat(id string) *Chat {
 	inner.process()
 	m.chats[id] = inner
 	return inner.getNewChat()
-}
-
-type Builder struct {
-	chatManager *ChatManager
-}
-
-func NewBuilder() *Builder {
-	return &Builder{
-		chatManager: &ChatManager{
-			chats:              make(map[string]*innerChat),
-			lock:               new(sync.RWMutex),
-			unifiedChatService: chat.NewUnifiedChatService(),
-		},
-	}
-}
-func (b *Builder) AddChatService(provider string, chatService chat.IChatService) {
-	b.chatManager.RegisterLLM(provider, chatService)
-}
-func (b *Builder) Build() *ChatManager {
-	return b.chatManager
 }
 
 // Event 是 agent 内部流转的事件（非 Claude API 类型）。

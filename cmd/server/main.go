@@ -3,7 +3,7 @@ package main
 import (
 	"flag"
 
-	"github.com/chuccp/go-ai-agent/internal/app"
+	"github.com/chuccp/go-ai-agent/internal2/app"
 	"github.com/chuccp/go-web-frame/log"
 )
 

@@ -9,9 +9,9 @@ import "strings"
 
 // ToolFunction 是发给模型的工具定义。模型据此生成 tool_use content block。
 type ToolFunction struct {
-	Name        string         `json:"name"`                 // 工具名称（唯一标识）
-	Description string         `json:"description"`          // 工具功能描述（模型据此决定是否调用）
-	InputSchema map[string]any `json:"input_schema"`         // 输入参数的 JSON Schema
+	Name          string           `json:"name"`                     // 工具名称（唯一标识）
+	Description   string           `json:"description"`              // 工具功能描述（模型据此决定是否调用）
+	InputSchema   map[string]any   `json:"input_schema"`             // 输入参数的 JSON Schema
 	InputExamples []map[string]any `json:"input_examples,omitempty"` // 调用示例（可选）
 }
 
@@ -21,9 +21,9 @@ type ToolFunction struct {
 type ContentType string
 
 const (
-	ContentTypeText      ContentType = "text"
-	ContentTypeImage     ContentType = "image"
-	ContentTypeToolUse   ContentType = "tool_use"
+	ContentTypeText       ContentType = "text"
+	ContentTypeImage      ContentType = "image"
+	ContentTypeToolUse    ContentType = "tool_use"
 	ContentTypeToolResult ContentType = "tool_result"
 )
 
@@ -58,17 +58,17 @@ const (
 	RoleAssistant Role = "assistant"
 )
 
-// ChatMessage 是 messages 数组中的一条消息。
+// Message 是 messages 数组中的一条消息。
 // Content 为 block 数组（与 API 一致）；为兼容纯文本场景，Text 字段在内部可转换为单 text block。
-type ChatMessage struct {
+type Message struct {
 	Role    Role           `json:"role"`    // "user" | "assistant"
 	Content []ContentBlock `json:"content"` // content block 数组
 }
 
 // Text 便捷构造：生成一条纯文本 user 消息。
-func Text(text string) ChatMessage {
-	return ChatMessage{
-		Role: RoleUser,
+func Text(text string) Message {
+	return Message{
+		Role:    RoleUser,
 		Content: []ContentBlock{{Type: ContentTypeText, Text: text}},
 	}
 }
@@ -77,19 +77,19 @@ func Text(text string) ChatMessage {
 
 // Messages 是发给 Claude Messages API 的完整请求体。
 type Messages struct {
-	Model     string        `json:"model"`      // 模型 ID，如 "claude-opus-4-8"
-	MaxTokens int           `json:"max_tokens"` // 最大生成 token 数
-	Messages  []ChatMessage `json:"messages"`   // 对话历史（user/assistant 交替）
+	Model     string    `json:"model"`      // 模型 ID，如 "claude-opus-4-8"
+	MaxTokens int       `json:"max_tokens"` // 最大生成 token 数
+	Messages  []Message `json:"messages"`   // 对话历史（user/assistant 交替）
 
 	// 可选字段
-	System      string         `json:"system,omitempty"`       // 系统提示（独立于 messages）
-	Tools       []ToolFunction `json:"tools,omitempty"`        // 可用工具列表
-	Stream      bool           `json:"stream,omitempty"`       // 是否流式返回
-	Temperature *float64       `json:"temperature,omitempty"`  // 采样温度 (0,1]
-	TopP        *float64       `json:"top_p,omitempty"`        // nucleus 采样
-	TopK        *int           `json:"top_k,omitempty"`        // top-k 采样
-	StopSequences []string     `json:"stop_sequences,omitempty"` // 停止序列
-	Metadata    map[string]any `json:"metadata,omitempty"`     // 自定义元数据（不透传给模型）
+	System        string         `json:"system,omitempty"`         // 系统提示（独立于 messages）
+	Tools         []ToolFunction `json:"tools,omitempty"`          // 可用工具列表
+	Stream        bool           `json:"stream,omitempty"`         // 是否流式返回
+	Temperature   *float64       `json:"temperature,omitempty"`    // 采样温度 (0,1]
+	TopP          *float64       `json:"top_p,omitempty"`          // nucleus 采样
+	TopK          *int           `json:"top_k,omitempty"`          // top-k 采样
+	StopSequences []string       `json:"stop_sequences,omitempty"` // 停止序列
+	Metadata      map[string]any `json:"metadata,omitempty"`       // 自定义元数据（不透传给模型）
 }
 
 // ==================== Response ====================
@@ -98,22 +98,22 @@ type Messages struct {
 type StopReason string
 
 const (
-	StopReasonEndTurn   StopReason = "end_turn"   // 自然结束
-	StopReasonMaxTokens StopReason = "max_tokens" // 达到 max_tokens 上限
-	StopReasonToolUse   StopReason = "tool_use"   // 需要调用工具
+	StopReasonEndTurn   StopReason = "end_turn"      // 自然结束
+	StopReasonMaxTokens StopReason = "max_tokens"    // 达到 max_tokens 上限
+	StopReasonToolUse   StopReason = "tool_use"      // 需要调用工具
 	StopReasonStopSeq   StopReason = "stop_sequence" // 命中停止序列
 )
 
 // Response 是 Messages API 的非流式响应体。
 type Response struct {
-	ID           string        `json:"id"`            // 响应唯一 ID
-	Type         string        `json:"type"`          // 通常为 "message"
-	Role         string        `json:"role"`          // 通常为 "assistant"
-	Model        string        `json:"model"`         // 实际使用的模型
-	Content      []ContentBlock `json:"content"`      // 生成的 content block 数组
-	StopReason   StopReason    `json:"stop_reason"`   // 停止原因
-	StopSequence string        `json:"stop_sequence,omitempty"` // 命中的停止序列
-	Usage        Usage         `json:"usage"`         // token 用量
+	ID           string         `json:"id"`                      // 响应唯一 ID
+	Type         string         `json:"type"`                    // 通常为 "message"
+	Role         string         `json:"role"`                    // 通常为 "assistant"
+	Model        string         `json:"model"`                   // 实际使用的模型
+	Content      []ContentBlock `json:"content"`                 // 生成的 content block 数组
+	StopReason   StopReason     `json:"stop_reason"`             // 停止原因
+	StopSequence string         `json:"stop_sequence,omitempty"` // 命中的停止序列
+	Usage        Usage          `json:"usage"`                   // token 用量
 }
 
 // Usage 记录本次请求的 token 消耗。
