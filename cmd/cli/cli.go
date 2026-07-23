@@ -13,7 +13,10 @@ import (
 	"github.com/chuccp/go-web-frame/core"
 )
 
-type handleMsg func(tea.Msg) tea.Cmd
+type MessageQueue interface {
+	HandleMessage(msg string) bool
+	ReadMessage() string
+}
 
 // ── Styles ─────────────────────────────────────────────────────────────
 
@@ -72,7 +75,7 @@ type Model struct {
 	// Scroll offset (for future: PgUp/PgDn to scroll history)
 	scrollOffset int
 	ctx          *core.Context
-	handleMsg    handleMsg
+	handleMsg    MessageQueue
 }
 
 // streamTick advances the typewriter effect.
@@ -137,8 +140,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.messages = append(m.messages, Message{Role: "assistant", Content: response})
 				}
 			} else {
-				//m.messages = append(m.messages, Message{Role: "user", Content: text})
-				//m.startStreaming(text)
+				m.messages = append(m.messages, Message{Role: "user", Content: text})
+				m.startStreaming(text)
 			}
 			m.input.Reset()
 			return m, m.startStreamTick()
@@ -310,11 +313,35 @@ func (m Model) collectMessageLines() []string {
 	return lines
 }
 
-// ── Simple REPL fallback (no TTY required) ─────────────────────────────
+// ── Entry point ──────────────────────────────────────────────────────────
+
+// isTerminal returns true if stdin is a real terminal (not a pipe / redirect).
+// ModeCharDevice works cross-platform: Unix character device, Windows console handle.
+func isTerminal() bool {
+	stat, err := os.Stdin.Stat()
+	if err != nil {
+		return false
+	}
+	return (stat.Mode() & os.ModeCharDevice) != 0
+}
+
+// Run starts the UI, picking TUI or simple REPL based on terminal capability.
+func Run(ctx *core.Context, messageQueue MessageQueue) error {
+	model := NewModel(ctx)
+	if isTerminal() {
+		p := tea.NewProgram(model)
+		_, err := p.Run()
+		return err
+	}
+	RunSimpleREPL(messageQueue)
+	return nil
+}
+
+// ── Simple REPL (no TTY required) ─────────────────────────────────────────
 
 // RunSimpleREPL is a standard-library chat REPL that works in any terminal,
 // including IDE environments without /dev/tty (GoLand, etc.).
-func RunSimpleREPL() {
+func RunSimpleREPL(messageQueue MessageQueue) {
 	const (
 		Reset  = "\033[0m"
 		Bold   = "\033[1m"
@@ -378,25 +405,27 @@ func RunSimpleREPL() {
 			fmt.Print(style("> ", Green))
 			continue
 		}
+		if messageQueue.HandleMessage(text) {
+			// Chat message
+			messages = append(messages, Message{Role: "user", Content: text})
+			fmt.Printf("  %s %s\n", style("You:", Dim), text)
 
-		// Chat message
-		messages = append(messages, Message{Role: "user", Content: text})
-		fmt.Printf("  %s %s\n", style("You:", Dim), text)
+			// Simulated assistant response with typewriter effect
+			response := fmt.Sprintf(
+				"Received: %q. This is a simulated response — "+
+					"hook up a real AI provider later.", text,
+			)
+			fmt.Print(style("  🤖 Assistant:", Bold+Cyan) + "\n  ")
+			for _, ch := range response {
+				fmt.Print(string(ch))
+				time.Sleep(12 * time.Millisecond)
+			}
+			fmt.Println()
+			fmt.Println()
 
-		// Simulated assistant response with typewriter effect
-		response := fmt.Sprintf(
-			"Received: %q. This is a simulated response — "+
-				"hook up a real AI provider later.", text,
-		)
-		fmt.Print(style("  🤖 Assistant:", Bold+Cyan) + "\n  ")
-		for _, ch := range response {
-			fmt.Print(string(ch))
-			time.Sleep(12 * time.Millisecond)
+			messages = append(messages, Message{Role: "assistant", Content: response})
+			fmt.Print(style("> ", Green))
 		}
-		fmt.Println()
-		fmt.Println()
 
-		messages = append(messages, Message{Role: "assistant", Content: response})
-		fmt.Print(style("> ", Green))
 	}
 }

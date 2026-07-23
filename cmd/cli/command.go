@@ -1,30 +1,31 @@
 package main
 
 import (
-	"fmt"
-
-	tea "github.com/charmbracelet/bubbletea"
+	agent "github.com/chuccp/go-ai-agent"
 	"github.com/chuccp/go-web-frame/core"
 )
 
-// Update(Msg) (Model, Cmd)
-
 type Command struct {
 	core.IRunner
-	ctx   *core.Context
-	model *Model
+	ctx         *core.Context
+	chatManager *agent.ChatManager
 }
 
 func (receiver *Command) Init(ctx *core.Context) error {
 	receiver.ctx = ctx
-	receiver.model = NewModel(receiver.ctx)
+	receiver.chatManager = agent.NewChatManager()
+	receiver.chatManager.GetChat("default")
 	return nil
 }
+
+func (receiver *Command) HandleMessage(msg string) bool {
+
+	return false
+}
+func (receiver *Command) ReadMessage() string {
+	return ""
+}
+
 func (receiver *Command) Run() error {
-	p := tea.NewProgram(receiver.model)
-	if _, err := p.Run(); err != nil {
-		fmt.Printf("⚠ TTY not available, using simple mode.\n\n")
-		RunSimpleREPL()
-	}
-	return nil
+	return Run(receiver.ctx, receiver)
 }

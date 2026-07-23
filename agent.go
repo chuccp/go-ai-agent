@@ -34,6 +34,14 @@ type ChatManager struct {
 	unifiedChatService *chat.UnifiedChatService
 }
 
+func NewChatManager() *ChatManager {
+	return &ChatManager{
+		chats:              make(map[string]*innerChat),
+		lock:               new(sync.RWMutex),
+		unifiedChatService: chat.NewUnifiedChatService(),
+	}
+}
+
 func (m *ChatManager) RegisterLLM(provider string, chatService chat.IChatService) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
