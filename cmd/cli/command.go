@@ -2,6 +2,7 @@ package main
 
 import (
 	agent "github.com/chuccp/go-ai-agent"
+	"github.com/chuccp/go-ai-agent/internal/api/chat/anthropic"
 	"github.com/chuccp/go-web-frame/core"
 )
 
@@ -16,12 +17,15 @@ type Command struct {
 func (receiver *Command) Init(ctx *core.Context) error {
 	receiver.ctx = ctx
 	receiver.chatManager = agent.NewChatManager()
-	var chatConfigs []*ChatConfig
-	err := ctx.GetConfig().UnmarshalKey(configKey, chatConfigs)
+	chatConfigs, err := core.UnmarshalKeyConfig[[]*ChatConfig](configKey, ctx)
 	if err != nil {
 		return err
 	}
-	receiver.chatManager.GetChat("default")
+	for _, chatConfig := range chatConfigs {
+		provider := chatConfig.Name + "_" + chatConfig.Type
+		receiver.chatManager.RegisterLLM(provider, anthropic.NewService(&anthropic.Config{}))
+
+	}
 	return nil
 }
 

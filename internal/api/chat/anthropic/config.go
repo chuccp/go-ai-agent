@@ -1,4 +1,4 @@
-package claude
+package anthropic
 
 type Config struct {
 	BaseURL string `mapstructure:"baseUrl" yaml:"baseUrl" json:"baseUrl"`
