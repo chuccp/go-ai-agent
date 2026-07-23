@@ -1,20 +1,21 @@
 package main
 
-import wf "github.com/chuccp/go-web-frame"
+import (
+	wf "github.com/chuccp/go-web-frame"
+	"github.com/chuccp/go-web-frame/config"
+)
 
-//	func main() {
-//		p := tea.NewProgram(NewModel(), tea.WithInput(os.Stdin))
-//		if _, err := p.Run(); err != nil {
-//			fmt.Printf("⚠ TTY not available, using simple mode.\n\n")
-//			RunSimpleREPL()
-//		}
-//	}
 func main() {
-	builder := wf.NewBuilder()
+
+	loadConfig, err := config.LoadConfig("./application.yml")
+	if err != nil {
+		return
+	}
+	builder := wf.NewBuilder(loadConfig)
 	builder.Runner(&Command{})
 	frame := builder.Build()
-	err := frame.Start()
-	if err != nil {
+	err0 := frame.Start()
+	if err0 != nil {
 		return
 	}
 }
