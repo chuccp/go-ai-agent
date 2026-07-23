@@ -19,32 +19,32 @@ type handleMsg func(tea.Msg) tea.Cmd
 
 var (
 	titleStyle = lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("205")).
-		Padding(0, 1)
+			Bold(true).
+			Foreground(lipgloss.Color("205")).
+			Padding(0, 1)
 
 	dividerStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("240"))
+			Foreground(lipgloss.Color("240"))
 
 	promptStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("42")).
-		Bold(true)
+			Foreground(lipgloss.Color("42")).
+			Bold(true)
 
 	userStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("243"))
+			Foreground(lipgloss.Color("243"))
 
 	assistantStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("117")).
-		Bold(true)
+			Foreground(lipgloss.Color("117")).
+			Bold(true)
 
 	assistantTextStyle = lipgloss.NewStyle().
-		PaddingLeft(2)
+				PaddingLeft(2)
 
 	cmdStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("221"))
+			Foreground(lipgloss.Color("221"))
 
 	dimStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("243"))
+			Foreground(lipgloss.Color("243"))
 )
 
 // ── Message ────────────────────────────────────────────────────────────
