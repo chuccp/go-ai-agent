@@ -42,7 +42,7 @@ func NewService(config *Config) Service {
 }
 
 // ChatWithStream 向 Anthropic Messages API 发送流式请求，
-// 收集所有 SSE 事件并聚合为单个 *chat.Response 返回。
+// 返回一个可逐事件读取的 *chat.Response。
 func (s *serviceImpl) ChatWithStream(chatMessages *chat.Messages) (*chat.Response, error) {
 	// 应用配置中的默认值
 	s.applyDefaults(chatMessages)
@@ -58,17 +58,22 @@ func (s *serviceImpl) ChatWithStream(chatMessages *chat.Messages) (*chat.Respons
 	if err != nil {
 		return nil, fmt.Errorf("HTTP request failed: %w", err)
 	}
-	defer r.RawResponse.Body.Close()
 
 	if r.StatusCode() != 200 {
 		body, readErr := io.ReadAll(r.RawResponse.Body)
+		r.RawResponse.Body.Close()
 		if readErr != nil {
 			return nil, fmt.Errorf("API error (%d), failed to read body: %w", r.StatusCode(), readErr)
 		}
 		return nil, fmt.Errorf("API error (%d): %s", r.StatusCode(), string(body))
 	}
 
-	return s.parseSSE(r.RawResponse.Body)
+	events := make(chan chat.Event, 16)
+	resp := chat.NewResponse(events)
+
+	go s.parseSSE(r.RawResponse.Body, events)
+
+	return resp, nil
 }
 
 // applyDefaults 将 Config 中的默认值填入请求。
@@ -81,9 +86,9 @@ func (s *serviceImpl) applyDefaults(m *chat.Messages) {
 	}
 }
 
-// -------- SSE 解析 --------
+// -------- SSE 解析（goroutine 中运行） --------
 
-// sseEvent 表示 Anthropic 流式响应中的一条 SSE 事件。
+// sseEvent 表示 Anthropic 流式响应中的一条原始 SSE 事件。
 type sseEvent struct {
 	Type         string             `json:"type"`
 	Index        int                `json:"index"`
@@ -101,21 +106,19 @@ type sseDelta struct {
 }
 
 type sseMessage struct {
-	ID        string             `json:"id"`
-	Type      string             `json:"type"`
-	Role      string             `json:"role"`
-	Model     string             `json:"model"`
-	Usage     chat.Usage         `json:"usage"`
-	StopReason chat.StopReason   `json:"stop_reason"`
+	ID         string         `json:"id"`
+	Type       string         `json:"type"`
+	Role       string         `json:"role"`
+	Model      string         `json:"model"`
+	Usage      chat.Usage     `json:"usage"`
+	StopReason chat.StopReason `json:"stop_reason"`
 }
 
-// parseSSE 从 HTTP 响应体中读取 SSE 事件流并聚合成 chat.Response。
-func (s *serviceImpl) parseSSE(body io.Reader) (*chat.Response, error) {
-	resp := &chat.Response{}
-	// 当前正在构建的 tool_use block
-	var curToolID, curToolName string
-	var curToolArgs strings.Builder
-	inToolBlock := false
+// parseSSE 从 HTTP 响应体中读取 SSE 事件流，转换为 chat.Event 并发送到 channel。
+// 解析完成后关闭 channel。
+func (s *serviceImpl) parseSSE(body io.ReadCloser, events chan<- chat.Event) {
+	defer close(events)
+	defer body.Close()
 
 	scanner := bufio.NewScanner(body)
 	for scanner.Scan() {
@@ -125,79 +128,62 @@ func (s *serviceImpl) parseSSE(body io.Reader) (*chat.Response, error) {
 		}
 		data := strings.TrimPrefix(line, "data: ")
 
-		var evt sseEvent
-		if err := json.Unmarshal([]byte(data), &evt); err != nil {
+		var raw sseEvent
+		if err := json.Unmarshal([]byte(data), &raw); err != nil {
 			continue
 		}
 
-		switch evt.Type {
+		switch raw.Type {
 		case "message_start":
-			if evt.Message != nil {
-				resp.ID = evt.Message.ID
-				resp.Type = evt.Message.Type
-				resp.Role = evt.Message.Role
-				resp.Model = evt.Message.Model
-				resp.Usage = evt.Message.Usage
+			if raw.Message != nil {
+				events <- &chat.MessageStartEvent{
+					ID:    raw.Message.ID,
+					Model: raw.Message.Model,
+					Role:  raw.Message.Role,
+					Usage: raw.Message.Usage,
+				}
 			}
 
 		case "content_block_start":
-			if evt.ContentBlock != nil && evt.ContentBlock.Type == chat.ContentTypeToolUse {
-				inToolBlock = true
-				curToolID = evt.ContentBlock.ID
-				curToolName = evt.ContentBlock.Name
-				curToolArgs.Reset()
+			if raw.ContentBlock != nil {
+				events <- &chat.ContentBlockStartEvent{
+					Index:        raw.Index,
+					ContentBlock: *raw.ContentBlock,
+				}
 			}
 
 		case "content_block_delta":
-			if evt.Delta == nil {
-				continue
-			}
-			switch evt.Delta.Type {
-			case "text_delta":
-				// 追加到最后一个 text block；若不存在则新建
-				if n := len(resp.Content); n > 0 && resp.Content[n-1].Type == chat.ContentTypeText {
-					resp.Content[n-1].Text += evt.Delta.Text
-				} else {
-					resp.Content = append(resp.Content, chat.ContentBlock{
-						Type: chat.ContentTypeText,
-						Text: evt.Delta.Text,
-					})
+			if raw.Delta != nil {
+				events <- &chat.ContentBlockDeltaEvent{
+					Index: raw.Index,
+					Delta: chat.ContentDelta{
+						Type:        raw.Delta.Type,
+						Text:        raw.Delta.Text,
+						PartialJSON: raw.Delta.PartialJSON,
+					},
 				}
-			case "input_json_delta":
-				curToolArgs.WriteString(evt.Delta.PartialJSON)
 			}
 
 		case "content_block_stop":
-			if inToolBlock {
-				var input any
-				if argsStr := curToolArgs.String(); argsStr != "" {
-					_ = json.Unmarshal([]byte(argsStr), &input)
-				}
-				resp.Content = append(resp.Content, chat.ContentBlock{
-					Type:  chat.ContentTypeToolUse,
-					ID:    curToolID,
-					Name:  curToolName,
-					Input: input,
-				})
-				inToolBlock = false
-			}
+			events <- &chat.ContentBlockStopEvent{Index: raw.Index}
 
 		case "message_delta":
-			if evt.Delta != nil {
-				resp.StopReason = chat.StopReason(evt.Delta.StopReason)
+			evt := &chat.MessageDeltaEvent{}
+			if raw.Delta != nil {
+				evt.StopReason = chat.StopReason(raw.Delta.StopReason)
 			}
-			if evt.Usage != nil {
-				resp.Usage.OutputTokens = evt.Usage.OutputTokens
+			if raw.Usage != nil {
+				evt.Usage = *raw.Usage
 			}
+			events <- evt
 
 		case "message_stop":
-			// 流结束，无需额外处理
+			events <- &chat.MessageStopEvent{}
+			return // 流正常结束
 		}
 	}
 
 	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("SSE stream read error: %w", err)
+		events <- &chat.ErrorEvent{Err: fmt.Errorf("SSE stream read error: %w", err)}
 	}
-
-	return resp, nil
 }
