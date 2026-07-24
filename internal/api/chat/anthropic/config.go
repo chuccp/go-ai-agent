@@ -1,5 +1,7 @@
 package anthropic
 
+const TYPE = "anthropic"
+
 type Config struct {
 	BaseURL string `mapstructure:"baseUrl" yaml:"baseUrl" json:"baseUrl"`
 	APIKey  string `mapstructure:"apiKey" yaml:"apiKey" json:"apiKey"`

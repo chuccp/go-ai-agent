@@ -15,14 +15,16 @@ type IChatService interface {
 }
 
 type UnifiedChatService struct {
-	providerMap map[string]IChatService
-	rLock       *sync.RWMutex
+	providerMap  map[string]IChatService
+	rLock        *sync.RWMutex
+	chatServices []IChatService
 }
 
 func NewUnifiedChatService() *UnifiedChatService {
 	return &UnifiedChatService{
-		providerMap: make(map[string]IChatService),
-		rLock:       new(sync.RWMutex),
+		providerMap:  make(map[string]IChatService),
+		rLock:        new(sync.RWMutex),
+		chatServices: make([]IChatService, 0),
 	}
 }
 
@@ -49,4 +51,5 @@ func (service *UnifiedChatService) Register(provider string, chatService IChatSe
 		service.providerMap = make(map[string]IChatService)
 	}
 	service.providerMap[provider] = chatService
+	service.chatServices = append(service.chatServices, chatService)
 }

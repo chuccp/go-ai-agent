@@ -6,4 +6,5 @@ type ChatConfig struct {
 	BaseUrl string
 	ApiKey  string
 	Model   string
+	Default bool
 }
