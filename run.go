@@ -27,64 +27,90 @@ func (b *blockBuilder) finalize() chat.ContentBlock {
 	return b.block
 }
 
+// blockCollector 管理流式 content block 的累积：持有当前正在构建的 block 和已完成的 block 列表。
+type blockCollector struct {
+	current *blockBuilder
+	blocks  []chat.ContentBlock
+}
+
+// start 开始构建一个新的 content block（自动 flush 上一个）。
+func (c *blockCollector) start(block chat.ContentBlock) {
+	c.flush()
+	c.current = &blockBuilder{block: block}
+}
+
+// flush 完成当前 block 并将其加入列表。
+func (c *blockCollector) flush() {
+	if c.current != nil {
+		c.blocks = append(c.blocks, c.current.finalize())
+		c.current = nil
+	}
+}
+
+// appendText 向当前 block 追加文本增量。
+func (c *blockCollector) appendText(text string) {
+	if c.current != nil {
+		c.current.block.Text += text
+	}
+}
+
+// appendJSON 向当前 block 追加 input_json_delta 片段。
+func (c *blockCollector) appendJSON(fragment string) {
+	if c.current != nil {
+		c.current.rawJSON.WriteString(fragment)
+	}
+}
+
+// take 返回所有已累积的 block（先 flush 当前未完成的）。
+func (c *blockCollector) take() []chat.ContentBlock {
+	c.flush()
+	return c.blocks
+}
+
 // streamResponse 消费 SSE 流，返回所有 content block 和 stop_reason。
 // 同时在消费过程中通过 addEvent 向外广播文本增量。
 func (s *chatSession) streamResponse(resp *chat.Response) (blocks []chat.ContentBlock, stopReason chat.StopReason, err error) {
-	var current *blockBuilder
-
-	appendBlock := func() {
-		if current != nil {
-			blocks = append(blocks, current.finalize())
-			current = nil
-		}
-	}
+	var c blockCollector
 
 	for evt := resp.ReadEvent(); evt != nil; evt = resp.ReadEvent() {
 		switch e := evt.(type) {
 		case *chat.ContentBlockStartEvent:
-			appendBlock()
-			current = &blockBuilder{
-				block: chat.ContentBlock{
-					Type: e.ContentBlock.Type,
-					ID:   e.ContentBlock.ID,
-					Name: e.ContentBlock.Name,
-				},
-			}
+			c.start(chat.ContentBlock{
+				Type: e.ContentBlock.Type,
+				ID:   e.ContentBlock.ID,
+				Name: e.ContentBlock.Name,
+			})
 
 		case *chat.ContentBlockDeltaEvent:
-			if current == nil {
-				continue
-			}
 			switch e.Delta.Type {
 			case "text_delta":
-				current.block.Text += e.Delta.Text
+				c.appendText(e.Delta.Text)
 				s.addEvent(&Event{
 					Type:           EventTypeChunk,
 					Content:        e.Delta.Text,
 					ConversationID: s.id,
 				})
 			case "input_json_delta":
-				current.rawJSON.WriteString(e.Delta.PartialJSON)
+				c.appendJSON(e.Delta.PartialJSON)
 			}
 
 		case *chat.ContentBlockStopEvent:
-			appendBlock()
+			c.flush()
 
 		case *chat.MessageDeltaEvent:
 			stopReason = e.StopReason
 
 		case *chat.ErrorEvent:
 			s.addEvent(&Event{Type: EventTypeError, Message: e.Error(), Done: true})
-			return blocks, stopReason, e.Err
+			return c.take(), stopReason, e.Err
 
 		case *chat.MessageStopEvent:
-			appendBlock()
-			return blocks, stopReason, nil
+			return c.take(), stopReason, nil
 		}
 	}
 
 	// 流异常中断（ReadEvent 返回 nil 但未收到 MessageStop）
-	return blocks, stopReason, nil
+	return c.take(), stopReason, nil
 }
 
 // executeTools 执行 tool_use blocks 中的工具，返回 tool_result blocks。
