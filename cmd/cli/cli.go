@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -16,8 +15,7 @@ import (
 
 type MessageQueue interface {
 	HandleMessage(msg string) bool
-	ReadMessage() string
-	TryReadEvent() *agent.Event
+	ReadEvent() *agent.Event
 }
 
 // ── Styles ─────────────────────────────────────────────────────────────
@@ -184,11 +182,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // ── Streaming ──────────────────────────────────────────────────────────
 
-// pollEventCmd 轮询事件，返回 chatEventMsg
+// pollEventCmd 阻塞等待事件（在独立 goroutine 中运行），返回 chatEventMsg
 func pollEventCmd(mq MessageQueue) tea.Cmd {
 	return func() tea.Msg {
-		time.Sleep(30 * time.Millisecond)
-		event := mq.TryReadEvent()
+		event := mq.ReadEvent()
 		return chatEventMsg{event: event}
 	}
 }
@@ -399,14 +396,14 @@ func RunSimpleREPL(messageQueue MessageQueue) {
 			messages = append(messages, Message{Role: "user", Content: text})
 			fmt.Printf("  %s %s\n", style("You:", Dim), text)
 
-			// 流式读取 AI 响应
+			// 流式读取 AI 响应（ReadEvent 已改为阻塞，无需轮询）
 			fmt.Print(style("  🤖 Assistant:", Bold+Cyan) + "\n  ")
 			var response strings.Builder
 			for {
-				event := messageQueue.TryReadEvent()
+				event := messageQueue.ReadEvent()
 				if event == nil {
-					time.Sleep(30 * time.Millisecond)
-					continue
+					// 队列已关闭
+					break
 				}
 				switch event.Type {
 				case agent.EventTypeChunk:
@@ -415,6 +412,7 @@ func RunSimpleREPL(messageQueue MessageQueue) {
 				case agent.EventTypeError:
 					fmt.Print(style("\n  [Error] "+event.Message, Red))
 					response.WriteString("[Error] " + event.Message)
+					goto done
 				case agent.EventTypeDone:
 					goto done
 				}

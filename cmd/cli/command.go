@@ -1,8 +1,6 @@
 package main
 
 import (
-	"time"
-
 	agent "github.com/chuccp/go-ai-agent"
 	"github.com/chuccp/go-ai-agent/internal/api/chat/anthropic"
 	"github.com/chuccp/go-web-frame/core"
@@ -25,6 +23,7 @@ func (receiver *Command) Init(ctx *core.Context) error {
 	if err != nil {
 		return err
 	}
+	receiver.chatManager.AddTool(agent.NewExecuteCommandTool())
 	for _, chatConfig := range chatConfigs {
 		provider := chatConfig.Name + "_" + chatConfig.Type + "_" + chatConfig.Model
 		if util.EqualsAnyIgnoreCase(chatConfig.Type, anthropic.TYPE) {
@@ -43,29 +42,7 @@ func (receiver *Command) HandleMessage(msg string) bool {
 	err := receiver.chat.SendText(msg)
 	return err == nil
 }
-
-// ReadMessage 阻塞读取事件直到 done/error，返回完整响应文本
-func (receiver *Command) ReadMessage() string {
-	var result string
-	for {
-		event := receiver.chat.ReadEvent()
-		if event == nil {
-			time.Sleep(30 * time.Millisecond)
-			continue
-		}
-		switch event.Type {
-		case agent.EventTypeChunk:
-			result += event.Content
-		case agent.EventTypeError:
-			return "[Error] " + event.Message
-		case agent.EventTypeDone:
-			return result
-		}
-	}
-}
-
-// TryReadEvent 非阻塞读取单个事件，无新事件返回 nil
-func (receiver *Command) TryReadEvent() *agent.Event {
+func (receiver *Command) ReadEvent() *agent.Event {
 	return receiver.chat.ReadEvent()
 }
 
