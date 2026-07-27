@@ -34,7 +34,7 @@ type TimeWheelLog struct {
 }
 
 type bucket struct {
-	queue *SliceQueue
+	queue *SliceQueue[*Timer]
 	lock  *sync.Mutex
 }
 
@@ -49,11 +49,7 @@ func (tw *TimeWheel) addTimer(index int32, timer *Timer) {
 func (b *bucket) read() (*Timer, error) {
 	b.lock.Lock()
 	defer b.lock.Unlock()
-	read, err := b.queue.Read()
-	if err != nil {
-		return nil, err
-	}
-	return read.(*Timer), nil
+	return b.queue.Read()
 }
 func (b *bucket) len() int {
 	b.lock.Lock()
@@ -183,7 +179,7 @@ func NewTimeWheel(tickSeconds int32, bucketsNum int32) *TimeWheel {
 	timeWheel.ctx, timeWheel.cancel = context.WithCancel(context.Background())
 	timeWheel.buckets = make([]*bucket, bucketsNum)
 	for i := 0; i < int(bucketsNum); i++ {
-		timeWheel.buckets[i] = &bucket{queue: new(SliceQueue), lock: new(sync.Mutex)}
+		timeWheel.buckets[i] = &bucket{queue: new(SliceQueue[*Timer]), lock: new(sync.Mutex)}
 	}
 	timeWheel.timeWheelLog = make([]*TimeWheelLog, logNum)
 	timeWheel.logIndex = 0

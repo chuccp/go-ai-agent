@@ -8,7 +8,7 @@ import (
 var ErrQueueClosed = errors.New("queue closed")
 
 type Queue struct {
-	sliceQueue *SliceQueue
+	sliceQueue *SliceQueue[any]
 	lock       *sync.RWMutex
 	waitNum    int32
 	flag       chan bool
@@ -106,7 +106,7 @@ func (queue *Queue) Dequeue() (value any, hasValue bool) {
 // NewQueue 创建一个新的 Queue。
 func NewQueue() *Queue {
 	return &Queue{
-		sliceQueue: new(SliceQueue),
+		sliceQueue: new(SliceQueue[any]),
 		lock:       new(sync.RWMutex),
 		flag:       make(chan bool),
 	}

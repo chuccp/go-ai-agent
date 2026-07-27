@@ -18,6 +18,7 @@ type UnifiedChatService struct {
 	providerMap  map[string]IChatService
 	rLock        *sync.RWMutex
 	chatServices []IChatService
+	provider     string
 }
 
 func NewUnifiedChatService() *UnifiedChatService {
@@ -44,7 +45,7 @@ func (service *UnifiedChatService) ChatWithStream(provider string, chatMessages 
 	}
 	return chatService.ChatWithStream(chatMessages)
 }
-func (service *UnifiedChatService) Register(provider string, chatService IChatService) {
+func (service *UnifiedChatService) Register(provider string, chatService IChatService, isDefault bool) {
 	service.rLock.Lock()
 	defer service.rLock.Unlock()
 	if service.providerMap == nil {
@@ -52,4 +53,13 @@ func (service *UnifiedChatService) Register(provider string, chatService IChatSe
 	}
 	service.providerMap[provider] = chatService
 	service.chatServices = append(service.chatServices, chatService)
+	if len(service.provider) == 0 {
+		service.provider = provider
+	}
+	if isDefault {
+		service.provider = provider
+	}
+}
+func (service *UnifiedChatService) DefaultProvider() string {
+	return service.provider
 }

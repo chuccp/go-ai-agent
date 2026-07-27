@@ -19,37 +19,42 @@ var errNegativeRead = errors.New("sliceQueue: reader returned negative count fro
 
 const maxInt = int(^uint(0) >> 1)
 
-type SliceQueueSafe struct {
-	sliceQueue *SliceQueue
+type SliceQueueSafe[T any] struct {
+	sliceQueue *SliceQueue[T]
 	lock       *sync.Mutex
 }
 
-func NewSliceQueueSafe() *SliceQueueSafe {
-	return &SliceQueueSafe{sliceQueue: new(SliceQueue), lock: new(sync.Mutex)}
+func NewSliceQueueSafe[T any]() *SliceQueueSafe[T] {
+	return &SliceQueueSafe[T]{sliceQueue: new(SliceQueue[T]), lock: new(sync.Mutex)}
 }
-func (sqs *SliceQueueSafe) Reset() {
+func (sqs *SliceQueueSafe[T]) Reset() {
 	sqs.lock.Lock()
 	defer sqs.lock.Unlock()
 	sqs.sliceQueue.Reset()
 }
-func (sqs *SliceQueueSafe) Write(c any) error {
+func (sqs *SliceQueueSafe[T]) Write(c T) error {
 	sqs.lock.Lock()
 	defer sqs.lock.Unlock()
 	return sqs.sliceQueue.Write(c)
 }
-func (sqs *SliceQueueSafe) Read() (any, error) {
+func (sqs *SliceQueueSafe[T]) Read() (T, error) {
 	sqs.lock.Lock()
 	defer sqs.lock.Unlock()
 	return sqs.sliceQueue.Read()
 }
+func (sqs *SliceQueueSafe[T]) Len() int {
+	sqs.lock.Lock()
+	defer sqs.lock.Unlock()
+	return sqs.sliceQueue.Len()
+}
 
-type SliceQueue struct {
-	buf      []any
+type SliceQueue[T any] struct {
+	buf      []T
 	off      int
 	lastRead readOp
 }
 
-func (b *SliceQueue) tryGrowByReslice(n int) (int, bool) {
+func (b *SliceQueue[T]) tryGrowByReslice(n int) (int, bool) {
 	if l := len(b.buf); n <= cap(b.buf)-l {
 		b.buf = b.buf[:l+n]
 		return l, true
@@ -57,13 +62,13 @@ func (b *SliceQueue) tryGrowByReslice(n int) (int, bool) {
 	return 0, false
 }
 
-func (b *SliceQueue) Reset() {
+func (b *SliceQueue[T]) Reset() {
 	b.buf = b.buf[:0]
 	b.off = 0
 	b.lastRead = opInvalid
 }
-func (b *SliceQueue) Len() int { return len(b.buf) - b.off }
-func (b *SliceQueue) grow(n int) int {
+func (b *SliceQueue[T]) Len() int { return len(b.buf) - b.off }
+func (b *SliceQueue[T]) grow(n int) int {
 	m := b.Len()
 	if m == 0 && b.off != 0 {
 		b.Reset()
@@ -72,7 +77,7 @@ func (b *SliceQueue) grow(n int) int {
 		return i
 	}
 	if b.buf == nil && n <= sliceSmallBufferSize {
-		b.buf = make([]any, n, sliceSmallBufferSize)
+		b.buf = make([]T, n, sliceSmallBufferSize)
 		return 0
 	}
 	c := cap(b.buf)
@@ -88,7 +93,7 @@ func (b *SliceQueue) grow(n int) int {
 	return m
 }
 
-func growSlice(b []any, n int) []any {
+func growSlice[T any](b []T, n int) []T {
 	defer func() {
 		if recover() != nil {
 			panic(ErrTooLarge)
@@ -98,23 +103,24 @@ func growSlice(b []any, n int) []any {
 	if c < 2*cap(b) {
 		c = 2 * cap(b)
 	}
-	b2 := append([]any(nil), make([]any, c)...)
+	b2 := append([]T(nil), make([]T, c)...)
 	copy(b2, b)
 	return b2[:len(b)]
 }
 
-func (b *SliceQueue) empty() bool { return len(b.buf) <= b.off }
-func (b *SliceQueue) Read() (any, error) {
+func (b *SliceQueue[T]) empty() bool { return len(b.buf) <= b.off }
+func (b *SliceQueue[T]) Read() (T, error) {
 	if b.empty() {
 		b.Reset()
-		return 0, io.EOF
+		var zero T
+		return zero, io.EOF
 	}
 	c := b.buf[b.off]
 	b.off++
 	b.lastRead = opRead
 	return c, nil
 }
-func (b *SliceQueue) Write(c any) error {
+func (b *SliceQueue[T]) Write(c T) error {
 	b.lastRead = opInvalid
 	m, ok := b.tryGrowByReslice(1)
 	if !ok {
@@ -122,19 +128,4 @@ func (b *SliceQueue) Write(c any) error {
 	}
 	b.buf[m] = c
 	return nil
-}
-
-var poolSliceQueue = &sync.Pool{
-	New: func() interface{} {
-		return new(SliceQueue)
-	},
-}
-
-func GetSliceQueue() *SliceQueue {
-	sliceQueue := poolSliceQueue.Get().(*SliceQueue)
-	sliceQueue.Reset()
-	return sliceQueue
-}
-func FreeSliceQueue(sliceQueue *SliceQueue) {
-	poolSliceQueue.Put(sliceQueue)
 }

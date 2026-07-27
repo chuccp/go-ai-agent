@@ -10,12 +10,14 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	agent "github.com/chuccp/go-ai-agent"
 	"github.com/chuccp/go-web-frame/core"
 )
 
 type MessageQueue interface {
 	HandleMessage(msg string) bool
 	ReadMessage() string
+	TryReadEvent() *agent.Event
 }
 
 // ── Styles ─────────────────────────────────────────────────────────────
@@ -59,6 +61,9 @@ type Message struct {
 
 // ── Model ──────────────────────────────────────────────────────────────
 
+// chatEventMsg 从事件轮询 goroutine 传递给 TUI 的消息
+type chatEventMsg struct{ event *agent.Event }
+
 // Model is the Bubble Tea model for the chat TUI.
 type Model struct {
 	messages []Message
@@ -69,17 +74,13 @@ type Model struct {
 
 	// Streaming state
 	streaming  bool
-	streamFull string
-	streamPos  int
+	streamText string
 
 	// Scroll offset (for future: PgUp/PgDn to scroll history)
 	scrollOffset int
 	ctx          *core.Context
 	handleMsg    MessageQueue
 }
-
-// streamTick advances the typewriter effect.
-type streamTick time.Time
 
 // NewModel creates a new chat Model.
 func NewModel(ctx *core.Context) *Model {
@@ -141,10 +142,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			} else {
 				m.messages = append(m.messages, Message{Role: "user", Content: text})
-				m.startStreaming(text)
+				m.handleMsg.HandleMessage(text)
+				m.streaming = true
+				m.streamText = ""
 			}
 			m.input.Reset()
-			return m, m.startStreamTick()
+			return m, pollEventCmd(m.handleMsg)
 
 		default:
 			var cmd tea.Cmd
@@ -152,25 +155,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, cmd)
 		}
 
-	case streamTick:
-		if m.streaming {
-			advance := 3
-			if remaining := len(m.streamFull) - m.streamPos; advance > remaining {
-				advance = remaining
-			}
-			m.streamPos += advance
-
-			if m.streamPos >= len(m.streamFull) {
-				m.messages = append(m.messages, Message{
-					Role:    "assistant",
-					Content: m.streamFull,
-				})
-				m.streaming = false
-				m.streamFull = ""
-				m.streamPos = 0
-				return m, nil
-			}
-			return m, tickCmd()
+	case chatEventMsg:
+		if msg.event == nil {
+			// 无新事件，继续轮询
+			return m, pollEventCmd(m.handleMsg)
+		}
+		switch msg.event.Type {
+		case agent.EventTypeChunk:
+			m.streamText += msg.event.Content
+			return m, pollEventCmd(m.handleMsg)
+		case agent.EventTypeError:
+			m.messages = append(m.messages, Message{Role: "assistant", Content: "[Error] " + msg.event.Message})
+			m.streaming = false
+			m.streamText = ""
+			return m, nil
+		case agent.EventTypeDone:
+			m.messages = append(m.messages, Message{Role: "assistant", Content: m.streamText})
+			m.streaming = false
+			m.streamText = ""
+			return m, nil
+		default:
+			return m, pollEventCmd(m.handleMsg)
 		}
 	}
 
@@ -179,26 +184,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // ── Streaming ──────────────────────────────────────────────────────────
 
-func tickCmd() tea.Cmd {
-	return tea.Tick(15*time.Millisecond, func(t time.Time) tea.Msg {
-		return streamTick(t)
-	})
-}
-
-func (m *Model) startStreaming(userText string) {
-	m.streamFull = fmt.Sprintf(
-		"I received: %q\n\nThis is a simulated response. "+
-			"Hook up a real AI provider to get actual responses. "+
-			"The streaming typewriter effect works — each character "+
-			"appears one by one just like Claude Code does.",
-		userText,
-	)
-	m.streamPos = 0
-	m.streaming = true
-}
-
-func (m *Model) startStreamTick() tea.Cmd {
-	return tickCmd()
+// pollEventCmd 轮询事件，返回 chatEventMsg
+func pollEventCmd(mq MessageQueue) tea.Cmd {
+	return func() tea.Msg {
+		time.Sleep(30 * time.Millisecond)
+		event := mq.TryReadEvent()
+		return chatEventMsg{event: event}
+	}
 }
 
 // ── Commands ───────────────────────────────────────────────────────────
@@ -255,13 +247,9 @@ func (m Model) View() string {
 	// Include streaming partial text
 	if m.streaming {
 		streamHeader := assistantStyle.Render("  🤖 Assistant:")
-		partial := m.streamFull[:m.streamPos]
-		cursor := ""
-		if m.streamPos < len(m.streamFull) {
-			cursor = lipgloss.NewStyle().Foreground(lipgloss.Color("117")).Render("▊")
-		}
+		cursor := lipgloss.NewStyle().Foreground(lipgloss.Color("117")).Render("▊")
 		lines = append(lines, streamHeader)
-		for _, l := range strings.Split(assistantTextStyle.Render(partial+cursor), "\n") {
+		for _, l := range strings.Split(assistantTextStyle.Render(m.streamText+cursor), "\n") {
 			lines = append(lines, l)
 		}
 	}
@@ -327,8 +315,9 @@ func isTerminal() bool {
 
 // Run starts the UI, picking TUI or simple REPL based on terminal capability.
 func Run(ctx *core.Context, messageQueue MessageQueue) error {
-	model := NewModel(ctx)
 	if isTerminal() {
+		model := NewModel(ctx)
+		model.handleMsg = messageQueue
 		p := tea.NewProgram(model)
 		_, err := p.Run()
 		return err
@@ -410,20 +399,31 @@ func RunSimpleREPL(messageQueue MessageQueue) {
 			messages = append(messages, Message{Role: "user", Content: text})
 			fmt.Printf("  %s %s\n", style("You:", Dim), text)
 
-			// Simulated assistant response with typewriter effect
-			response := fmt.Sprintf(
-				"Received: %q. This is a simulated response — "+
-					"hook up a real AI provider later.", text,
-			)
+			// 流式读取 AI 响应
 			fmt.Print(style("  🤖 Assistant:", Bold+Cyan) + "\n  ")
-			for _, ch := range response {
-				fmt.Print(string(ch))
-				time.Sleep(12 * time.Millisecond)
+			var response strings.Builder
+			for {
+				event := messageQueue.TryReadEvent()
+				if event == nil {
+					time.Sleep(30 * time.Millisecond)
+					continue
+				}
+				switch event.Type {
+				case agent.EventTypeChunk:
+					fmt.Print(event.Content)
+					response.WriteString(event.Content)
+				case agent.EventTypeError:
+					fmt.Print(style("\n  [Error] "+event.Message, Red))
+					response.WriteString("[Error] " + event.Message)
+				case agent.EventTypeDone:
+					goto done
+				}
 			}
+		done:
 			fmt.Println()
 			fmt.Println()
 
-			messages = append(messages, Message{Role: "assistant", Content: response})
+			messages = append(messages, Message{Role: "assistant", Content: response.String()})
 			fmt.Print(style("> ", Green))
 		}
 
