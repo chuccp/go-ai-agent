@@ -70,12 +70,12 @@ func (c *blockCollector) take() []chat.ContentBlock {
 // streamResponse 消费 SSE 流，返回所有 content block 和 stop_reason。
 // 同时在消费过程中通过 addEvent 向外广播文本增量。
 func (s *chatSession) streamResponse(resp *chat.Response) (blocks []chat.ContentBlock, stopReason chat.StopReason, err error) {
-	var c blockCollector
+	var collector blockCollector
 
 	for evt := resp.ReadEvent(); evt != nil; evt = resp.ReadEvent() {
 		switch e := evt.(type) {
 		case *chat.ContentBlockStartEvent:
-			c.start(chat.ContentBlock{
+			collector.start(chat.ContentBlock{
 				Type: e.ContentBlock.Type,
 				ID:   e.ContentBlock.ID,
 				Name: e.ContentBlock.Name,
@@ -84,33 +84,33 @@ func (s *chatSession) streamResponse(resp *chat.Response) (blocks []chat.Content
 		case *chat.ContentBlockDeltaEvent:
 			switch e.Delta.Type {
 			case "text_delta":
-				c.appendText(e.Delta.Text)
+				collector.appendText(e.Delta.Text)
 				s.addEvent(&Event{
 					Type:           EventTypeChunk,
 					Content:        e.Delta.Text,
 					ConversationID: s.id,
 				})
 			case "input_json_delta":
-				c.appendJSON(e.Delta.PartialJSON)
+				collector.appendJSON(e.Delta.PartialJSON)
 			}
 
 		case *chat.ContentBlockStopEvent:
-			c.flush()
+			collector.flush()
 
 		case *chat.MessageDeltaEvent:
 			stopReason = e.StopReason
 
 		case *chat.ErrorEvent:
 			s.addEvent(&Event{Type: EventTypeError, Message: e.Error(), Done: true})
-			return c.take(), stopReason, e.Err
+			return collector.take(), stopReason, e.Err
 
 		case *chat.MessageStopEvent:
-			return c.take(), stopReason, nil
+			return collector.take(), stopReason, nil
 		}
 	}
 
 	// 流异常中断（ReadEvent 返回 nil 但未收到 MessageStop）
-	return c.take(), stopReason, nil
+	return collector.take(), stopReason, nil
 }
 
 // executeTools 执行 tool_use blocks 中的工具，返回 tool_result blocks。
