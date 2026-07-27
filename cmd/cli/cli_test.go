@@ -42,7 +42,7 @@ func TestFullChatFlow(t *testing.T) {
 	cmd := newTestCommand(t)
 
 	// 发送一条简单消息
-	sent := cmd.HandleMessage("用中文简短回答：1+1等于几？不要调用工具。")
+	sent := cmd.HandleMessage("评价一个 凡人修仙传？不要调用工具。")
 	if !sent {
 		t.Fatal("HandleMessage 返回 false，消息发送失败")
 	}
