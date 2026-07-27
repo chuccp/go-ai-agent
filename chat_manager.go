@@ -24,6 +24,8 @@ func NewChatManager() *ChatManager {
 }
 
 func (m *ChatManager) AddTool(exec ToolExecutor) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
 	m.toolExecutors[exec.Definition().Name] = exec
 }
 
