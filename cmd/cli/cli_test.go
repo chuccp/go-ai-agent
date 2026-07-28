@@ -121,7 +121,7 @@ func TestMultipleMessages(t *testing.T) {
 			t.Fatalf("[%s] AI 返回空响应", round.desc)
 		}
 		if strings.Contains(result, "[Error]") {
-			t.Fatalf("[%s] AI 返回错误: %s", round.desc)
+			t.Fatalf("[%s] AI 返回错误: %s", round.desc, result)
 		}
 		if round.mustHave != "" && !strings.Contains(result, round.mustHave) {
 			t.Fatalf("[%s] 回复中缺少关键词 %q，上下文丢失。\n实际回复: %s", round.desc, round.mustHave, result)
