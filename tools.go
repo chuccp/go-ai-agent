@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chuccp/go-ai-agent/chat"
+	"github.com/chuccp/go-agent-sdk/chat"
 )
 
 // ToolExecutor 工具执行器接口：定义工具的元数据（发给 LLM）和执行逻辑。

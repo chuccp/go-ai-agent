@@ -6,7 +6,7 @@ import (
 	"log"
 	"strings"
 
-	"github.com/chuccp/go-ai-agent/chat"
+	"github.com/chuccp/go-agent-sdk/chat"
 )
 
 // blockBuilder 在流式接收过程中累积构建一个 content block。

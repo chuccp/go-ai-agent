@@ -3,7 +3,7 @@ package agent
 import (
 	"sync"
 
-	"github.com/chuccp/go-ai-agent/chat"
+	"github.com/chuccp/go-agent-sdk/chat"
 )
 
 // ChatManager 聊天会话管理器

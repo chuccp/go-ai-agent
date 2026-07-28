@@ -4,8 +4,8 @@ import (
 	"log"
 	"sync"
 
-	"github.com/chuccp/go-ai-agent/chat"
-	"github.com/chuccp/go-ai-agent/util"
+	"github.com/chuccp/go-agent-sdk/chat"
+	"github.com/chuccp/go-agent-sdk/util"
 )
 
 // chatSession 完整会话实体，管理消息队列、对话历史和 LLM 调用

@@ -3,8 +3,8 @@ package agent
 import (
 	"sync"
 
-	"github.com/chuccp/go-ai-agent/chat"
-	"github.com/chuccp/go-ai-agent/util"
+	"github.com/chuccp/go-agent-sdk/chat"
+	"github.com/chuccp/go-agent-sdk/util"
 )
 
 const (

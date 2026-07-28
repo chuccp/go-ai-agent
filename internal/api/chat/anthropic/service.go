@@ -7,7 +7,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/chuccp/go-ai-agent/chat"
+	"github.com/chuccp/go-agent-sdk/chat"
 	"resty.dev/v3"
 )
 
