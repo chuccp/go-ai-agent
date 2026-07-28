@@ -9,7 +9,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	agent "github.com/chuccp/go-ai-agent"
+	"github.com/chuccp/go-agent-sdk/agent"
 	"github.com/chuccp/go-web-frame/core"
 )
 

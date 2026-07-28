@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	agent "github.com/chuccp/go-ai-agent"
+	"github.com/chuccp/go-agent-sdk/agent"
 	"github.com/chuccp/go-web-frame/config"
 	"github.com/chuccp/go-web-frame/core"
 )

@@ -7,7 +7,10 @@ replace github.com/chuccp/go-web-frame => ../go-web-frame
 replace github.com/chuccp/go-agent-sdk => ../go-agent-sdk
 
 require (
-	emperror.dev/errors v0.8.1
+	github.com/charmbracelet/bubbles v1.0.0
+	github.com/charmbracelet/bubbletea v1.3.10
+	github.com/charmbracelet/lipgloss v1.1.0
+	github.com/chuccp/go-agent-sdk v0.0.0-20260728055118-449d238dd391
 	github.com/chuccp/go-web-frame v1.0.12
 	github.com/chuccp/go-web-frame/component/cache v1.0.8
 	github.com/chuccp/go-web-frame/component/cors v1.0.14
@@ -22,20 +25,17 @@ require (
 )
 
 require (
+	emperror.dev/errors v0.8.1 // indirect
 	filippo.io/edwards25519 v1.2.0 // indirect
 	github.com/atotto/clipboard v0.1.4 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/bytedance/gopkg v0.1.4 // indirect
 	github.com/bytedance/sonic v1.15.2 // indirect
 	github.com/bytedance/sonic/loader v0.5.1 // indirect
-	github.com/charmbracelet/bubbles v1.0.0 // indirect
-	github.com/charmbracelet/bubbletea v1.3.10 // indirect
 	github.com/charmbracelet/colorprofile v0.4.1 // indirect
-	github.com/charmbracelet/lipgloss v1.1.0 // indirect
 	github.com/charmbracelet/x/ansi v0.11.6 // indirect
 	github.com/charmbracelet/x/cellbuf v0.0.15 // indirect
 	github.com/charmbracelet/x/term v0.2.2 // indirect
-	github.com/chuccp/go-agent-sdk v0.0.0-20260728055118-449d238dd391 // indirect
 	github.com/clipperhouse/displaywidth v0.9.0 // indirect
 	github.com/clipperhouse/stringish v0.1.1 // indirect
 	github.com/clipperhouse/uax29/v2 v2.5.0 // indirect

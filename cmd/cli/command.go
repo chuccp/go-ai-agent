@@ -1,7 +1,7 @@
 package main
 
 import (
-	agent "github.com/chuccp/go-ai-agent"
+	"github.com/chuccp/go-agent-sdk/agent"
 	"github.com/chuccp/go-ai-agent/internal/api/chat/anthropic"
 	"github.com/chuccp/go-web-frame/core"
 	"github.com/chuccp/go-web-frame/util"
