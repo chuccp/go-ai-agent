@@ -207,12 +207,13 @@ func (s *chatSession) run() {
 
 			continue
 
-		default:
+		default: // end_turn
 			s.history = append(s.history, chat.Message{
 				Role:    chat.RoleAssistant,
 				Content: textBlocks(blocks),
 			})
 			s.addEvent(&Event{Type: EventTypeDone, Done: true, ConversationID: s.id})
+			return
 		}
 	}
 }

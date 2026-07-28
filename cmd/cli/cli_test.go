@@ -85,11 +85,29 @@ func TestMultipleMessages(t *testing.T) {
 	cmd := newTestCommand(t)
 
 	rounds := []struct {
-		msg  string
-		desc string
+		msg      string
+		mustHave string // 回复中必须包含的关键词，用于验证上下文
+		mustNot  string // 回复中禁止出现的内容
+		desc     string
 	}{
-		{"用中文简短回答：什么是 Go 语言？一句话。", "第一轮"},
-		{"它和 Rust 的主要区别是什么？也是一句话。", "第二轮（多轮对话）"},
+		{
+			msg:      "请记住：我最喜欢的编程语言是 Go。只需要回复 已记住 。",
+			mustHave: "已记住",
+			mustNot:  "",
+			desc:     "第一轮（设置上下文）",
+		},
+		{
+			msg:      "我刚才说我最喜欢的编程语言是什么？一句话回答。",
+			mustHave: "Go",
+			mustNot:  "",
+			desc:     "第二轮（验证上下文）",
+		},
+		{
+			msg:      "把它的名字全部改成大写告诉我。",
+			mustHave: "GO",
+			mustNot:  "",
+			desc:     "第三轮（深度引用上下文）",
+		},
 	}
 
 	for _, round := range rounds {
@@ -103,7 +121,13 @@ func TestMultipleMessages(t *testing.T) {
 			t.Fatalf("[%s] AI 返回空响应", round.desc)
 		}
 		if strings.Contains(result, "[Error]") {
-			t.Fatalf("[%s] AI 返回错误: %s", round.desc, result)
+			t.Fatalf("[%s] AI 返回错误: %s", round.desc)
+		}
+		if round.mustHave != "" && !strings.Contains(result, round.mustHave) {
+			t.Fatalf("[%s] 回复中缺少关键词 %q，上下文丢失。\n实际回复: %s", round.desc, round.mustHave, result)
+		}
+		if round.mustNot != "" && strings.Contains(result, round.mustNot) {
+			t.Fatalf("[%s] 回复中包含禁止内容 %q。\n实际回复: %s", round.desc, round.mustNot, result)
 		}
 
 		t.Logf("[%s] ✅ %s", round.desc, result)
