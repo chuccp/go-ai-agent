@@ -58,20 +58,44 @@ func (b *bucket) len() int {
 }
 
 type Timer struct {
-	C       <-chan bool
-	c       chan<- bool
+	C      <-chan bool
+	c      chan bool
+	onFire func()
+	mu     sync.Mutex
 	isClose int32
 }
 
 func (t *Timer) run() {
+	t.mu.Lock()
 	if atomic.CompareAndSwapInt32(&t.isClose, 0, 1) {
-		close(t.c)
+		fn := t.onFire
+		t.onFire = nil
+		t.mu.Unlock()
+		if fn != nil {
+			fn()
+		}
+		if t.c != nil {
+			close(t.c)
+		}
+	} else {
+		t.mu.Unlock()
 	}
 }
+
 func (t *Timer) Close() {
-	if atomic.CompareAndSwapInt32(&t.isClose, 0, 1) {
-		close(t.c)
+	t.run()
+}
+
+// OnFire 注册回调，timer 到期时在时间轮协程中执行。若已到期则直接调用。
+func (t *Timer) OnFire(fn func()) {
+	t.mu.Lock()
+	if t.isClose == 1 {
+		t.mu.Unlock()
+		fn()
+		return
 	}
+	t.onFire = fn
+	t.mu.Unlock()
 }
 
 func (tw *TimeWheel) GetLog() []*TimeWheelLog {
@@ -89,8 +113,8 @@ func (tw *TimeWheel) NewTimer(tickSeconds int32) *Timer {
 		index = index + 1
 	}
 
-	c := make(chan bool, 1)
-	timer := &Timer{C: c, c: c}
+	ch := make(chan bool, 1)
+	timer := &Timer{C: ch, c: ch}
 
 	// 原子读 readerIndex，避免与 scheduler 的数据竞争
 	ri := atomic.LoadInt32(&tw.readerIndex)
@@ -104,6 +128,32 @@ func (tw *TimeWheel) NewTimer(tickSeconds int32) *Timer {
 	newRi := atomic.LoadInt32(&tw.readerIndex)
 	if ri != newRi && isBetween(ri, newRi, vIndex) {
 		// 目标 bucket 已被越过，立即触发
+		timer.run()
+	}
+
+	return timer
+}
+
+// NewCallbackTimer 创建一个无 channel 的 Timer，仅支持 OnFire 回调。
+// 相比 NewTimer 不会分配 chan bool，适合回调模式（如 sync.Cond 场景）。
+func (tw *TimeWheel) NewCallbackTimer(tickSeconds int32) *Timer {
+	index := tickSeconds / tw.tick
+	y := tickSeconds % tw.tick
+	if y > 0 {
+		index = index + 1
+	}
+
+	timer := &Timer{}
+
+	ri := atomic.LoadInt32(&tw.readerIndex)
+	vIndex := index + ri
+	if vIndex >= tw.bucketsNum {
+		vIndex = vIndex - tw.bucketsNum
+	}
+	tw.addTimer(vIndex, timer)
+
+	newRi := atomic.LoadInt32(&tw.readerIndex)
+	if ri != newRi && isBetween(ri, newRi, vIndex) {
 		timer.run()
 	}
 
