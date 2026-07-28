@@ -26,7 +26,7 @@ func (receiver *Command) Init(ctx *core.Context) error {
 	receiver.chatManager.AddTool(agent.NewExecuteCommandTool())
 	for _, chatConfig := range chatConfigs {
 		provider := chatConfig.Name + "_" + chatConfig.Type + "_" + chatConfig.Model
-		if util.EqualsAnyIgnoreCase(chatConfig.Type, anthropic.TYPE) {
+		if util.EqualsAnyIgnoreCase(chatConfig.Type, anthropic.TYPE, "claude") {
 			receiver.chatManager.RegisterLLM(provider, anthropic.NewService(&anthropic.Config{
 				BaseURL: chatConfig.BaseUrl,
 				APIKey:  chatConfig.ApiKey,
