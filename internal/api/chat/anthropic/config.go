@@ -1,6 +1,6 @@
 package anthropic
 
-const TYPE = "anthropic"
+var TYPE = []string{"anthropic", "claude"}
 
 type Config struct {
 	BaseURL string `mapstructure:"baseUrl" yaml:"baseUrl" json:"baseUrl"`

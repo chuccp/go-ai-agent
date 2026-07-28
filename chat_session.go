@@ -72,17 +72,20 @@ func (s *chatSession) SendMessage(message *chat.Message) error {
 	return nil
 }
 
-// build 从队列中取出所有待处理消息，追加到历史记录，构建 LLM 请求
+// build 从队列中取出所有待处理消息，追加到历史记录，构建 LLM 请求。
+// 如果队列中没有新消息，返回 nil，goroutine 退出等待下次 SendMessage 重新启动。
 func (s *chatSession) build() *chat.Messages {
+	var hasNew bool
 	for {
 		msg, err := s.revQueue.Read()
 		if err != nil {
 			break
 		}
 		s.history = append(s.history, *msg)
+		hasNew = true
 	}
 
-	if len(s.history) == 0 {
+	if !hasNew {
 		return nil
 	}
 
