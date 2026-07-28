@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/chuccp/go-agent-sdk/agent"
+	"github.com/chuccp/go-ai-agent/cmd/server/entity"
+	"github.com/chuccp/go-ai-agent/cmd/server/model"
 	"github.com/chuccp/go-ai-agent/cmd/server/runner"
 	"github.com/chuccp/go-web-frame/core"
 	"github.com/chuccp/go-web-frame/log"
@@ -28,33 +30,92 @@ type connState struct {
 // It handles all WebSocket I/O (connect, read, write, disconnect) and
 // delegates to the go-agent-sdk ChatRunner for the actual LLM work.
 type ChatRest struct {
-	context     *core.Context
-	chatRunner  *runner.ChatRunner
-	activeConns map[string]*connState
-	mu          sync.Mutex
-	connSeq     int64
-}
-
-// NewChatRest creates a new ChatRest instance.
-func NewChatRest() *ChatRest {
-	return &ChatRest{
-		activeConns: make(map[string]*connState),
-	}
+	context      *core.Context
+	chatRunner   *runner.ChatRunner
+	sessionModel *model.ChatSessionModel
+	messageModel *model.ChatMessageModel
+	activeConns  map[string]*connState
+	mu           sync.Mutex
+	connSeq      int64
 }
 
 // Init registers all chat-related routes on the web framework context.
 func (c *ChatRest) Init(ctx *core.Context) error {
 	c.context = ctx
+	c.activeConns = make(map[string]*connState)
 	c.chatRunner = core.GetRunner[*runner.ChatRunner](ctx)
+	c.sessionModel = core.GetModel[*model.ChatSessionModel](ctx)
+	c.messageModel = core.GetModel[*model.ChatMessageModel](ctx)
 
-	// WebSocket — real-time chat streaming
+	// Session CRUD
+	ctx.Get("/api/chat/sessions", c.listSessions)
+	ctx.Post("/api/chat/sessions", c.createSession)
+	ctx.Delete("/api/chat/sessions/:id", c.deleteSession)
+	ctx.Get("/api/chat/sessions/:id/messages", c.getSessionMessages)
+
 	ctx.WebSocket("/ws/chat", c.HandleWebSocket)
-
-	// REST — health check
 	ctx.Get("/api/chat/health", c.health)
-
 	log.Info("Chat REST routes registered (go-agent-sdk)", zap.String("ws", "/ws/chat"))
 	return nil
+}
+
+// ── Session REST handlers ─────────────────────────────────────────────
+
+// listSessions returns all chat sessions ordered by most recently updated.
+func (c *ChatRest) listSessions(request *web.Request) (any, error) {
+	sessions, err := c.sessionModel.Query().
+		Order("updated_at desc").
+		All()
+	if err != nil {
+		return nil, err
+	}
+	return web.Data(sessions), nil
+}
+
+// createSession creates a new chat session with an optional title.
+func (c *ChatRest) createSession(request *web.Request) (any, error) {
+	title := "New Chat"
+	if jsonObj, err := request.Json(); err == nil {
+		if t := jsonObj.GetString("title"); t != "" {
+			title = t
+		}
+	}
+
+	session := &entity.ChatSession{Title: title}
+	if err := c.sessionModel.WithContext(request.Ctx()).Save(session); err != nil {
+		return nil, err
+	}
+	return web.Data(session), nil
+}
+
+// deleteSession deletes a session and all its messages.
+func (c *ChatRest) deleteSession(request *web.Request) (any, error) {
+	id := request.ParamUint("id")
+
+	// Delete all messages in this session
+	err := c.messageModel.WithContext(request.Ctx()).
+		Delete().Where("session_id = ?", id).Delete()
+	if err != nil {
+		return nil, err
+	}
+	// Delete the session itself
+	if err := c.sessionModel.WithContext(request.Ctx()).DeleteByPK(id); err != nil {
+		return nil, err
+	}
+	return web.Ok("deleted"), nil
+}
+
+// getSessionMessages returns all messages for a session ordered by creation time.
+func (c *ChatRest) getSessionMessages(request *web.Request) (any, error) {
+	sessionId := request.ParamUint("id")
+	messages, err := c.messageModel.Query().
+		Where("session_id = ?", sessionId).
+		Order("created_at asc").
+		All()
+	if err != nil {
+		return nil, err
+	}
+	return web.Data(messages), nil
 }
 
 // ── WebSocket handler ──────────────────────────────────────────────────
@@ -105,8 +166,9 @@ func (c *ChatRest) HandleWebSocket(webSocket *web.WebSocket) error {
 		}
 
 		var req struct {
-			Type    string `json:"type"`
-			Message string `json:"message"`
+			Type      string `json:"type"`
+			Message   string `json:"message"`
+			SessionId uint   `json:"session_id"`
 		}
 		if err := json.Unmarshal(message, &req); err != nil {
 			c.sendJSON(stream, agent.Event{
@@ -127,7 +189,7 @@ func (c *ChatRest) HandleWebSocket(webSocket *web.WebSocket) error {
 				})
 				continue
 			}
-			c.handleChat(connID, stream, req.Message)
+			c.handleChat(connID, stream, req.Message, req.SessionId)
 		case "stop":
 			c.stopConn(connID)
 		default:
@@ -144,11 +206,22 @@ func (c *ChatRest) HandleWebSocket(webSocket *web.WebSocket) error {
 
 // handleChat sends a user message to the chat session for this connection.
 // It stops any previous chat on the same connection first (one active chat at a time).
-func (c *ChatRest) handleChat(connID string, stream *web.WebSocketStream, message string) {
+// chatSessionKey returns the session key for the ChatManager.
+// Uses sessionId if provided, otherwise falls back to connID.
+func chatSessionKey(connID string, sessionId uint) string {
+	if sessionId > 0 {
+		return fmt.Sprintf("session-%d", sessionId)
+	}
+	return connID
+}
+
+// handleChat sends a user message to the chat session for this connection.
+// It stops any previous chat on the same connection first (one active chat at a time).
+func (c *ChatRest) handleChat(connID string, stream *web.WebSocketStream, message string, sessionId uint) {
 	// Stop any existing chat on this connection before starting a new one.
 	c.stopConn(connID)
 
-	client := c.chatRunner.GetChat(connID)
+	client := c.chatRunner.GetChat(chatSessionKey(connID, sessionId))
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -258,9 +331,9 @@ func (c *ChatRest) health(_ *web.Request) (any, error) {
 	conns := len(c.activeConns)
 	c.mu.Unlock()
 	return web.Data(map[string]any{
-		"status":        "ok",
-		"engine":        "go-agent-sdk",
-		"active_conns":  conns,
-		"server_time":   time.Now().Format(time.RFC3339),
+		"status":       "ok",
+		"engine":       "go-agent-sdk",
+		"active_conns": conns,
+		"server_time":  time.Now().Format(time.DateTime),
 	}), nil
 }
