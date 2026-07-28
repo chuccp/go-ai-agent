@@ -6,18 +6,27 @@ import (
 	"sync"
 )
 
-type readOp int8
-
-const (
-	opRead    readOp = -1
-	opInvalid readOp = 0
-)
-const sliceSmallBufferSize = 64
+const initialCap = 64
 
 var ErrTooLarge = errors.New("sliceQueue: too large")
-var errNegativeRead = errors.New("sliceQueue: reader returned negative count from Read")
 
+// maxInt is the maximum int value on this platform.
 const maxInt = int(^uint(0) >> 1)
+
+// nextPow2 returns the smallest power of two >= n.
+func nextPow2(n int) int {
+	if n <= 0 {
+		return 1
+	}
+	n--
+	n |= n >> 1
+	n |= n >> 2
+	n |= n >> 4
+	n |= n >> 8
+	n |= n >> 16
+	n |= n >> 32
+	return n + 1
+}
 
 type SliceQueueSafe[T any] struct {
 	sliceQueue *SliceQueue[T]
@@ -48,84 +57,79 @@ func (sqs *SliceQueueSafe[T]) Len() int {
 	return sqs.sliceQueue.Len()
 }
 
+// SliceQueue is a generic ring buffer queue.
+// Zero value is valid — first Write allocates the initial buffer.
 type SliceQueue[T any] struct {
-	buf      []T
-	off      int
-	lastRead readOp
+	buf   []T
+	read  int // next element to read
+	write int // next slot to write
+	count int // number of elements in the queue
 }
 
-func (b *SliceQueue[T]) tryGrowByReslice(n int) (int, bool) {
-	if l := len(b.buf); n <= cap(b.buf)-l {
-		b.buf = b.buf[:l+n]
-		return l, true
-	}
-	return 0, false
+// Len returns the number of elements in the queue.
+func (q *SliceQueue[T]) Len() int { return q.count }
+
+// Reset clears the queue, retaining the underlying buffer for reuse.
+func (q *SliceQueue[T]) Reset() {
+	q.read = 0
+	q.write = 0
+	q.count = 0
 }
 
-func (b *SliceQueue[T]) Reset() {
-	b.buf = b.buf[:0]
-	b.off = 0
-	b.lastRead = opInvalid
-}
-func (b *SliceQueue[T]) Len() int { return len(b.buf) - b.off }
-func (b *SliceQueue[T]) grow(n int) int {
-	m := b.Len()
-	if m == 0 && b.off != 0 {
-		b.Reset()
+func (q *SliceQueue[T]) cap() int { return cap(q.buf) }
+func (q *SliceQueue[T]) mask() int { return q.cap() - 1 }
+
+func (q *SliceQueue[T]) full() bool { return q.count == q.cap() }
+func (q *SliceQueue[T]) empty() bool { return q.count == 0 }
+
+// grow doubles the capacity and reorders elements linearly.
+func (q *SliceQueue[T]) grow() {
+	c := q.cap()
+	newCap := c * 2
+	if c == 0 {
+		newCap = initialCap
 	}
-	if i, ok := b.tryGrowByReslice(n); ok {
-		return i
-	}
-	if b.buf == nil && n <= sliceSmallBufferSize {
-		b.buf = make([]T, n, sliceSmallBufferSize)
-		return 0
-	}
-	c := cap(b.buf)
-	if n <= c/2-m {
-		copy(b.buf, b.buf[b.off:])
-	} else if c > maxInt-c-n {
+	if newCap > maxInt {
 		panic(ErrTooLarge)
-	} else {
-		b.buf = growSlice(b.buf[b.off:], b.off+n)
 	}
-	b.off = 0
-	b.buf = b.buf[:m+n]
-	return m
-}
 
-func growSlice[T any](b []T, n int) []T {
-	defer func() {
-		if recover() != nil {
-			panic(ErrTooLarge)
+	// allocate power-of-2 size for efficient & modulus
+	newCap = nextPow2(newCap)
+	newBuf := make([]T, newCap)
+	if q.count > 0 {
+		first := q.read
+		end := q.read + q.count
+		if end <= c {
+			copy(newBuf, q.buf[first:end])
+		} else {
+			n := copy(newBuf, q.buf[first:])
+			copy(newBuf[n:], q.buf[:end-c])
 		}
-	}()
-	c := len(b) + n
-	if c < 2*cap(b) {
-		c = 2 * cap(b)
 	}
-	b2 := append([]T(nil), make([]T, c)...)
-	copy(b2, b)
-	return b2[:len(b)]
+	q.buf = newBuf
+	q.read = 0
+	q.write = q.count
 }
 
-func (b *SliceQueue[T]) empty() bool { return len(b.buf) <= b.off }
-func (b *SliceQueue[T]) Read() (T, error) {
-	if b.empty() {
-		b.Reset()
+// Write enqueues an element. Returns an error if the operation fails.
+func (q *SliceQueue[T]) Write(c T) error {
+	if q.full() {
+		q.grow()
+	}
+	q.buf[q.write] = c
+	q.write = (q.write + 1) & q.mask()
+	q.count++
+	return nil
+}
+
+// Read dequeues and returns an element. Returns io.EOF if the queue is empty.
+func (q *SliceQueue[T]) Read() (T, error) {
+	if q.empty() {
 		var zero T
 		return zero, io.EOF
 	}
-	c := b.buf[b.off]
-	b.off++
-	b.lastRead = opRead
+	c := q.buf[q.read]
+	q.read = (q.read + 1) & q.mask()
+	q.count--
 	return c, nil
-}
-func (b *SliceQueue[T]) Write(c T) error {
-	b.lastRead = opInvalid
-	m, ok := b.tryGrowByReslice(1)
-	if !ok {
-		m = b.grow(1)
-	}
-	b.buf[m] = c
-	return nil
 }

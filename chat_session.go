@@ -18,7 +18,7 @@ type chatSession struct {
 	history            []chat.Message
 	isRun              bool
 	provider           string
-	queues             []*util.Queue
+	queues             []*util.Queue[bool]
 	toolExecutors      map[string]ToolExecutor
 }
 
@@ -30,13 +30,13 @@ func newChatSession(id string, unifiedChatService *chat.UnifiedChatService, tool
 		events:             newEventStore(),
 		history:            make([]chat.Message, 0),
 		isRun:              false,
-		queues:             make([]*util.Queue, 0),
+		queues:             make([]*util.Queue[bool], 0),
 		toolExecutors:      toolExecutors,
 	}
 }
 
 func (s *chatSession) newClient() *ChatClient {
-	queue := util.NewQueue()
+	queue := util.NewQueue[bool]()
 	s.mu.Lock()
 	s.queues = append(s.queues, queue)
 	s.mu.Unlock()
@@ -111,7 +111,7 @@ func (s *chatSession) addEvent(event *Event) {
 // flush 通知所有客户端有新事件
 func (s *chatSession) flush() {
 	s.mu.Lock()
-	queues := make([]*util.Queue, len(s.queues))
+	queues := make([]*util.Queue[bool], len(s.queues))
 	copy(queues, s.queues)
 	s.mu.Unlock()
 

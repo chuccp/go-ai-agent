@@ -7,7 +7,7 @@ import (
 )
 
 func TestQueue_ConcurrentNoDeadlock(t *testing.T) {
-	q := NewQueue()
+	q := NewQueue[int]()
 	var wg sync.WaitGroup
 	const n = 100000
 
@@ -32,7 +32,7 @@ func TestQueue_ConcurrentNoDeadlock(t *testing.T) {
 }
 
 func TestQueue_CloseWakeup(t *testing.T) {
-	q := NewQueue()
+	q := NewQueue[int]()
 	go func() {
 		time.Sleep(10 * time.Millisecond)
 		q.Close()
@@ -48,7 +48,7 @@ func TestQueue_DequeueTimer(t *testing.T) {
 	go tw.Start()
 	defer tw.Stop()
 
-	q := NewQueue()
+	q := NewQueue[int]()
 	timer := tw.NewCallbackTimer(1) // 1 second
 	_, ok := q.DequeueTimer(timer)
 	if ok {
@@ -61,7 +61,7 @@ func TestQueue_DequeueTimerWithData(t *testing.T) {
 	go tw.Start()
 	defer tw.Stop()
 
-	q := NewQueue()
+	q := NewQueue[int]()
 	go q.Offer(42)
 	timer := tw.NewCallbackTimer(60) // long timeout, data arrives immediately
 	v, ok := q.DequeueTimer(timer)
@@ -71,7 +71,7 @@ func TestQueue_DequeueTimerWithData(t *testing.T) {
 }
 
 func TestQueue_CloseIdempotent(t *testing.T) {
-	q := NewQueue()
+	q := NewQueue[int]()
 	q.Close()
 	q.Close() // should not panic
 	_, ok := q.Dequeue()
@@ -81,7 +81,7 @@ func TestQueue_CloseIdempotent(t *testing.T) {
 }
 
 func TestQueue_OfferAfterClose(t *testing.T) {
-	q := NewQueue()
+	q := NewQueue[int]()
 	q.Close()
 	err := q.Offer(42)
 	if err != ErrQueueClosed {

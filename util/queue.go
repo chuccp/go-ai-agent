@@ -7,14 +7,14 @@ import (
 
 var ErrQueueClosed = errors.New("queue closed")
 
-type Queue struct {
-	sliceQueue *SliceQueue[any]
+type Queue[T any] struct {
+	sliceQueue *SliceQueue[T]
 	lock       *sync.Mutex
 	cond       *sync.Cond
 	closed     bool
 }
 
-func (queue *Queue) Offer(value any) error {
+func (queue *Queue[T]) Offer(value T) error {
 	queue.lock.Lock()
 	if queue.closed {
 		queue.lock.Unlock()
@@ -27,7 +27,7 @@ func (queue *Queue) Offer(value any) error {
 	return err
 }
 
-func (queue *Queue) DequeueTimer(timer *Timer) (value any, hasValue bool) {
+func (queue *Queue[T]) DequeueTimer(timer *Timer) (value T, hasValue bool) {
 	defer timer.Close()
 
 	timedOut := false
@@ -47,7 +47,8 @@ func (queue *Queue) DequeueTimer(timer *Timer) (value any, hasValue bool) {
 	}
 	if queue.closed {
 		queue.lock.Unlock()
-		return nil, false
+		var zero T
+		return zero, false
 	}
 
 	for !timedOut {
@@ -58,7 +59,8 @@ func (queue *Queue) DequeueTimer(timer *Timer) (value any, hasValue bool) {
 		}
 		if queue.closed {
 			queue.lock.Unlock()
-			return nil, false
+			var zero T
+			return zero, false
 		}
 		queue.cond.Wait()
 	}
@@ -68,10 +70,11 @@ func (queue *Queue) DequeueTimer(timer *Timer) (value any, hasValue bool) {
 	if err == nil {
 		return v, true
 	}
-	return nil, false
+	var zero T
+	return zero, false
 }
 
-func (queue *Queue) Dequeue() (value any, hasValue bool) {
+func (queue *Queue[T]) Dequeue() (value T, hasValue bool) {
 	queue.lock.Lock()
 	defer queue.lock.Unlock()
 	for {
@@ -80,16 +83,17 @@ func (queue *Queue) Dequeue() (value any, hasValue bool) {
 			return v, true
 		}
 		if queue.closed {
-			return nil, false
+			var zero T
+			return zero, false
 		}
 		queue.cond.Wait()
 	}
 }
 
 // NewQueue 创建一个新的 Queue。
-func NewQueue() *Queue {
-	q := &Queue{
-		sliceQueue: new(SliceQueue[any]),
+func NewQueue[T any]() *Queue[T] {
+	q := &Queue[T]{
+		sliceQueue: new(SliceQueue[T]),
 		lock:       new(sync.Mutex),
 	}
 	q.cond = sync.NewCond(q.lock)
@@ -97,7 +101,7 @@ func NewQueue() *Queue {
 }
 
 // Close 关闭队列，唤醒所有等待者。幂等，多次调用安全。
-func (queue *Queue) Close() {
+func (queue *Queue[T]) Close() {
 	queue.lock.Lock()
 	if queue.closed {
 		queue.lock.Unlock()

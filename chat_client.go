@@ -32,7 +32,7 @@ type ChatHandler interface {
 type ChatClient struct {
 	handler ChatHandler
 	offset  uint
-	queue   *util.Queue
+	queue   *util.Queue[bool]
 }
 
 func (c *ChatClient) SendText(message string) error {
