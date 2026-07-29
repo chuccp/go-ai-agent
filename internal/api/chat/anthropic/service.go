@@ -44,7 +44,7 @@ func NewService(config *Config) Service {
 
 // ChatWithStream 向 Anthropic Messages API 发送流式请求，
 // 将事件写入 response，完成后关闭。
-func (s *serviceImpl) ChatWithStream(ctx context.Context, chatMessages *chat.Messages, response *chat.Response) error {
+func (s *serviceImpl) ChatWithStream(ctx context.Context, chatMessages *chat.Messages, response chat.StreamWriter) error {
 	// 应用配置中的默认值
 	s.applyDefaults(chatMessages)
 	chatMessages.Stream = true
@@ -114,7 +114,7 @@ type sseMessage struct {
 
 // parseSSE 从 HTTP 响应体中读取 SSE 事件流，转换为 chat.Event 并写入 Response。
 // 解析完成后关闭 Response。
-func (s *serviceImpl) parseSSE(body io.ReadCloser, resp *chat.Response) {
+func (s *serviceImpl) parseSSE(body io.ReadCloser, resp chat.StreamWriter) {
 	defer resp.Close()
 	defer body.Close()
 
