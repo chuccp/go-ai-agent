@@ -8,9 +8,8 @@ import (
 	"time"
 
 	"github.com/chuccp/go-agent-sdk/agent"
-	"github.com/chuccp/go-ai-agent/cmd/server/entity"
-	"github.com/chuccp/go-ai-agent/cmd/server/model"
 	"github.com/chuccp/go-ai-agent/cmd/server/runner"
+	"github.com/chuccp/go-ai-agent/cmd/server/service"
 	"github.com/chuccp/go-web-frame/core"
 	"github.com/chuccp/go-web-frame/log"
 	"github.com/chuccp/go-web-frame/web"
@@ -30,13 +29,12 @@ type connState struct {
 // It handles all WebSocket I/O (connect, read, write, disconnect) and
 // delegates to the go-agent-sdk ChatRunner for the actual LLM work.
 type ChatRest struct {
-	context      *core.Context
-	chatRunner   *runner.ChatRunner
-	sessionModel *model.ChatSessionModel
-	messageModel *model.ChatMessageModel
-	activeConns  map[string]*connState
-	mu           sync.Mutex
-	connSeq      int64
+	context            *core.Context
+	chatRunner         *runner.ChatRunner
+	chatSessionService *service.ChatSessionService
+	activeConns        map[string]*connState
+	mu                 sync.Mutex
+	connSeq            int64
 }
 
 // Init registers all chat-related routes on the web framework context.
@@ -44,8 +42,7 @@ func (c *ChatRest) Init(ctx *core.Context) error {
 	c.context = ctx
 	c.activeConns = make(map[string]*connState)
 	c.chatRunner = core.GetRunner[*runner.ChatRunner](ctx)
-	c.sessionModel = core.GetModel[*model.ChatSessionModel](ctx)
-	c.messageModel = core.GetModel[*model.ChatMessageModel](ctx)
+	c.chatSessionService = core.GetService[*service.ChatSessionService](ctx)
 
 	// Session CRUD
 	ctx.Get("/api/chat/sessions", c.listSessions)
@@ -63,9 +60,7 @@ func (c *ChatRest) Init(ctx *core.Context) error {
 
 // listSessions returns all chat sessions ordered by most recently updated.
 func (c *ChatRest) listSessions(request *web.Request) (any, error) {
-	sessions, err := c.sessionModel.Query().
-		Order("updated_at desc").
-		All()
+	sessions, err := c.chatSessionService.ListSessions()
 	if err != nil {
 		return nil, err
 	}
@@ -81,8 +76,8 @@ func (c *ChatRest) createSession(request *web.Request) (any, error) {
 		}
 	}
 
-	session := &entity.ChatSession{Title: title}
-	if err := c.sessionModel.WithContext(request.Ctx()).Save(session); err != nil {
+	session, err := c.chatSessionService.CreateSession(request.Ctx(), title)
+	if err != nil {
 		return nil, err
 	}
 	return web.Data(session), nil
@@ -91,15 +86,7 @@ func (c *ChatRest) createSession(request *web.Request) (any, error) {
 // deleteSession deletes a session and all its messages.
 func (c *ChatRest) deleteSession(request *web.Request) (any, error) {
 	id := request.ParamUint("id")
-
-	// Delete all messages in this session
-	err := c.messageModel.WithContext(request.Ctx()).
-		Delete().Where("session_id = ?", id).Delete()
-	if err != nil {
-		return nil, err
-	}
-	// Delete the session itself
-	if err := c.sessionModel.WithContext(request.Ctx()).DeleteByPK(id); err != nil {
+	if err := c.chatSessionService.DeleteSession(request.Ctx(), id); err != nil {
 		return nil, err
 	}
 	return web.Ok("deleted"), nil
@@ -108,10 +95,7 @@ func (c *ChatRest) deleteSession(request *web.Request) (any, error) {
 // getSessionMessages returns all messages for a session ordered by creation time.
 func (c *ChatRest) getSessionMessages(request *web.Request) (any, error) {
 	sessionId := request.ParamUint("id")
-	messages, err := c.messageModel.Query().
-		Where("session_id = ?", sessionId).
-		Order("created_at asc").
-		All()
+	messages, err := c.chatSessionService.GetSessionMessages(sessionId)
 	if err != nil {
 		return nil, err
 	}
