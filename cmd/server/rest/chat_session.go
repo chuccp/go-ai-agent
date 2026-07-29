@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 
 	"github.com/chuccp/go-agent-sdk/agent"
+	sdkutil "github.com/chuccp/go-agent-sdk/util"
 	"github.com/chuccp/go-ai-agent/cmd/server/entity"
 	"github.com/chuccp/go-ai-agent/cmd/server/server"
 	"github.com/chuccp/go-ai-agent/cmd/server/service"
@@ -111,7 +112,7 @@ func (c *Chat) HandleWebSocket(webSocket *web.WebSocket) error {
 	session := c.agent.GetSession()
 	defer session.Release()
 
-	go func() {
+	sdkutil.Go(func() {
 		for {
 			event := session.ReadEvent()
 			if event == nil {
@@ -126,7 +127,7 @@ func (c *Chat) HandleWebSocket(webSocket *web.WebSocket) error {
 				return
 			}
 		}
-	}()
+	})
 
 	for {
 		messageType, message, err := stream.Read(stream.Context())

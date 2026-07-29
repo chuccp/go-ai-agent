@@ -48,3 +48,6 @@ PLAN.md
 /.qoder
 go-ai-agent-desktop
 /view
+.DS_Store
+cli
+cli
