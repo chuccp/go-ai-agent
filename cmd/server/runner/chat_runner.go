@@ -16,12 +16,13 @@ type ChatRunner struct {
 	core.IRunner
 	ctx         *core.Context
 	chatManager *agent.ChatManager
-	chatMap     *sync.Map
+	chatMap     map[string]*agent.ChatClient
+	lock        sync.RWMutex
 }
 
 func (r *ChatRunner) Init(ctx *core.Context) error {
 	r.ctx = ctx
-	r.chatMap = new(sync.Map)
+	r.chatMap = make(map[string]*agent.ChatClient)
 	r.chatManager = agent.NewChatManager()
 	chatConfigs, err := core.UnmarshalKeyConfig[[]*ChatConfig](configKey, ctx)
 	if err != nil {
@@ -45,11 +46,24 @@ func (r *ChatRunner) Init(ctx *core.Context) error {
 func (r *ChatRunner) Run() error {
 	return nil
 }
-func (r *ChatRunner) GetChat(id string) *agent.ChatClient {
-	return r.chatManager.GetChat(id)
+func (r *ChatRunner) GetChat(id string, chatId string) *agent.ChatClient {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+	if chatClient, ok := r.chatMap[chatId]; ok {
+		return chatClient
+	}
+
+	chatClient := r.chatManager.GetChat(id)
+	if chatClient == nil {
+		return nil
+	}
+	r.chatMap[chatId] = chatClient
+	return chatClient
+
 }
 
 func (r *ChatRunner) HandleChat(chatId string, message *entity.RevMessage) {
+
 
 }
 
