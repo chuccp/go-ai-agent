@@ -1,4 +1,4 @@
-package runner
+package server
 
 import (
 	"sync"
@@ -12,17 +12,15 @@ import (
 	"go.uber.org/zap"
 )
 
-type ChatRunner struct {
+type AgentServer struct {
 	core.IRunner
 	ctx         *core.Context
 	chatManager *agent.ChatManager
-	chatMap     map[string]*agent.ChatClient
 	lock        sync.RWMutex
 }
 
-func (r *ChatRunner) Init(ctx *core.Context) error {
+func (r *AgentServer) Init(ctx *core.Context) error {
 	r.ctx = ctx
-	r.chatMap = make(map[string]*agent.ChatClient)
 	r.chatManager = agent.NewChatManager()
 	chatConfigs, err := core.UnmarshalKeyConfig[[]*ChatConfig](configKey, ctx)
 	if err != nil {
@@ -39,42 +37,16 @@ func (r *ChatRunner) Init(ctx *core.Context) error {
 			}), chatConfig.Default)
 		}
 	}
-	log.Info("ChatRunner initialized (go-agent-sdk)", zap.Int("providers", len(chatConfigs)))
+	log.Info("AgentServer initialized (go-agent-sdk)", zap.Int("providers", len(chatConfigs)))
 	return nil
 }
-
-func (r *ChatRunner) Run() error {
-	return nil
-}
-func (r *ChatRunner) GetChat(id string, chatId string) *agent.ChatClient {
-	r.lock.Lock()
-	defer r.lock.Unlock()
-	if chatClient, ok := r.chatMap[chatId]; ok {
-		return chatClient
-	}
-
-	chatClient := r.chatManager.GetChat(id)
-	if chatClient == nil {
-		return nil
-	}
-	r.chatMap[chatId] = chatClient
-	return chatClient
-
+func (r *AgentServer) GetChat() *Chat {
+	return newChat(r.chatManager)
 }
 
-func (r *ChatRunner) HandleChat(chatId string, message *entity.RevMessage) {
+func (r *AgentServer) HandleChat(chat *agent.ChatClient, message *entity.RevMessage) {
 
 }
-func (r *ChatRunner) DeleteChat(chatId string) {
-	r.lock.Lock()
-	defer r.lock.Unlock()
-	if chatClient, ok := r.chatMap[chatId]; ok {
-		chatClient.Close()
-		delete(r.chatMap, chatId)
-	}
-
-}
-
-func (r *ChatRunner) HandleStop(chatId string, message *entity.RevMessage) {
+func (r *AgentServer) HandleStop(chat *agent.ChatClient, message *entity.RevMessage) {
 
 }

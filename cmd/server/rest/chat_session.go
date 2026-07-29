@@ -2,18 +2,16 @@ package rest
 
 import (
 	"context"
-	"sync"
 
 	"github.com/chuccp/go-agent-sdk/agent"
 	"github.com/chuccp/go-ai-agent/cmd/server/entity"
-	"github.com/chuccp/go-ai-agent/cmd/server/runner"
+	"github.com/chuccp/go-ai-agent/cmd/server/server"
 	"github.com/chuccp/go-ai-agent/cmd/server/service"
 	"github.com/chuccp/go-web-frame/core"
 	"github.com/chuccp/go-web-frame/log"
 	"github.com/chuccp/go-web-frame/util"
 	"github.com/chuccp/go-web-frame/web"
 	"github.com/coder/websocket"
-	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
 
@@ -28,23 +26,18 @@ type connState struct {
 
 // ChatRest registers WebSocket and REST API routes for the web chat.
 // It handles all WebSocket I/O (connect, read, write, disconnect) and
-// delegates to the go-agent-sdk ChatRunner for the actual LLM work.
+// delegates to the go-agent-sdk AgentServer for the actual LLM work.
 type ChatRest struct {
 	context            *core.Context
-	chatRunner         *runner.ChatRunner
+	agentServer        *server.AgentServer
 	chatSessionService *service.ChatSessionService
-	activeConns        map[string]*connState
-	mu                 sync.Mutex
-	connSeq            int64
 }
 
 // Init registers all chat-related routes on the web framework context.
 func (c *ChatRest) Init(ctx *core.Context) error {
 	c.context = ctx
-	c.activeConns = make(map[string]*connState)
-	c.chatRunner = core.GetRunner[*runner.ChatRunner](ctx)
+	c.agentServer = core.GetRunner[*server.AgentServer](ctx)
 	c.chatSessionService = core.GetService[*service.ChatSessionService](ctx)
-
 	// Session CRUD
 	ctx.Get("/api/chat/sessions", c.listSessions)
 	ctx.Post("/api/chat/sessions", c.createSession)
@@ -113,7 +106,8 @@ func (c *ChatRest) HandleWebSocket(webSocket *web.WebSocket) error {
 	}
 	defer stream.Close()
 	stream.Conn().SetReadLimit(10 * 1024 * 1024)
-	chatId := uuid.New().String()
+	chat := c.agentServer.GetChat()
+	defer chat.Release()
 	for {
 		messageType, message, err := stream.Read(stream.Context())
 		if err != nil {
@@ -128,9 +122,9 @@ func (c *ChatRest) HandleWebSocket(webSocket *web.WebSocket) error {
 			}
 			switch revMessage.Type {
 			case entity.ChatType:
-				c.chatRunner.HandleChat(chatId, revMessage)
+				chat.HandleChat(revMessage)
 			case entity.StopType:
-				c.chatRunner.HandleStop(chatId, revMessage)
+				chat.HandleStop(revMessage)
 			}
 		case websocket.MessageBinary:
 

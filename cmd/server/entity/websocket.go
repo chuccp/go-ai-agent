@@ -12,5 +12,5 @@ const (
 type RevMessage struct {
 	Type      string `json:"type"`
 	Message   string `json:"message"`
-	SessionId uint   `json:"session_id"`
+	SessionId string `json:"session_id"`
 }

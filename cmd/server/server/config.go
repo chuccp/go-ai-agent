@@ -1,4 +1,4 @@
-package runner
+package server
 
 const configKey = "api.chat"
 

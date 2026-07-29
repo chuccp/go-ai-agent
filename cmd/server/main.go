@@ -3,7 +3,7 @@ package main
 import (
 	"github.com/chuccp/go-ai-agent/cmd/server/model"
 	"github.com/chuccp/go-ai-agent/cmd/server/rest"
-	"github.com/chuccp/go-ai-agent/cmd/server/runner"
+	"github.com/chuccp/go-ai-agent/cmd/server/server"
 	"github.com/chuccp/go-ai-agent/cmd/server/service"
 	wf "github.com/chuccp/go-web-frame"
 	"github.com/chuccp/go-web-frame/config"
@@ -19,7 +19,7 @@ func main() {
 	}
 	builder := wf.NewBuilder(loadConfig)
 	builder.Service(&service.ChatSessionService{})
-	builder.Runner(&runner.ChatRunner{})
+	builder.Service(&server.AgentServer{})
 	builder.Rest(&rest.ChatRest{})
 	builder.Model(&model.ChatMessageModel{}, &model.ChatSessionModel{})
 	frame := builder.Build()
