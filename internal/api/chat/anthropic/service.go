@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/chuccp/go-agent-sdk/chat"
-	"github.com/chuccp/go-agent-sdk/util"
 	"resty.dev/v3"
 )
 
@@ -71,11 +70,8 @@ func (s *serviceImpl) ChatWithStream(ctx context.Context, chatMessages *chat.Mes
 		return nil, fmt.Errorf("API error (%d): %s", r.StatusCode(), string(body))
 	}
 
-	events := util.NewQueue[chat.Event]()
-	resp := chat.NewResponse(events)
-
-	go s.parseSSE(r.RawResponse.Body, events)
-
+	resp := chat.NewResponse()
+	s.parseSSE(r.RawResponse.Body, resp)
 	return resp, nil
 }
 
@@ -117,10 +113,10 @@ type sseMessage struct {
 	StopReason chat.StopReason `json:"stop_reason"`
 }
 
-// parseSSE 从 HTTP 响应体中读取 SSE 事件流，转换为 chat.Event 并写入队列。
-// 解析完成后关闭队列。
-func (s *serviceImpl) parseSSE(body io.ReadCloser, events *util.Queue[chat.Event]) {
-	defer events.Close()
+// parseSSE 从 HTTP 响应体中读取 SSE 事件流，转换为 chat.Event 并写入 Response。
+// 解析完成后关闭 Response。
+func (s *serviceImpl) parseSSE(body io.ReadCloser, resp *chat.Response) {
+	defer resp.Close()
 	defer body.Close()
 
 	scanner := bufio.NewScanner(body)
@@ -139,7 +135,7 @@ func (s *serviceImpl) parseSSE(body io.ReadCloser, events *util.Queue[chat.Event
 		switch raw.Type {
 		case "message_start":
 			if raw.Message != nil {
-				events.Offer(&chat.MessageStartEvent{
+				resp.Write(&chat.MessageStartEvent{
 					ID:    raw.Message.ID,
 					Model: raw.Message.Model,
 					Role:  raw.Message.Role,
@@ -149,7 +145,7 @@ func (s *serviceImpl) parseSSE(body io.ReadCloser, events *util.Queue[chat.Event
 
 		case "content_block_start":
 			if raw.ContentBlock != nil {
-				events.Offer(&chat.ContentBlockStartEvent{
+				resp.Write(&chat.ContentBlockStartEvent{
 					Index:        raw.Index,
 					ContentBlock: *raw.ContentBlock,
 				})
@@ -157,7 +153,7 @@ func (s *serviceImpl) parseSSE(body io.ReadCloser, events *util.Queue[chat.Event
 
 		case "content_block_delta":
 			if raw.Delta != nil {
-				events.Offer(&chat.ContentBlockDeltaEvent{
+				resp.Write(&chat.ContentBlockDeltaEvent{
 					Index: raw.Index,
 					Delta: chat.ContentDelta{
 						Type:        raw.Delta.Type,
@@ -168,7 +164,7 @@ func (s *serviceImpl) parseSSE(body io.ReadCloser, events *util.Queue[chat.Event
 			}
 
 		case "content_block_stop":
-			events.Offer(&chat.ContentBlockStopEvent{Index: raw.Index})
+			resp.Write(&chat.ContentBlockStopEvent{Index: raw.Index})
 
 		case "message_delta":
 			evt := &chat.MessageDeltaEvent{}
@@ -178,15 +174,15 @@ func (s *serviceImpl) parseSSE(body io.ReadCloser, events *util.Queue[chat.Event
 			if raw.Usage != nil {
 				evt.Usage = *raw.Usage
 			}
-			events.Offer(evt)
+			resp.Write(evt)
 
 		case "message_stop":
-			events.Offer(&chat.MessageStopEvent{})
+			resp.Write(&chat.MessageStopEvent{})
 			return // 流正常结束
 		}
 	}
 
 	if err := scanner.Err(); err != nil {
-		events.Offer(&chat.ErrorEvent{Err: fmt.Errorf("SSE stream read error: %w", err)})
+		resp.Write(&chat.ErrorEvent{Err: fmt.Errorf("SSE stream read error: %w", err)})
 	}
 }

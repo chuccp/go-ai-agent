@@ -162,6 +162,6 @@ func (c *Chat) HandleWebSocket(webSocket *web.WebSocket) error {
 
 // writeError 向前端发送错误事件
 func writeError(stream *web.WebSocketStream, err error) {
-	data, _ := json.Marshal(&agent.Event{Type: "error", Message: err.Error()})
+	data, _ := json.Marshal(agent.NewErrorEvent(err.Error()))
 	_ = stream.WriteText(context.Background(), data)
 }
