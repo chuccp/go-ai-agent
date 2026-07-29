@@ -133,7 +133,7 @@ func (c *ChatRest) HandleWebSocket(webSocket *web.WebSocket) error {
 	c.mu.Unlock()
 
 	defer func() {
-		c.stopConn(connID)
+		c.stopConn(connID, 0)
 		c.mu.Lock()
 		delete(c.activeConns, connID)
 		c.mu.Unlock()
@@ -175,7 +175,7 @@ func (c *ChatRest) HandleWebSocket(webSocket *web.WebSocket) error {
 			}
 			c.handleChat(connID, stream, req.Message, req.SessionId)
 		case "stop":
-			c.stopConn(connID)
+			c.stopConn(connID, req.SessionId)
 		default:
 			c.sendJSON(stream, agent.Event{
 				Type:    agent.EventTypeError,
@@ -203,7 +203,7 @@ func chatSessionKey(connID string, sessionId uint) string {
 // It stops any previous chat on the same connection first (one active chat at a time).
 func (c *ChatRest) handleChat(connID string, stream *web.WebSocketStream, message string, sessionId uint) {
 	// Stop any existing chat on this connection before starting a new one.
-	c.stopConn(connID)
+	c.stopConn(connID, sessionId)
 
 	client := c.chatRunner.GetChat(chatSessionKey(connID, sessionId))
 
@@ -269,8 +269,9 @@ func (c *ChatRest) relayEvents(ctx context.Context, cancel context.CancelFunc, c
 }
 
 // stopConn cancels the relay goroutine and closes the chat client
-// for the given connection, if one is active.
-func (c *ChatRest) stopConn(connID string) {
+// for the given connection and session, if one is active.
+func (c *ChatRest) stopConn(connID string, sessionId uint) {
+	_ = sessionId // reserved for future per-session lifecycle management
 	c.mu.Lock()
 	state, ok := c.activeConns[connID]
 	c.mu.Unlock()
