@@ -1,7 +1,7 @@
 import type { ChatModelAdapter, ChatModelRunResult } from '@assistant-ui/react'
 
 /**
- * Simple WebSocket adapter for the go-agent-sdk chat protocol.
+ * WebSocket adapter for the go-agent-sdk chat protocol.
  *
  * Protocol:
  *   Send:    { type: "chat",  message: "user text", session_id: 123 }
@@ -9,11 +9,22 @@ import type { ChatModelAdapter, ChatModelRunResult } from '@assistant-ui/react'
  *   Receive: { type: "chunk", content: "text", done: false, conversation_id: "..." }
  *   Receive: { type: "done",  done: true }
  *   Receive: { type: "error", message: "error text" }
+ *   Receive: { type: "message_sent", message_id: N }      — 消息已被立即处理
+ *   Receive: { type: "message_queued", message_id: N }    — 消息进入等待队列
+ *   Receive: { type: "message_consumed", message_id: N }  — 队列消息已被消费
  */
+
+export interface QueueEvent {
+  type: 'message_sent' | 'message_queued' | 'message_consumed'
+  message_id: number
+}
+
+export type QueueEventListener = (evt: QueueEvent) => void
 
 export function createSimpleWebSocketAdapter(
   getWs: () => WebSocket | null,
   getSessionId: () => number,
+  onQueueEvent?: QueueEventListener,
 ): ChatModelAdapter {
   return {
     async *run({ messages, abortSignal }): AsyncGenerator<ChatModelRunResult> {
@@ -39,8 +50,6 @@ export function createSimpleWebSocketAdapter(
       if (!textContent.trim()) return
 
       // --- Streaming via event queue ---
-      // Yield the FULL accumulated text each time (not deltas), so
-      // assistant-ui sees progressive replacements of the same content block.
       const queue: ChatModelRunResult[] = []
       let done = false
       let fullText = ''
@@ -69,6 +78,11 @@ export function createSimpleWebSocketAdapter(
               push()
               done = true
               return
+            case 'message_sent':
+            case 'message_queued':
+            case 'message_consumed':
+              onQueueEvent?.({ type: msg.type, message_id: msg.message_id })
+              break
           }
         } catch { /* ignore parse errors */ }
       }

@@ -2,6 +2,7 @@ package rest
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/chuccp/go-agent-sdk/agent"
 	"github.com/chuccp/go-ai-agent/cmd/server/entity"
@@ -24,19 +25,19 @@ type connState struct {
 	cancel context.CancelFunc
 }
 
-// ChatRest registers WebSocket and REST API routes for the web chat.
+// Chat registers WebSocket and REST API routes for the web chat.
 // It handles all WebSocket I/O (connect, read, write, disconnect) and
-// delegates to the go-agent-sdk AgentServer for the actual LLM work.
-type ChatRest struct {
+// delegates to the go-agent-sdk Agent for the actual LLM work.
+type Chat struct {
 	context            *core.Context
-	agentServer        *server.AgentServer
+	agent              *server.Agent
 	chatSessionService *service.ChatSessionService
 }
 
 // Init registers all chat-related routes on the web framework context.
-func (c *ChatRest) Init(ctx *core.Context) error {
+func (c *Chat) Init(ctx *core.Context) error {
 	c.context = ctx
-	c.agentServer = core.GetRunner[*server.AgentServer](ctx)
+	c.agent = core.GetRunner[*server.Agent](ctx)
 	c.chatSessionService = core.GetService[*service.ChatSessionService](ctx)
 	// Session CRUD
 	ctx.Get("/api/chat/sessions", c.listSessions)
@@ -51,7 +52,7 @@ func (c *ChatRest) Init(ctx *core.Context) error {
 // ── Session REST handlers ─────────────────────────────────────────────
 
 // listSessions returns all chat sessions ordered by most recently updated.
-func (c *ChatRest) listSessions(request *web.Request) (any, error) {
+func (c *Chat) listSessions(request *web.Request) (any, error) {
 	sessions, err := c.chatSessionService.ListSessions()
 	if err != nil {
 		return nil, err
@@ -60,7 +61,7 @@ func (c *ChatRest) listSessions(request *web.Request) (any, error) {
 }
 
 // createSession creates a new chat session with an optional title.
-func (c *ChatRest) createSession(request *web.Request) (any, error) {
+func (c *Chat) createSession(request *web.Request) (any, error) {
 	title := "New Chat"
 	if jsonObj, err := request.Json(); err == nil {
 		if t := jsonObj.GetString("title"); t != "" {
@@ -76,7 +77,7 @@ func (c *ChatRest) createSession(request *web.Request) (any, error) {
 }
 
 // deleteSession deletes a session and all its messages.
-func (c *ChatRest) deleteSession(request *web.Request) (any, error) {
+func (c *Chat) deleteSession(request *web.Request) (any, error) {
 	id := request.ParamUint("id")
 	if err := c.chatSessionService.DeleteSession(request.Ctx(), id); err != nil {
 		return nil, err
@@ -85,7 +86,7 @@ func (c *ChatRest) deleteSession(request *web.Request) (any, error) {
 }
 
 // getSessionMessages returns all messages for a session ordered by creation time.
-func (c *ChatRest) getSessionMessages(request *web.Request) (any, error) {
+func (c *Chat) getSessionMessages(request *web.Request) (any, error) {
 	sessionId := request.ParamUint("id")
 	messages, err := c.chatSessionService.GetSessionMessages(sessionId)
 	if err != nil {
@@ -99,15 +100,34 @@ func (c *ChatRest) getSessionMessages(request *web.Request) (any, error) {
 // HandleWebSocket is the entry point for web WebSocket connections.
 // Each connection gets a unique session ID; all chat messages within
 // one connection share the same conversation context.
-func (c *ChatRest) HandleWebSocket(webSocket *web.WebSocket) error {
+func (c *Chat) HandleWebSocket(webSocket *web.WebSocket) error {
 	stream, err := webSocket.OpenStream(web.WithOriginPatterns("*"))
 	if err != nil {
 		return err
 	}
 	defer stream.Close()
 	stream.Conn().SetReadLimit(10 * 1024 * 1024)
-	chat := c.agentServer.GetChat()
-	defer chat.Release()
+
+	session := c.agent.GetSession()
+	defer session.Release()
+
+	go func() {
+		for {
+			event := session.ReadEvent()
+			if event == nil {
+				return
+			}
+			data, err := json.Marshal(event)
+			if err != nil {
+				continue
+			}
+			if err := stream.WriteText(stream.Context(), data); err != nil {
+				log.Debug("WebSocket write ended", zap.Error(err))
+				return
+			}
+		}
+	}()
+
 	for {
 		messageType, message, err := stream.Read(stream.Context())
 		if err != nil {
@@ -116,15 +136,15 @@ func (c *ChatRest) HandleWebSocket(webSocket *web.WebSocket) error {
 		}
 		switch messageType {
 		case websocket.MessageText:
-			revMessage, err := util.JsonUnmarshal[*entity.RevMessage](message)
+			msg, err := util.JsonUnmarshal[*entity.Message](message)
 			if err != nil {
 				return err
 			}
-			switch revMessage.Type {
+			switch msg.Type {
 			case entity.ChatType:
-				chat.HandleChat(revMessage)
+				session.HandleChat(msg)
 			case entity.StopType:
-				chat.HandleStop(revMessage)
+				session.HandleStop(msg)
 			}
 		case websocket.MessageBinary:
 

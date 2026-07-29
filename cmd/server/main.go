@@ -19,8 +19,8 @@ func main() {
 	}
 	builder := wf.NewBuilder(loadConfig)
 	builder.Service(&service.ChatSessionService{})
-	builder.Service(&server.AgentServer{})
-	builder.Rest(&rest.ChatRest{})
+	builder.Service(&server.Agent{})
+	builder.Rest(&rest.Chat{})
 	builder.Model(&model.ChatMessageModel{}, &model.ChatSessionModel{})
 	frame := builder.Build()
 	err = frame.Start()

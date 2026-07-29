@@ -12,41 +12,41 @@ import (
 	"go.uber.org/zap"
 )
 
-type AgentServer struct {
+type Agent struct {
 	core.IRunner
 	ctx         *core.Context
 	chatManager *agent.ChatManager
 	lock        sync.RWMutex
 }
 
-func (r *AgentServer) Init(ctx *core.Context) error {
+func (r *Agent) Init(ctx *core.Context) error {
 	r.ctx = ctx
 	r.chatManager = agent.NewChatManager()
-	chatConfigs, err := core.UnmarshalKeyConfig[[]*ChatConfig](configKey, ctx)
+	providers, err := core.UnmarshalKeyConfig[[]*Provider](configKey, ctx)
 	if err != nil {
 		return err
 	}
 	r.chatManager.AddTool(agent.NewExecuteCommandTool())
-	for _, chatConfig := range chatConfigs {
-		provider := chatConfig.Name + "_" + chatConfig.Type + "_" + chatConfig.Model
-		if util.EqualsAnyIgnoreCase(chatConfig.Type, anthropic.TYPE...) {
-			r.chatManager.RegisterLLM(provider, anthropic.NewService(&anthropic.Config{
-				BaseURL: chatConfig.BaseUrl,
-				APIKey:  chatConfig.ApiKey,
-				Model:   chatConfig.Model,
-			}), chatConfig.Default)
+	for _, provider := range providers {
+		key := provider.Name + "_" + provider.Type + "_" + provider.Model
+		if util.EqualsAnyIgnoreCase(provider.Type, anthropic.TYPE...) {
+			r.chatManager.RegisterLLM(key, anthropic.NewService(&anthropic.Config{
+				BaseURL: provider.BaseUrl,
+				APIKey:  provider.ApiKey,
+				Model:   provider.Model,
+			}), provider.Default)
 		}
 	}
-	log.Info("AgentServer initialized (go-agent-sdk)", zap.Int("providers", len(chatConfigs)))
+	log.Info("Agent initialized (go-agent-sdk)", zap.Int("providers", len(providers)))
 	return nil
 }
-func (r *AgentServer) GetChat() *Chat {
-	return newChat(r.chatManager)
+func (r *Agent) GetSession() *Session {
+	return newSession(r.chatManager)
 }
 
-func (r *AgentServer) HandleChat(chat *agent.ChatClient, message *entity.RevMessage) {
+func (r *Agent) HandleChat(chat *agent.ChatClient, message *entity.Message) {
 
 }
-func (r *AgentServer) HandleStop(chat *agent.ChatClient, message *entity.RevMessage) {
+func (r *Agent) HandleStop(chat *agent.ChatClient, message *entity.Message) {
 
 }

@@ -1,6 +1,24 @@
-import { type ReactNode, useMemo, useRef, useEffect } from 'react'
+import { type ReactNode, useMemo, useRef, useEffect, useState, useCallback, createContext, useContext } from 'react'
 import { AssistantRuntimeProvider, useLocalRuntime, useAssistantRuntime } from '@assistant-ui/react'
-import { createSimpleWebSocketAdapter } from './WebSocketAdapter'
+import { createSimpleWebSocketAdapter, type QueueEvent } from './WebSocketAdapter'
+
+// ── Message Queue Context ──
+
+export interface QueuedMessage {
+  id: number
+  status: 'queued' | 'consumed'
+}
+
+interface MessageQueueState {
+  queuedMessages: QueuedMessage[]
+  queueCount: number
+}
+
+const MessageQueueContext = createContext<MessageQueueState>({ queuedMessages: [], queueCount: 0 })
+
+export function useMessageQueue() {
+  return useContext(MessageQueueContext)
+}
 
 interface Props {
   children: ReactNode
@@ -11,6 +29,29 @@ export function ChatRuntimeProvider({ children, sessionId }: Props) {
   const wsRef = useRef<WebSocket | null>(null)
   const sessionIdRef = useRef(sessionId)
   sessionIdRef.current = sessionId
+
+  // 消息队列状态
+  const [queuedMessages, setQueuedMessages] = useState<QueuedMessage[]>([])
+
+  const handleQueueEvent = useCallback((evt: QueueEvent) => {
+    switch (evt.type) {
+      case 'message_queued':
+        setQueuedMessages(prev => [...prev, { id: evt.message_id, status: 'queued' }])
+        break
+      case 'message_consumed':
+        setQueuedMessages(prev =>
+          prev.map(m => m.id === evt.message_id ? { ...m, status: 'consumed' as const } : m)
+        )
+        // 消费后短暂保留然后移除
+        setTimeout(() => {
+          setQueuedMessages(prev => prev.filter(m => m.id !== evt.message_id))
+        }, 600)
+        break
+      case 'message_sent':
+        // 消息已被立即处理，无需排队显示
+        break
+    }
+  }, [])
 
   // Connect WebSocket on mount
   useEffect(() => {
@@ -45,15 +86,25 @@ export function ChatRuntimeProvider({ children, sessionId }: Props) {
   const getWs = () => wsRef.current
   const getSessionId = () => sessionIdRef.current
 
-  const adapter = useMemo(() => createSimpleWebSocketAdapter(getWs, getSessionId), [])
+  const adapter = useMemo(
+    () => createSimpleWebSocketAdapter(getWs, getSessionId, handleQueueEvent),
+    [handleQueueEvent],
+  )
 
   const runtime = useLocalRuntime(adapter)
 
+  const queueState = useMemo<MessageQueueState>(() => ({
+    queuedMessages,
+    queueCount: queuedMessages.filter(m => m.status === 'queued').length,
+  }), [queuedMessages])
+
   return (
-    <AssistantRuntimeProvider runtime={runtime}>
-      <SessionResetter sessionId={sessionId} />
-      {children}
-    </AssistantRuntimeProvider>
+    <MessageQueueContext.Provider value={queueState}>
+      <AssistantRuntimeProvider runtime={runtime}>
+        <SessionResetter sessionId={sessionId} />
+        {children}
+      </AssistantRuntimeProvider>
+    </MessageQueueContext.Provider>
   )
 }
 

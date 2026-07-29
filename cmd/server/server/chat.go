@@ -9,50 +9,69 @@ import (
 	"github.com/chuccp/go-web-frame/util"
 )
 
-type Chat struct {
+type Session struct {
 	chatManager *agent.ChatManager
 	chatClient  *agent.ChatClient
 	lock        sync.Mutex
+	hasClient   chan bool
 }
 
-func (c *Chat) HandleChat(message *entity.RevMessage) error {
-	client, err := c.getChatClient(message.SessionId)
+func (s *Session) HandleChat(message *entity.Message) error {
+	client, err := s.getChatClient(message.SessionId)
 	if err != nil {
 		return err
 	}
 	return client.SendText(message.Message)
-
 }
 
-func (c *Chat) HandleStop(message *entity.RevMessage) error {
-	client, err := c.getChatClient(message.SessionId)
+func (s *Session) HandleStop(message *entity.Message) error {
+	client, err := s.getChatClient(message.SessionId)
 	if err != nil {
 		return err
 	}
 	client.Stop()
 	return nil
-
 }
-func (c *Chat) getChatClient(id string) (*agent.ChatClient, error) {
+
+func (s *Session) getChatClient(id string) (*agent.ChatClient, error) {
 	if util.IsBlank(id) {
 		return nil, errors.New("id is blank")
 	}
-	c.lock.Lock()
-	defer c.lock.Unlock()
-	if c.chatClient != nil {
-		return c.chatClient, nil
+	s.lock.Lock()
+
+	if s.chatClient != nil {
+		s.lock.Unlock()
+		return s.chatClient, nil
 	}
-	c.chatClient = c.chatManager.GetChat(id)
-	return c.chatClient, nil
+	s.chatClient = s.chatManager.GetChat(id)
+	s.lock.Unlock()
+	s.hasClient <- true
+	return s.chatClient, nil
 }
-func (c *Chat) Release() {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-	if c.chatClient != nil {
-		c.chatClient.Close()
+
+func (s *Session) ReadEvent() *agent.Event {
+
+	for {
+		if s.chatClient != nil {
+			return s.chatClient.ReadEvent()
+		}
+		if !<-s.hasClient {
+			break
+		}
+	}
+	return nil
+
+}
+
+func (s *Session) Release() {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	close(s.hasClient)
+	if s.chatClient != nil {
+		s.chatClient.Close()
 	}
 }
 
-func newChat(chatManager *agent.ChatManager) *Chat {
-	return &Chat{chatManager: chatManager}
+func newSession(chatManager *agent.ChatManager) *Session {
+	return &Session{chatManager: chatManager, hasClient: make(chan bool, 1)}
 }

@@ -8,8 +8,8 @@ const (
 	StopType = "stop"
 )
 
-// RevMessage is the incoming WebSocket message structure for the chat protocol.
-type RevMessage struct {
+// Message is the incoming WebSocket message structure for the chat protocol.
+type Message struct {
 	Type      string `json:"type"`
 	Message   string `json:"message"`
 	SessionId string `json:"session_id"`

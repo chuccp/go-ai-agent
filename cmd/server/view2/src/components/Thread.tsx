@@ -5,6 +5,7 @@ import {
   useThread,
   useComposerRuntime,
 } from '@assistant-ui/react'
+import { useMessageQueue } from './ChatRuntimeProvider'
 
 export function Thread() {
   return (
@@ -57,6 +58,9 @@ export function Thread() {
         </div>
       </ThreadPrimitive.Viewport>
 
+      {/* ── Message Queue Indicator ── */}
+      <MessageQueueBar />
+
       {/* ── Composer ── */}
       <div style={{ padding: '0 24px 24px', flexShrink: 0 }}>
         <div style={{ maxWidth: 820, margin: '0 auto' }}>
@@ -64,6 +68,50 @@ export function Thread() {
         </div>
       </div>
     </ThreadPrimitive.Root>
+  )
+}
+
+// ── Message Queue Bar ──
+
+function MessageQueueBar() {
+  const { queuedMessages, queueCount } = useMessageQueue()
+
+  if (queuedMessages.length === 0) return null
+
+  return (
+    <div style={{
+      padding: '8px 24px', flexShrink: 0,
+      background: '#fff8e1', borderTop: '1px solid #ffe082',
+    }}>
+      <div style={{ maxWidth: 820, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          width: 20, height: 20, borderRadius: '50%',
+          background: '#f9a825', color: '#fff', fontSize: 11, fontWeight: 700,
+        }}>
+          {queueCount}
+        </span>
+        <span style={{ fontSize: 13, color: '#5f6368' }}>
+          {queueCount > 0
+            ? `${queueCount} 条消息排队等待处理中…`
+            : '消息已被消费，即将显示…'}
+        </span>
+        <div style={{ display: 'flex', gap: 4, marginLeft: 'auto' }}>
+          {queuedMessages.map(m => (
+            <span key={m.id} style={{
+              display: 'inline-block', padding: '2px 8px',
+              borderRadius: 10, fontSize: 11, fontFamily: 'monospace',
+              background: m.status === 'queued' ? '#fff3e0' : '#e8f5e9',
+              color: m.status === 'queued' ? '#e65100' : '#2e7d32',
+              border: `1px solid ${m.status === 'queued' ? '#ffcc80' : '#a5d6a7'}`,
+              transition: 'all 0.3s ease',
+            }}>
+              #{m.id} {m.status === 'queued' ? '⏳' : '✓'}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
   )
 }
 

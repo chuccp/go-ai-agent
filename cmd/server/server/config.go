@@ -2,8 +2,8 @@ package server
 
 const configKey = "api.chat"
 
-// ChatConfig mirrors the CLI's config structure for LLM provider registration.
-type ChatConfig struct {
+// Provider mirrors the CLI's config structure for LLM provider registration.
+type Provider struct {
 	Name    string
 	Type    string
 	BaseUrl string
