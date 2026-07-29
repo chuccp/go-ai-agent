@@ -3,16 +3,18 @@ package rest
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"sync"
 	"time"
 
 	"github.com/chuccp/go-agent-sdk/agent"
+	"github.com/chuccp/go-ai-agent/cmd/server/entity"
 	"github.com/chuccp/go-ai-agent/cmd/server/runner"
 	"github.com/chuccp/go-ai-agent/cmd/server/service"
 	"github.com/chuccp/go-web-frame/core"
 	"github.com/chuccp/go-web-frame/log"
+	"github.com/chuccp/go-web-frame/util"
 	"github.com/chuccp/go-web-frame/web"
+	"github.com/coder/websocket"
 	"go.uber.org/zap"
 )
 
@@ -112,76 +114,64 @@ func (c *ChatRest) HandleWebSocket(webSocket *web.WebSocket) error {
 	if err != nil {
 		return err
 	}
-
-	connID := c.nextConnID()
-
-	c.mu.Lock()
-	if len(c.activeConns) >= maxActiveConns {
-		c.mu.Unlock()
-		resp, _ := json.Marshal(agent.Event{
-			Type:    agent.EventTypeError,
-			Message: "Too many concurrent connections. Please try again later.",
-		})
-		_ = stream.WriteText(context.Background(), resp)
-		stream.Close()
-		log.Warn("websocket connection rejected: max connections reached",
-			zap.Int("limit", maxActiveConns))
-		return nil
-	}
-	state := &connState{}
-	c.activeConns[connID] = state
-	c.mu.Unlock()
-
-	defer func() {
-		c.stopConn(connID, 0)
-		c.mu.Lock()
-		delete(c.activeConns, connID)
-		c.mu.Unlock()
-		stream.Close()
-	}()
-
+	defer stream.Close()
 	stream.Conn().SetReadLimit(10 * 1024 * 1024)
-
 	for {
-		_, message, err := stream.Read(stream.Context())
+		messageType, message, err := stream.Read(stream.Context())
 		if err != nil {
-			log.Debug("WebSocket read ended", zap.String("connID", connID), zap.Error(err))
+			log.Debug("WebSocket read ended", zap.Error(err))
 			break
 		}
-
-		var req struct {
-			Type      string `json:"type"`
-			Message   string `json:"message"`
-			SessionId uint   `json:"session_id"`
-		}
-		if err := json.Unmarshal(message, &req); err != nil {
-			c.sendJSON(stream, agent.Event{
-				Type:    agent.EventTypeError,
-				Message: "Invalid JSON format: " + err.Error(),
-			})
-			continue
-		}
-
-		switch req.Type {
-		case "ping":
-			c.sendJSON(stream, agent.Event{Type: "pong"})
-		case "chat":
-			if req.Message == "" {
-				c.sendJSON(stream, agent.Event{
-					Type:    agent.EventTypeError,
-					Message: "message field is required for chat",
-				})
-				continue
+		switch messageType {
+		case websocket.MessageText:
+			revMessage, err := util.JsonUnmarshal[*entity.RevMessage](message)
+			if err != nil {
+				return err
 			}
-			c.handleChat(connID, stream, req.Message, req.SessionId)
-		case "stop":
-			c.stopConn(connID, req.SessionId)
-		default:
-			c.sendJSON(stream, agent.Event{
-				Type:    agent.EventTypeError,
-				Message: "Unknown request type: " + req.Type,
-			})
+			switch revMessage.Type {
+			case entity.ChatType:
+				c.chatRunner.HandleChat(revMessage)
+
+			}
+		case websocket.MessageBinary:
+
 		}
+
+		log.Debug("WebSocket read", zap.String("type", string(messageType)), zap.Any("message", message))
+		//
+		//var req struct {
+		//	Type      string `json:"type"`
+		//	Message   string `json:"message"`
+		//	SessionId uint   `json:"session_id"`
+		//}
+		//if err := json.Unmarshal(message, &req); err != nil {
+		//	c.sendJSON(stream, agent.Event{
+		//		Type:    agent.EventTypeError,
+		//		Message: "Invalid JSON format: " + err.Error(),
+		//	})
+		//	continue
+		//}
+		//
+		//switch req.Type {
+		//case "ping":
+		//	c.sendJSON(stream, agent.Event{Type: "pong"})
+		//case "chat":
+		//	if req.Message == "" {
+		//		c.sendJSON(stream, agent.Event{
+		//			Type:    agent.EventTypeError,
+		//			Message: "message field is required for chat",
+		//		})
+		//		continue
+		//	}
+		//	c.handleChat(connID, stream, req.Message, req.SessionId)
+		//case "stop":
+		//	c.stopConn(connID, req.SessionId)
+		//default:
+		//	c.sendJSON(stream, agent.Event{
+		//		Type:    agent.EventTypeError,
+		//		Message: "Unknown request type: " + req.Type,
+		//	})
+		//}
 	}
 	return nil
 }
@@ -192,99 +182,99 @@ func (c *ChatRest) HandleWebSocket(webSocket *web.WebSocket) error {
 // It stops any previous chat on the same connection first (one active chat at a time).
 // chatSessionKey returns the session key for the ChatManager.
 // Uses sessionId if provided, otherwise falls back to connID.
-func chatSessionKey(connID string, sessionId uint) string {
-	if sessionId > 0 {
-		return fmt.Sprintf("session-%d", sessionId)
-	}
-	return connID
-}
+//func chatSessionKey(connID string, sessionId uint) string {
+//	if sessionId > 0 {
+//		return fmt.Sprintf("session-%d", sessionId)
+//	}
+//	return connID
+//}
 
-// handleChat sends a user message to the chat session for this connection.
-// It stops any previous chat on the same connection first (one active chat at a time).
-func (c *ChatRest) handleChat(connID string, stream *web.WebSocketStream, message string, sessionId uint) {
-	// Stop any existing chat on this connection before starting a new one.
-	c.stopConn(connID, sessionId)
+//// handleChat sends a user message to the chat session for this connection.
+//// It stops any previous chat on the same connection first (one active chat at a time).
+//func (c *ChatRest) handleChat(connID string, stream *web.WebSocketStream, message string, sessionId uint) {
+//	// Stop any existing chat on this connection before starting a new one.
+//	c.stopConn(connID, sessionId)
+//
+//	client := c.chatRunner.GetChat(chatSessionKey(connID, sessionId))
+//
+//	ctx, cancel := context.WithCancel(context.Background())
+//
+//	c.mu.Lock()
+//	if state, ok := c.activeConns[connID]; ok {
+//		state.client = client
+//		state.cancel = cancel
+//	}
+//	c.mu.Unlock()
+//
+//	if err := client.SendText(message); err != nil {
+//		c.sendJSON(stream, agent.Event{
+//			Type:    agent.EventTypeError,
+//			Message: err.Error(),
+//		})
+//		cancel()
+//		c.mu.Lock()
+//		if state, ok := c.activeConns[connID]; ok {
+//			state.client = nil
+//			state.cancel = nil
+//		}
+//		c.mu.Unlock()
+//		return
+//	}
+//
+//	go c.relayEvents(ctx, cancel, client, stream, connID)
+//}
 
-	client := c.chatRunner.GetChat(chatSessionKey(connID, sessionId))
+//// relayEvents reads events from the ChatClient in a loop and writes them
+//// to the WebSocket as JSON. It exits when the chat is done, an error occurs,
+//// or the context is cancelled (via stop or disconnect).
+//func (c *ChatRest) relayEvents(ctx context.Context, cancel context.CancelFunc, client *agent.ChatClient, stream *web.WebSocketStream, connID string) {
+//	defer func() {
+//		cancel()
+//		c.mu.Lock()
+//		if state, ok := c.activeConns[connID]; ok && state.client == client {
+//			state.client = nil
+//			state.cancel = nil
+//		}
+//		c.mu.Unlock()
+//	}()
+//
+//	for {
+//		event := client.ReadEvent()
+//		if event == nil {
+//			return
+//		}
+//
+//		select {
+//		case <-ctx.Done():
+//			return
+//		default:
+//		}
+//
+//		c.sendJSON(stream, *event)
+//
+//		if event.Type == agent.EventTypeDone || event.Type == agent.EventTypeError {
+//			return
+//		}
+//	}
+//}
 
-	ctx, cancel := context.WithCancel(context.Background())
-
-	c.mu.Lock()
-	if state, ok := c.activeConns[connID]; ok {
-		state.client = client
-		state.cancel = cancel
-	}
-	c.mu.Unlock()
-
-	if err := client.SendText(message); err != nil {
-		c.sendJSON(stream, agent.Event{
-			Type:    agent.EventTypeError,
-			Message: err.Error(),
-		})
-		cancel()
-		c.mu.Lock()
-		if state, ok := c.activeConns[connID]; ok {
-			state.client = nil
-			state.cancel = nil
-		}
-		c.mu.Unlock()
-		return
-	}
-
-	go c.relayEvents(ctx, cancel, client, stream, connID)
-}
-
-// relayEvents reads events from the ChatClient in a loop and writes them
-// to the WebSocket as JSON. It exits when the chat is done, an error occurs,
-// or the context is cancelled (via stop or disconnect).
-func (c *ChatRest) relayEvents(ctx context.Context, cancel context.CancelFunc, client *agent.ChatClient, stream *web.WebSocketStream, connID string) {
-	defer func() {
-		cancel()
-		c.mu.Lock()
-		if state, ok := c.activeConns[connID]; ok && state.client == client {
-			state.client = nil
-			state.cancel = nil
-		}
-		c.mu.Unlock()
-	}()
-
-	for {
-		event := client.ReadEvent()
-		if event == nil {
-			return
-		}
-
-		select {
-		case <-ctx.Done():
-			return
-		default:
-		}
-
-		c.sendJSON(stream, *event)
-
-		if event.Type == agent.EventTypeDone || event.Type == agent.EventTypeError {
-			return
-		}
-	}
-}
-
-// stopConn cancels the relay goroutine and closes the chat client
-// for the given connection and session, if one is active.
-func (c *ChatRest) stopConn(connID string, sessionId uint) {
-	_ = sessionId // reserved for future per-session lifecycle management
-	c.mu.Lock()
-	state, ok := c.activeConns[connID]
-	c.mu.Unlock()
-	if !ok {
-		return
-	}
-	if state.cancel != nil {
-		state.cancel()
-	}
-	if state.client != nil {
-		state.client.Close()
-	}
-}
+//// stopConn cancels the relay goroutine and closes the chat client
+//// for the given connection and session, if one is active.
+//func (c *ChatRest) stopConn(connID string, sessionId uint) {
+//	_ = sessionId // reserved for future per-session lifecycle management
+//	c.mu.Lock()
+//	state, ok := c.activeConns[connID]
+//	c.mu.Unlock()
+//	if !ok {
+//		return
+//	}
+//	if state.cancel != nil {
+//		state.cancel()
+//	}
+//	if state.client != nil {
+//		state.client.Close()
+//	}
+//}
 
 // ── Helpers ────────────────────────────────────────────────────────────
 
@@ -298,14 +288,6 @@ func (c *ChatRest) sendJSON(stream *web.WebSocketStream, event agent.Event) {
 	if err := stream.WriteText(context.Background(), data); err != nil {
 		log.Warn("websocket write failed", zap.Error(err))
 	}
-}
-
-// nextConnID generates a unique connection ID for each WebSocket session.
-func (c *ChatRest) nextConnID() string {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.connSeq++
-	return fmt.Sprintf("web-%d", c.connSeq)
 }
 
 // ── REST handlers ──────────────────────────────────────────────────────

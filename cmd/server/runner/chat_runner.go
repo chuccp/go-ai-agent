@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/chuccp/go-agent-sdk/agent"
+	"github.com/chuccp/go-ai-agent/cmd/server/entity"
 	"github.com/chuccp/go-ai-agent/internal/api/chat/anthropic"
 	"github.com/chuccp/go-web-frame/core"
 	"github.com/chuccp/go-web-frame/log"
@@ -67,6 +68,10 @@ func (r *ChatRunner) Init(ctx *core.Context) error {
 	log.Info("ChatRunner initialized (go-agent-sdk)",
 		zap.Int("providers", len(chatConfigs)))
 	return nil
+}
+
+func (r *ChatRunner) HandleChat(revMessage *entity.RevMessage) {
+
 }
 
 // Run is a no-op lifecycle hook. The ChatRunner has no background work
