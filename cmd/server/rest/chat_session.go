@@ -2,9 +2,7 @@ package rest
 
 import (
 	"context"
-	"encoding/json"
 	"sync"
-	"time"
 
 	"github.com/chuccp/go-agent-sdk/agent"
 	"github.com/chuccp/go-ai-agent/cmd/server/entity"
@@ -15,6 +13,7 @@ import (
 	"github.com/chuccp/go-web-frame/util"
 	"github.com/chuccp/go-web-frame/web"
 	"github.com/coder/websocket"
+	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
 
@@ -51,9 +50,7 @@ func (c *ChatRest) Init(ctx *core.Context) error {
 	ctx.Post("/api/chat/sessions", c.createSession)
 	ctx.Delete("/api/chat/sessions/:id", c.deleteSession)
 	ctx.Get("/api/chat/sessions/:id/messages", c.getSessionMessages)
-
 	ctx.WebSocket("/ws/chat", c.HandleWebSocket)
-	ctx.Get("/api/chat/health", c.health)
 	log.Info("Chat REST routes registered (go-agent-sdk)", zap.String("ws", "/ws/chat"))
 	return nil
 }
@@ -116,6 +113,7 @@ func (c *ChatRest) HandleWebSocket(webSocket *web.WebSocket) error {
 	}
 	defer stream.Close()
 	stream.Conn().SetReadLimit(10 * 1024 * 1024)
+	chatId := uuid.New().String()
 	for {
 		messageType, message, err := stream.Read(stream.Context())
 		if err != nil {
@@ -130,177 +128,15 @@ func (c *ChatRest) HandleWebSocket(webSocket *web.WebSocket) error {
 			}
 			switch revMessage.Type {
 			case entity.ChatType:
-				c.chatRunner.HandleChat(revMessage)
-
+				c.chatRunner.HandleChat(chatId, revMessage)
+			case entity.StopType:
+				c.chatRunner.HandleStop(chatId, revMessage)
 			}
 		case websocket.MessageBinary:
 
 		}
 
 		log.Debug("WebSocket read", zap.String("type", string(messageType)), zap.Any("message", message))
-		//
-		//var req struct {
-		//	Type      string `json:"type"`
-		//	Message   string `json:"message"`
-		//	SessionId uint   `json:"session_id"`
-		//}
-		//if err := json.Unmarshal(message, &req); err != nil {
-		//	c.sendJSON(stream, agent.Event{
-		//		Type:    agent.EventTypeError,
-		//		Message: "Invalid JSON format: " + err.Error(),
-		//	})
-		//	continue
-		//}
-		//
-		//switch req.Type {
-		//case "ping":
-		//	c.sendJSON(stream, agent.Event{Type: "pong"})
-		//case "chat":
-		//	if req.Message == "" {
-		//		c.sendJSON(stream, agent.Event{
-		//			Type:    agent.EventTypeError,
-		//			Message: "message field is required for chat",
-		//		})
-		//		continue
-		//	}
-		//	c.handleChat(connID, stream, req.Message, req.SessionId)
-		//case "stop":
-		//	c.stopConn(connID, req.SessionId)
-		//default:
-		//	c.sendJSON(stream, agent.Event{
-		//		Type:    agent.EventTypeError,
-		//		Message: "Unknown request type: " + req.Type,
-		//	})
-		//}
 	}
 	return nil
-}
-
-// ── Chat helpers ───────────────────────────────────────────────────────
-
-// handleChat sends a user message to the chat session for this connection.
-// It stops any previous chat on the same connection first (one active chat at a time).
-// chatSessionKey returns the session key for the ChatManager.
-// Uses sessionId if provided, otherwise falls back to connID.
-//func chatSessionKey(connID string, sessionId uint) string {
-//	if sessionId > 0 {
-//		return fmt.Sprintf("session-%d", sessionId)
-//	}
-//	return connID
-//}
-
-//// handleChat sends a user message to the chat session for this connection.
-//// It stops any previous chat on the same connection first (one active chat at a time).
-//func (c *ChatRest) handleChat(connID string, stream *web.WebSocketStream, message string, sessionId uint) {
-//	// Stop any existing chat on this connection before starting a new one.
-//	c.stopConn(connID, sessionId)
-//
-//	client := c.chatRunner.GetChat(chatSessionKey(connID, sessionId))
-//
-//	ctx, cancel := context.WithCancel(context.Background())
-//
-//	c.mu.Lock()
-//	if state, ok := c.activeConns[connID]; ok {
-//		state.client = client
-//		state.cancel = cancel
-//	}
-//	c.mu.Unlock()
-//
-//	if err := client.SendText(message); err != nil {
-//		c.sendJSON(stream, agent.Event{
-//			Type:    agent.EventTypeError,
-//			Message: err.Error(),
-//		})
-//		cancel()
-//		c.mu.Lock()
-//		if state, ok := c.activeConns[connID]; ok {
-//			state.client = nil
-//			state.cancel = nil
-//		}
-//		c.mu.Unlock()
-//		return
-//	}
-//
-//	go c.relayEvents(ctx, cancel, client, stream, connID)
-//}
-
-//// relayEvents reads events from the ChatClient in a loop and writes them
-//// to the WebSocket as JSON. It exits when the chat is done, an error occurs,
-//// or the context is cancelled (via stop or disconnect).
-//func (c *ChatRest) relayEvents(ctx context.Context, cancel context.CancelFunc, client *agent.ChatClient, stream *web.WebSocketStream, connID string) {
-//	defer func() {
-//		cancel()
-//		c.mu.Lock()
-//		if state, ok := c.activeConns[connID]; ok && state.client == client {
-//			state.client = nil
-//			state.cancel = nil
-//		}
-//		c.mu.Unlock()
-//	}()
-//
-//	for {
-//		event := client.ReadEvent()
-//		if event == nil {
-//			return
-//		}
-//
-//		select {
-//		case <-ctx.Done():
-//			return
-//		default:
-//		}
-//
-//		c.sendJSON(stream, *event)
-//
-//		if event.Type == agent.EventTypeDone || event.Type == agent.EventTypeError {
-//			return
-//		}
-//	}
-//}
-
-//// stopConn cancels the relay goroutine and closes the chat client
-//// for the given connection and session, if one is active.
-//func (c *ChatRest) stopConn(connID string, sessionId uint) {
-//	_ = sessionId // reserved for future per-session lifecycle management
-//	c.mu.Lock()
-//	state, ok := c.activeConns[connID]
-//	c.mu.Unlock()
-//	if !ok {
-//		return
-//	}
-//	if state.cancel != nil {
-//		state.cancel()
-//	}
-//	if state.client != nil {
-//		state.client.Close()
-//	}
-//}
-
-// ── Helpers ────────────────────────────────────────────────────────────
-
-// sendJSON marshals an agent.Event and writes it to the WebSocket stream.
-func (c *ChatRest) sendJSON(stream *web.WebSocketStream, event agent.Event) {
-	data, err := json.Marshal(event)
-	if err != nil {
-		log.Warn("failed to marshal event", zap.Error(err))
-		return
-	}
-	if err := stream.WriteText(context.Background(), data); err != nil {
-		log.Warn("websocket write failed", zap.Error(err))
-	}
-}
-
-// ── REST handlers ──────────────────────────────────────────────────────
-
-// health returns a simple status check for the chat service.
-func (c *ChatRest) health(_ *web.Request) (any, error) {
-	c.mu.Lock()
-	conns := len(c.activeConns)
-	c.mu.Unlock()
-	return web.Data(map[string]any{
-		"status":       "ok",
-		"engine":       "go-agent-sdk",
-		"active_conns": conns,
-		"server_time":  time.Now().Format(time.DateTime),
-	}), nil
 }
