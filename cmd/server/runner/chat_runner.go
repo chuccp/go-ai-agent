@@ -64,6 +64,14 @@ func (r *ChatRunner) GetChat(id string, chatId string) *agent.ChatClient {
 
 func (r *ChatRunner) HandleChat(chatId string, message *entity.RevMessage) {
 
+}
+func (r *ChatRunner) DeleteChat(chatId string) {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+	if chatClient, ok := r.chatMap[chatId]; ok {
+		chatClient.Close()
+		delete(r.chatMap, chatId)
+	}
 
 }
 
