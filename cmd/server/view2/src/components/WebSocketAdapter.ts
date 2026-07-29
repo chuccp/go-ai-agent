@@ -4,7 +4,7 @@ import type { ChatModelAdapter, ChatModelRunResult } from '@assistant-ui/react'
  * Simple WebSocket adapter for the go-agent-sdk chat protocol.
  *
  * Protocol:
- *   Send:    { type: "chat",  message: "user text" }
+ *   Send:    { type: "chat",  message: "user text", session_id: 123 }
  *   Send:    { type: "stop" }
  *   Receive: { type: "chunk", content: "text", done: false, conversation_id: "..." }
  *   Receive: { type: "done",  done: true }
@@ -13,6 +13,7 @@ import type { ChatModelAdapter, ChatModelRunResult } from '@assistant-ui/react'
 
 export function createSimpleWebSocketAdapter(
   getWs: () => WebSocket | null,
+  getSessionId: () => number,
 ): ChatModelAdapter {
   return {
     async *run({ messages, abortSignal }): AsyncGenerator<ChatModelRunResult> {
@@ -38,14 +39,15 @@ export function createSimpleWebSocketAdapter(
       if (!textContent.trim()) return
 
       // --- Streaming via event queue ---
+      // Yield the FULL accumulated text each time (not deltas), so
+      // assistant-ui sees progressive replacements of the same content block.
       const queue: ChatModelRunResult[] = []
       let done = false
-      let accumulated = ''
+      let fullText = ''
 
-      const flush = () => {
-        if (accumulated) {
-          queue.push({ content: [{ type: 'text', text: accumulated }] })
-          accumulated = ''
+      const push = () => {
+        if (fullText) {
+          queue.push({ content: [{ type: 'text', text: fullText }] })
         }
       }
 
@@ -54,17 +56,20 @@ export function createSimpleWebSocketAdapter(
           const msg = JSON.parse(evt.data)
           switch (msg.type) {
             case 'chunk':
-              if (msg.content) accumulated += msg.content
+              if (msg.content) {
+                fullText += msg.content
+                push()
+              }
               break
             case 'done':
               done = true
               return
             case 'error':
-              accumulated += `\n\n❌ ${msg.message || 'Unknown error'}`
+              fullText += `\n\n❌ ${msg.message || 'Unknown error'}`
+              push()
               done = true
               return
           }
-          flush()
         } catch { /* ignore parse errors */ }
       }
 
@@ -79,8 +84,9 @@ export function createSimpleWebSocketAdapter(
         done = true
       })
 
-      // Send the message
-      ws.send(JSON.stringify({ type: 'chat', message: textContent.trim() }))
+      // Send the message with session_id
+      const sessionId = getSessionId()
+      ws.send(JSON.stringify({ type: 'chat', message: textContent.trim(), session_id: sessionId }))
 
       // Yield results as they arrive
       while (!done) {

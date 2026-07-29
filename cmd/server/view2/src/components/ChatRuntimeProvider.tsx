@@ -1,11 +1,16 @@
 import { type ReactNode, useMemo, useRef, useEffect } from 'react'
-import { AssistantRuntimeProvider, useLocalRuntime } from '@assistant-ui/react'
+import { AssistantRuntimeProvider, useLocalRuntime, useAssistantRuntime } from '@assistant-ui/react'
 import { createSimpleWebSocketAdapter } from './WebSocketAdapter'
 
-interface Props { children: ReactNode }
+interface Props {
+  children: ReactNode
+  sessionId: number
+}
 
-export function ChatRuntimeProvider({ children }: Props) {
+export function ChatRuntimeProvider({ children, sessionId }: Props) {
   const wsRef = useRef<WebSocket | null>(null)
+  const sessionIdRef = useRef(sessionId)
+  sessionIdRef.current = sessionId
 
   // Connect WebSocket on mount
   useEffect(() => {
@@ -38,14 +43,31 @@ export function ChatRuntimeProvider({ children }: Props) {
   }, [])
 
   const getWs = () => wsRef.current
+  const getSessionId = () => sessionIdRef.current
 
-  const adapter = useMemo(() => createSimpleWebSocketAdapter(getWs), [])
+  const adapter = useMemo(() => createSimpleWebSocketAdapter(getWs, getSessionId), [])
 
   const runtime = useLocalRuntime(adapter)
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
+      <SessionResetter sessionId={sessionId} />
       {children}
     </AssistantRuntimeProvider>
   )
+}
+
+/** Resets the thread when sessionId changes. */
+function SessionResetter({ sessionId }: { sessionId: number }) {
+  const prevRef = useRef(sessionId)
+  const runtime = useAssistantRuntime()
+
+  useEffect(() => {
+    if (sessionId !== prevRef.current) {
+      prevRef.current = sessionId
+      runtime.threads.main.reset()
+    }
+  }, [sessionId, runtime])
+
+  return null
 }

@@ -90,22 +90,22 @@ function UserMessage() {
   )
 }
 
-// ── Assistant Message Bubble ──
+// ── Assistant Message (agent-style, full width, no bubble) ──
 
 function AssistantMessage() {
   return (
-    <MessagePrimitive.Root style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: 24 }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, maxWidth: '85%' }}>
+    <MessagePrimitive.Root style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: 32 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, width: '100%' }}>
         <div style={{
-          width: 34, height: 34, borderRadius: '50%',
+          width: 30, height: 30, borderRadius: '50%',
           background: 'linear-gradient(135deg, #4285f4, #34a853)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: '#fff', fontSize: 15, fontWeight: 700, flexShrink: 0,
+          color: '#fff', fontSize: 14, fontWeight: 700, flexShrink: 0,
+          marginTop: 2,
         }}>AI</div>
         <div style={{
-          padding: '12px 16px', borderRadius: '20px 20px 20px 4px',
-          background: '#f8f9fa', border: '1px solid #e8eaed',
-          fontSize: 14, lineHeight: 1.7, color: '#3c4043', wordBreak: 'break-word',
+          fontSize: 15, lineHeight: 1.75, color: '#1f2937',
+          wordBreak: 'break-word', flex: 1, minWidth: 0,
         }}>
           <MessagePrimitive.Content />
         </div>
