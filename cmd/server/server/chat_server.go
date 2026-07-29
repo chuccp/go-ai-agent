@@ -44,12 +44,15 @@ func (r *Agent) GetSession() *Session {
 	return newSession(r.chatManager)
 }
 
-func (r *Agent) HandleChat(chat *agent.ChatClient, message *entity.Message) {
+func (r *Agent) HandleChat(chat *agent.ChatClient, message *entity.Message) error {
 	if err := chat.SendText(message.Message); err != nil {
 		log.Warn("HandleChat: send failed", zap.String("session_id", message.SessionId), zap.Error(err))
+		return err
 	}
+	return nil
 }
 
-func (r *Agent) HandleStop(chat *agent.ChatClient, message *entity.Message) {
+func (r *Agent) HandleStop(chat *agent.ChatClient, message *entity.Message) error {
 	chat.Stop()
+	return nil
 }

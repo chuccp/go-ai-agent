@@ -143,9 +143,13 @@ func (c *Chat) HandleWebSocket(webSocket *web.WebSocket) error {
 			}
 			switch msg.Type {
 			case entity.ChatType:
-				session.HandleChat(msg)
+				if err := session.HandleChat(msg); err != nil {
+					writeError(stream, err)
+				}
 			case entity.StopType:
-				session.HandleStop(msg)
+				if err := session.HandleStop(msg); err != nil {
+					writeError(stream, err)
+				}
 			}
 		case websocket.MessageBinary:
 
@@ -154,4 +158,10 @@ func (c *Chat) HandleWebSocket(webSocket *web.WebSocket) error {
 		log.Debug("WebSocket read", zap.String("type", string(messageType)), zap.Any("message", message))
 	}
 	return nil
+}
+
+// writeError 向前端发送错误事件
+func writeError(stream *web.WebSocketStream, err error) {
+	data, _ := json.Marshal(&agent.Event{Type: "error", Message: err.Error()})
+	_ = stream.WriteText(context.Background(), data)
 }
