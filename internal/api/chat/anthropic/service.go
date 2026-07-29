@@ -43,8 +43,8 @@ func NewService(config *Config) Service {
 }
 
 // ChatWithStream 向 Anthropic Messages API 发送流式请求，
-// 返回一个可逐事件读取的 *chat.Response。
-func (s *serviceImpl) ChatWithStream(ctx context.Context, chatMessages *chat.Messages) (*chat.Response, error) {
+// 将事件写入 response，完成后关闭。
+func (s *serviceImpl) ChatWithStream(ctx context.Context, chatMessages *chat.Messages, response *chat.Response) error {
 	// 应用配置中的默认值
 	s.applyDefaults(chatMessages)
 	chatMessages.Stream = true
@@ -58,21 +58,20 @@ func (s *serviceImpl) ChatWithStream(ctx context.Context, chatMessages *chat.Mes
 		SetResponseDoNotParse(true).
 		Post("/v1/messages")
 	if err != nil {
-		return nil, fmt.Errorf("HTTP request failed: %w", err)
+		return fmt.Errorf("HTTP request failed: %w", err)
 	}
 
 	if r.StatusCode() != 200 {
 		body, readErr := io.ReadAll(r.RawResponse.Body)
 		r.RawResponse.Body.Close()
 		if readErr != nil {
-			return nil, fmt.Errorf("API error (%d), failed to read body: %w", r.StatusCode(), readErr)
+			return fmt.Errorf("API error (%d), failed to read body: %w", r.StatusCode(), readErr)
 		}
-		return nil, fmt.Errorf("API error (%d): %s", r.StatusCode(), string(body))
+		return fmt.Errorf("API error (%d): %s", r.StatusCode(), string(body))
 	}
 
-	resp := chat.NewResponse()
-	s.parseSSE(r.RawResponse.Body, resp)
-	return resp, nil
+	s.parseSSE(r.RawResponse.Body, response)
+	return nil
 }
 
 // applyDefaults 将 Config 中的默认值填入请求。
