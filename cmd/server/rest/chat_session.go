@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 
 	"github.com/chuccp/go-agent-sdk/agent"
+	"github.com/chuccp/go-agent-sdk/chat"
 	sdkutil "github.com/chuccp/go-agent-sdk/util"
 	"github.com/chuccp/go-ai-agent/cmd/server/entity"
 	"github.com/chuccp/go-ai-agent/cmd/server/server"
@@ -163,6 +164,6 @@ func (c *Chat) HandleWebSocket(webSocket *web.WebSocket) error {
 
 // writeError 向前端发送错误事件
 func writeError(stream *web.WebSocketStream, err error) {
-	data, _ := json.Marshal(agent.NewErrorEvent(err.Error()))
+	data, _ := json.Marshal(chat.NewErrorEvent(err.Error()))
 	_ = stream.WriteText(context.Background(), data)
 }

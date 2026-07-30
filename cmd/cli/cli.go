@@ -9,13 +9,13 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/chuccp/go-agent-sdk/agent"
+	"github.com/chuccp/go-agent-sdk/chat"
 	"github.com/chuccp/go-web-frame/core"
 )
 
 type MessageQueue interface {
 	HandleMessage(msg string) bool
-	ReadEvent() *agent.Event
+	ReadEvent() *chat.ClientEvent
 }
 
 // ── Styles ─────────────────────────────────────────────────────────────
@@ -60,7 +60,7 @@ type Message struct {
 // ── Model ──────────────────────────────────────────────────────────────
 
 // chatEventMsg 从事件轮询 goroutine 传递给 TUI 的消息
-type chatEventMsg struct{ event *agent.Event }
+type chatEventMsg struct{ event *chat.ClientEvent }
 
 // Model is the Bubble Tea model for the chat TUI.
 type Model struct {
@@ -158,16 +158,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// 无新事件，继续轮询
 			return m, pollEventCmd(m.handleMsg)
 		}
-		switch msg.event.Type {
-		case agent.EventTypeChunk:
+		switch msg.event.Type() {
+		case chat.EventTypeChunk:
 			m.streamText += msg.event.Content
 			return m, pollEventCmd(m.handleMsg)
-		case agent.EventTypeError:
+		case chat.EventTypeError:
 			m.messages = append(m.messages, Message{Role: "assistant", Content: "[Error] " + msg.event.Message})
 			m.streaming = false
 			m.streamText = ""
 			return m, nil
-		case agent.EventTypeDone:
+		case chat.EventTypeDone:
 			m.messages = append(m.messages, Message{Role: "assistant", Content: m.streamText})
 			m.streaming = false
 			m.streamText = ""
@@ -405,15 +405,15 @@ func RunSimpleREPL(messageQueue MessageQueue) {
 					// 队列已关闭
 					break
 				}
-				switch event.Type {
-				case agent.EventTypeChunk:
+				switch event.Type() {
+				case chat.EventTypeChunk:
 					fmt.Print(event.Content)
 					response.WriteString(event.Content)
-				case agent.EventTypeError:
+				case chat.EventTypeError:
 					fmt.Print(style("\n  [Error] "+event.Message, Red))
 					response.WriteString("[Error] " + event.Message)
 					goto done
-				case agent.EventTypeDone:
+				case chat.EventTypeDone:
 					goto done
 				}
 			}

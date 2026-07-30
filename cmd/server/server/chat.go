@@ -5,6 +5,7 @@ import (
 
 	"emperror.dev/errors"
 	"github.com/chuccp/go-agent-sdk/agent"
+	"github.com/chuccp/go-agent-sdk/chat"
 	"github.com/chuccp/go-ai-agent/cmd/server/entity"
 	"github.com/chuccp/go-web-frame/util"
 )
@@ -49,7 +50,7 @@ func (s *Session) getChatClient(id string) (*agent.ChatClient, error) {
 	return s.chatClient, nil
 }
 
-func (s *Session) ReadEvent() *agent.Event {
+func (s *Session) ReadEvent() *chat.ClientEvent {
 
 	for {
 		if s.chatClient != nil {

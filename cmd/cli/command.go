@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/chuccp/go-agent-sdk/agent"
+	"github.com/chuccp/go-agent-sdk/chat"
 	"github.com/chuccp/go-ai-agent/internal/api/chat/anthropic"
 	"github.com/chuccp/go-web-frame/core"
 	"github.com/chuccp/go-web-frame/util"
@@ -23,7 +24,7 @@ func (receiver *Command) Init(ctx *core.Context) error {
 	if err != nil {
 		return err
 	}
-	receiver.chatManager.AddTool(agent.NewExecuteCommandTool())
+	receiver.chatManager.AddTool(agent.NewCommandTool())
 	for _, chatConfig := range chatConfigs {
 		provider := chatConfig.Name + "_" + chatConfig.Type + "_" + chatConfig.Model
 		if util.EqualsAnyIgnoreCase(chatConfig.Type, anthropic.TYPE...) {
@@ -42,7 +43,7 @@ func (receiver *Command) HandleMessage(msg string) bool {
 	err := receiver.chat.SendText(msg)
 	return err == nil
 }
-func (receiver *Command) ReadEvent() *agent.Event {
+func (receiver *Command) ReadEvent() *chat.ClientEvent {
 	return receiver.chat.ReadEvent()
 }
 
