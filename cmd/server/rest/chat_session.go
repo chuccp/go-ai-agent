@@ -114,11 +114,17 @@ func (c *Chat) HandleWebSocket(webSocket *web.WebSocket) error {
 	defer session.Release()
 
 	sdkutil.Go(func() {
+		var lastSeq uint
 		for {
 			event := session.ReadEvent()
 			if event == nil {
 				return
 			}
+			// 跳过重复事件
+			if event.Seq != 0 && event.Seq <= lastSeq {
+				continue
+			}
+			lastSeq = event.Seq
 			data, err := json.Marshal(event)
 			if err != nil {
 				writeError(stream, err)

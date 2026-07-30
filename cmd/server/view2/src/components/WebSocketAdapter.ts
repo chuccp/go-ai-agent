@@ -53,10 +53,17 @@ export function createSimpleWebSocketAdapter(
       const queue: ChatModelRunResult[] = []
       let done = false
       let fullText = ''
+      let thinkingText = ''
 
       const push = () => {
-        if (fullText) {
-          queue.push({ content: [{ type: 'text', text: fullText }] })
+        // 将 thinking 和正文组合，用标记包裹 thinking
+        let combined = ''
+        if (thinkingText) {
+          combined += `⟪think⟫${thinkingText}⟪/think⟫\n\n`
+        }
+        combined += fullText
+        if (combined) {
+          queue.push({ content: [{ type: 'text', text: combined }] })
         }
       }
 
@@ -64,6 +71,12 @@ export function createSimpleWebSocketAdapter(
         try {
           const msg = JSON.parse(evt.data)
           switch (msg.type) {
+            case 'thinking':
+              if (msg.content) {
+                thinkingText += msg.content
+                push()
+              }
+              break
             case 'chunk':
               if (msg.content) {
                 fullText += msg.content
