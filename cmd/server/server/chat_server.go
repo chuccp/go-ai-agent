@@ -34,7 +34,7 @@ func (r *Agent) Init(ctx *core.Context) error {
 	for _, provider := range providers {
 		key := provider.Name + "_" + provider.Type + "_" + provider.Model
 		if util.EqualsAnyIgnoreCase(provider.Type, anthropic.TYPE...) {
-			r.chatManager.RegisterLLM(key, anthropic.NewService(&anthropic.Config{
+			r.chatManager.RegisterChat(key, anthropic.NewService(&anthropic.Config{
 				BaseURL: provider.BaseUrl,
 				APIKey:  provider.ApiKey,
 				Model:   provider.Model,

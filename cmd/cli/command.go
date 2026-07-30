@@ -28,7 +28,7 @@ func (receiver *Command) Init(ctx *core.Context) error {
 	for _, chatConfig := range chatConfigs {
 		provider := chatConfig.Name + "_" + chatConfig.Type + "_" + chatConfig.Model
 		if util.EqualsAnyIgnoreCase(chatConfig.Type, anthropic.TYPE...) {
-			receiver.chatManager.RegisterLLM(provider, anthropic.NewService(&anthropic.Config{
+			receiver.chatManager.RegisterChat(provider, anthropic.NewService(&anthropic.Config{
 				BaseURL: chatConfig.BaseUrl,
 				APIKey:  chatConfig.ApiKey,
 				Model:   chatConfig.Model,

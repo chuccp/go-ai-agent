@@ -99,6 +99,7 @@ type sseEvent struct {
 type sseDelta struct {
 	Type        string `json:"type"`
 	Text        string `json:"text"`
+	Thinking    string `json:"thinking"`
 	PartialJSON string `json:"partial_json"`
 	StopReason  string `json:"stop_reason"`
 }
@@ -157,6 +158,7 @@ func (s *serviceImpl) parseSSE(body io.ReadCloser, resp chat.StreamWriter) {
 					Delta: chat.ContentDelta{
 						Type:        raw.Delta.Type,
 						Text:        raw.Delta.Text,
+						Thinking:    raw.Delta.Thinking,
 						PartialJSON: raw.Delta.PartialJSON,
 					},
 				})
