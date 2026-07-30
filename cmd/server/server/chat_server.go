@@ -18,7 +18,7 @@ type Agent struct {
 	ctx          *core.Context
 	chatManager  *agent.ChatManager
 	lock         sync.RWMutex
-	historyStore *service.HistoryStoreImpl
+	chatSessionService *service.ChatSessionService
 }
 
 func (r *Agent) Init(ctx *core.Context) error {
@@ -28,9 +28,9 @@ func (r *Agent) Init(ctx *core.Context) error {
 	if err != nil {
 		return err
 	}
-	r.historyStore = core.GetService[*service.HistoryStoreImpl](ctx)
+	r.chatSessionService = core.GetService[*service.ChatSessionService](ctx)
 	r.chatManager.AddTool(agent.NewExecuteCommandTool())
-	r.chatManager.SetHistoryStore(r.historyStore)
+	r.chatManager.SetHistoryStore(r.chatSessionService)
 	for _, provider := range providers {
 		key := provider.Name + "_" + provider.Type + "_" + provider.Model
 		if util.EqualsAnyIgnoreCase(provider.Type, anthropic.TYPE...) {

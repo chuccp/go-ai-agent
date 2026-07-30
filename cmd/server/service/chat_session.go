@@ -2,7 +2,10 @@ package service
 
 import (
 	"context"
+	"encoding/json"
+	"strconv"
 
+	"github.com/chuccp/go-agent-sdk/chat"
 	"github.com/chuccp/go-ai-agent/cmd/server/entity"
 	"github.com/chuccp/go-ai-agent/cmd/server/model"
 	"github.com/chuccp/go-web-frame/core"
@@ -57,4 +60,73 @@ func (s *ChatSessionService) GetSessionMessages(sessionId uint) ([]*entity.ChatM
 		Where("session_id = ?", sessionId).
 		Order("created_at asc").
 		All()
+}
+
+// LoadHistory loads the chat history for a session from the database,
+// converting stored rows back to SDK chat.Message format.
+// Implements agent.HistoryStore interface.
+func (s *ChatSessionService) LoadHistory(sessionID string) ([]chat.Message, error) {
+	id, err := strconv.ParseUint(sessionID, 10, 64)
+	if err != nil {
+		return nil, nil // invalid sessionID, treat as new session
+	}
+
+	rows, err := s.messageModel.Query().
+		Where("session_id = ?", uint(id)).
+		Order("created_at asc").
+		All()
+	if err != nil {
+		return nil, err
+	}
+	if len(rows) == 0 {
+		return nil, nil
+	}
+
+	messages := make([]chat.Message, 0, len(rows))
+	for _, row := range rows {
+		msg := chat.Message{
+			Role: chat.Role(row.Role),
+		}
+		if row.Content != "" {
+			var blocks []chat.ContentBlock
+			if err := json.Unmarshal([]byte(row.Content), &blocks); err == nil {
+				msg.Content = blocks
+			} else {
+				// fallback: plain text stored in legacy format
+				msg.Content = []chat.ContentBlock{{Type: chat.ContentTypeText, Text: row.Content}}
+			}
+		}
+		messages = append(messages, msg)
+	}
+	return messages, nil
+}
+
+// SaveHistory persists the full chat history for a session to the database.
+// Strategy: delete old messages, then batch insert new ones.
+// Implements agent.HistoryStore interface.
+func (s *ChatSessionService) SaveHistory(sessionID string, messages []chat.Message) error {
+	id, err := strconv.ParseUint(sessionID, 10, 64)
+	if err != nil {
+		return nil
+	}
+	sid := uint(id)
+
+	// Delete old records
+	if err := s.messageModel.Delete().Where("session_id = ?", sid).Delete(); err != nil {
+		return err
+	}
+
+	// Batch insert new records
+	for _, msg := range messages {
+		contentJSON, _ := json.Marshal(msg.Content)
+		row := &entity.ChatMessage{
+			SessionId: sid,
+			Role:      string(msg.Role),
+			Content:   string(contentJSON),
+		}
+		if err := s.messageModel.Save(row); err != nil {
+			return err
+		}
+	}
+	return nil
 }
