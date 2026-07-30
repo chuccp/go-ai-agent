@@ -13,24 +13,25 @@ import (
 )
 
 const (
-	AnthropicVersion = "2023-06-01"
-	DefaultBaseURL   = "https://api.anthropic.com"
-	DefaultMaxTokens = 4096
+	AnthropicVersion      = "2023-06-01"
+	DefaultBaseURL        = "https://api.anthropic.com"
+	DefaultMaxTokens      = 4096
+	DefaultThinkingBudget = 10000
 )
 
-// Service 瀹氫箟 Anthropic 鑱婂ぉ鏈嶅姟鎺ュ彛锛屽祵鍏ラ€氱敤鐨?chat.ChatService銆?
+// Service 定义 Anthropic 聊天服务接口，嵌入通用的 chat.ChatService。
 type Service interface {
 	chat.ChatService
 }
 
-// serviceImpl 鏄?Service 鐨勫叿浣撳疄鐜帮紝灏佽 HTTP 瀹㈡埛绔笌閰嶇疆銆?
+// serviceImpl 是 Service 的具体实现，封装 HTTP 客户端与配置。
 type serviceImpl struct {
 	config      *Config
 	restyClient *resty.Client
 }
 
-// NewService 鏍规嵁缁欏畾閰嶇疆鍒涘缓涓€涓?Anthropic 鑱婂ぉ鏈嶅姟瀹炰緥銆?
-// 鑻?BaseURL 涓虹┖鍒欓粯璁や娇鐢?Anthropic 瀹樻柟 API 鍦板潃銆?
+// NewService 根据给定配置创建一个 Anthropic 聊天服务实例。
+// 若 BaseURL 为空则默认使用 Anthropic 官方 API 地址。
 func NewService(config *Config) Service {
 	baseURL := config.BaseURL
 	if baseURL == "" {
@@ -42,10 +43,9 @@ func NewService(config *Config) Service {
 	}
 }
 
-// ChatWithStream 鍚?Anthropic Messages API 鍙戦€佹祦寮忚姹傦紝
-// 灏嗕簨浠跺啓鍏?response锛屽畬鎴愬悗鍏抽棴銆?
+// ChatWithStream 向 Anthropic Messages API 发送流式请求，
+// 将事件写入 response，完成后关闭。
 func (s *serviceImpl) ChatWithStream(ctx context.Context, chatMessages *chat.Request, response chat.StreamWriter) error {
-	// 搴旂敤閰嶇疆涓殑榛樿鍊?
 	s.applyDefaults(chatMessages)
 	chatMessages.Stream = true
 
@@ -74,7 +74,7 @@ func (s *serviceImpl) ChatWithStream(ctx context.Context, chatMessages *chat.Req
 	return nil
 }
 
-// applyDefaults 灏?Config 涓殑榛樿鍊煎～鍏ヨ姹傘€?
+// applyDefaults 将 Config 中的默认值填入请求。
 func (s *serviceImpl) applyDefaults(m *chat.Request) {
 	if m.Model == "" && s.config.Model != "" {
 		m.Model = s.config.Model
@@ -82,11 +82,22 @@ func (s *serviceImpl) applyDefaults(m *chat.Request) {
 	if m.MaxTokens == 0 {
 		m.MaxTokens = DefaultMaxTokens
 	}
+	// 应用思考级别配置
+	if m.Thinking == nil && s.config.Thinking {
+		budget := s.config.ThinkingBudget
+		if budget == 0 {
+			budget = DefaultThinkingBudget
+		}
+		m.Thinking = &chat.ThinkingConfig{
+			Type:         "enabled",
+			BudgetTokens: budget,
+		}
+	}
 }
 
-// -------- SSE 瑙ｆ瀽锛坓oroutine 涓繍琛岋級 --------
+// -------- SSE 解析 --------
 
-// sseEvent 琛ㄧず Anthropic 娴佸紡鍝嶅簲涓殑涓€鏉″師濮?SSE 浜嬩欢銆?
+// sseEvent 表示 Anthropic 流式响应中的一条原始 SSE 事件。
 type sseEvent struct {
 	Type         string             `json:"type"`
 	Index        int                `json:"index"`
@@ -113,8 +124,8 @@ type sseMessage struct {
 	StopReason chat.StopReason `json:"stop_reason"`
 }
 
-// parseSSE 浠?HTTP 鍝嶅簲浣撲腑璇诲彇 SSE 浜嬩欢娴侊紝杞崲涓?chat.Event 骞跺啓鍏?Response銆?
-// 瑙ｆ瀽瀹屾垚鍚庡叧闂?Response銆?
+// parseSSE 从 HTTP 响应体中读取 SSE 事件流，转换为 chat.Event 并写入 Response。
+// 解析完成后关闭 Response。
 func (s *serviceImpl) parseSSE(body io.ReadCloser, resp chat.StreamWriter) {
 	defer resp.Close()
 	defer body.Close()
@@ -179,7 +190,7 @@ func (s *serviceImpl) parseSSE(body io.ReadCloser, resp chat.StreamWriter) {
 
 		case "message_stop":
 			resp.Write(&chat.MessageStopEvent{})
-			return // 娴佹甯哥粨鏉?
+			return // 流正常结束
 		}
 	}
 

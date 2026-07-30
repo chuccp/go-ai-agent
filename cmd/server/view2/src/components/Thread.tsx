@@ -4,7 +4,9 @@ import {
   ComposerPrimitive,
   useThread,
   useComposerRuntime,
+  useMessage,
 } from '@assistant-ui/react'
+import Markdown from 'react-markdown'
 import { useMessageQueue } from './ChatRuntimeProvider'
 
 export function Thread() {
@@ -140,7 +142,70 @@ function UserMessage() {
 
 // ── Assistant Message (agent-style, full width, no bubble) ──
 
+interface Segment {
+  type: 'think' | 'tool' | 'result' | 'text'
+  content: string
+}
+
+/** 解析内容中的类型标记，拆分为不同类型的片段 */
+function parseSegments(raw: string): Segment[] {
+  const segments: Segment[] = []
+  const regex = /⟪(think|tool|result)⟫([\s\S]*?)⟪\/\1⟫/g
+  let lastIndex = 0
+  let match: RegExpExecArray | null
+
+  while ((match = regex.exec(raw)) !== null) {
+    // 标记前的普通文本
+    if (match.index > lastIndex) {
+      const text = raw.slice(lastIndex, match.index).trim()
+      if (text) segments.push({ type: 'text', content: text })
+    }
+    segments.push({ type: match[1] as Segment['type'], content: match[2].trim() })
+    lastIndex = regex.lastIndex
+  }
+  // 剩余文本
+  if (lastIndex < raw.length) {
+    const text = raw.slice(lastIndex).trim()
+    if (text) segments.push({ type: 'text', content: text })
+  }
+  return segments
+}
+
+const segmentStyles: Record<string, React.CSSProperties> = {
+  think: {
+    margin: '8px 0', padding: '8px 14px',
+    borderLeft: '2px solid #d1c4e9', borderRadius: 4,
+    background: '#faf5ff', fontSize: 12.5, lineHeight: 1.6,
+    color: '#8b5cf6', fontStyle: 'italic',
+    maxHeight: 100, overflowY: 'auto',
+  },
+  tool: {
+    margin: '6px 0', padding: '6px 12px',
+    borderLeft: '3px solid #42a5f5', borderRadius: 4,
+    background: '#e3f2fd', fontSize: 12.5,
+    fontFamily: "'SF Mono', 'Fira Code', monospace",
+    color: '#1565c0',
+  },
+  result: {
+    margin: '6px 0', padding: '6px 12px',
+    borderLeft: '3px solid #66bb6a', borderRadius: 4,
+    background: '#e8f5e9', fontSize: 12.5,
+    fontFamily: "'SF Mono', 'Fira Code', monospace",
+    color: '#2e7d32', whiteSpace: 'pre-wrap',
+  },
+}
+
 function AssistantMessage() {
+  const content = useMessage((m) => m.content)
+
+  // 提取纯文本
+  const raw = content
+    .map((part) => (part.type === 'text' ? part.text : ''))
+    .join('')
+
+  const segments = parseSegments(raw)
+  const hasMarkers = segments.some(s => s.type !== 'text')
+
   return (
     <MessagePrimitive.Root style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: 32 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, width: '100%' }}>
@@ -151,11 +216,24 @@ function AssistantMessage() {
           color: '#fff', fontSize: 14, fontWeight: 700, flexShrink: 0,
           marginTop: 2,
         }}>AI</div>
-        <div style={{
-          fontSize: 15, lineHeight: 1.75, color: '#1f2937',
+        <div className="aui-assistant-message" style={{
+          fontSize: 14.5, lineHeight: 1.8, color: '#1f2937',
           wordBreak: 'break-word', flex: 1, minWidth: 0,
         }}>
-          <MessagePrimitive.Content />
+          {hasMarkers ? (
+            segments.map((seg, i) =>
+              seg.type === 'text' ? (
+                <Markdown key={i}>{seg.content}</Markdown>
+              ) : (
+                <div key={i} style={segmentStyles[seg.type]}>
+                  {seg.type === 'think' ? '💭 ' : seg.type === 'tool' ? '🔧 ' : '↳ '}
+                  {seg.content}
+                </div>
+              )
+            )
+          ) : (
+            <MessagePrimitive.Content />
+          )}
         </div>
       </div>
     </MessagePrimitive.Root>
