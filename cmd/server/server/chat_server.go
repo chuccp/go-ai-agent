@@ -27,6 +27,7 @@ func (r *Agent) Init(ctx *core.Context) error {
 		return err
 	}
 	r.chatManager.AddTool(agent.NewExecuteCommandTool())
+	r.chatManager.SetHistoryStore(NewHistoryStore(ctx))
 	for _, provider := range providers {
 		key := provider.Name + "_" + provider.Type + "_" + provider.Model
 		if util.EqualsAnyIgnoreCase(provider.Type, anthropic.TYPE...) {
