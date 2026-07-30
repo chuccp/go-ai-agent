@@ -5,6 +5,7 @@ import (
 
 	"github.com/chuccp/go-agent-sdk/agent"
 	"github.com/chuccp/go-ai-agent/cmd/server/entity"
+	"github.com/chuccp/go-ai-agent/cmd/server/service"
 	"github.com/chuccp/go-ai-agent/internal/api/chat/anthropic"
 	"github.com/chuccp/go-web-frame/core"
 	"github.com/chuccp/go-web-frame/log"
@@ -14,9 +15,10 @@ import (
 
 type Agent struct {
 	core.IRunner
-	ctx         *core.Context
-	chatManager *agent.ChatManager
-	lock        sync.RWMutex
+	ctx          *core.Context
+	chatManager  *agent.ChatManager
+	lock         sync.RWMutex
+	historyStore *service.HistoryStoreImpl
 }
 
 func (r *Agent) Init(ctx *core.Context) error {
@@ -26,8 +28,9 @@ func (r *Agent) Init(ctx *core.Context) error {
 	if err != nil {
 		return err
 	}
+	r.historyStore = core.GetService[*service.HistoryStoreImpl](ctx)
 	r.chatManager.AddTool(agent.NewExecuteCommandTool())
-	r.chatManager.SetHistoryStore(NewHistoryStore(ctx))
+	r.chatManager.SetHistoryStore(r.historyStore)
 	for _, provider := range providers {
 		key := provider.Name + "_" + provider.Type + "_" + provider.Model
 		if util.EqualsAnyIgnoreCase(provider.Type, anthropic.TYPE...) {

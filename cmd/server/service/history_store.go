@@ -1,4 +1,4 @@
-package server
+package service
 
 import (
 	"encoding/json"
@@ -15,10 +15,9 @@ type HistoryStoreImpl struct {
 	messageModel *model.ChatMessageModel
 }
 
-func NewHistoryStore(ctx *core.Context) *HistoryStoreImpl {
-	return &HistoryStoreImpl{
-		messageModel: core.GetModel[*model.ChatMessageModel](ctx),
-	}
+func (h *HistoryStoreImpl) Init(ctx *core.Context) error {
+	h.messageModel = core.GetModel[*model.ChatMessageModel](ctx)
+	return nil
 }
 
 // LoadHistory 从数据库加载指定会话的历史消息，还原为 SDK 的 chat.Message 格式。
