@@ -120,6 +120,7 @@ func (c *Chat) HandleWebSocket(webSocket *web.WebSocket) error {
 			}
 			data, err := json.Marshal(event)
 			if err != nil {
+				writeError(stream, err)
 				continue
 			}
 			if err := stream.WriteText(stream.Context(), data); err != nil {

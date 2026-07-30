@@ -46,7 +46,7 @@ func (r *Agent) GetSession() *Session {
 
 func (r *Agent) HandleChat(chat *agent.ChatClient, message *entity.Message) error {
 	if err := chat.SendText(message.Message); err != nil {
-		log.Warn("HandleChat: send failed", zap.String("session_id", message.SessionId), zap.Error(err))
+		log.Warn("HandleChat: send failed", zap.String("session_id", message.GetSessionId()), zap.Error(err))
 		return err
 	}
 	return nil

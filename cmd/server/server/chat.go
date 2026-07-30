@@ -17,7 +17,7 @@ type Session struct {
 }
 
 func (s *Session) HandleChat(message *entity.Message) error {
-	client, err := s.getChatClient(message.SessionId)
+	client, err := s.getChatClient(message.GetSessionId())
 	if err != nil {
 		return err
 	}
@@ -25,7 +25,7 @@ func (s *Session) HandleChat(message *entity.Message) error {
 }
 
 func (s *Session) HandleStop(message *entity.Message) error {
-	client, err := s.getChatClient(message.SessionId)
+	client, err := s.getChatClient(message.GetSessionId())
 	if err != nil {
 		return err
 	}

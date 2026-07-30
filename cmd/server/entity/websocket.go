@@ -1,5 +1,7 @@
 package entity
 
+import "github.com/spf13/cast"
+
 // WebSocket message type constants.
 const (
 	ChatType = "chat"
@@ -12,5 +14,9 @@ const (
 type Message struct {
 	Type      string `json:"type"`
 	Message   string `json:"message"`
-	SessionId string `json:"session_id"`
+	SessionId uint   `json:"session_id"`
+}
+
+func (m *Message) GetSessionId() string {
+	return cast.ToString(m.SessionId)
 }
