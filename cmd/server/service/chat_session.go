@@ -88,12 +88,12 @@ func (s *ChatSessionService) LoadHistory(sessionID string) ([]chat.Message, erro
 			Role: chat.Role(row.Role),
 		}
 		if row.Content != "" {
-			var blocks []chat.ContentBlock
+			var blocks chat.Blocks
 			if err := json.Unmarshal([]byte(row.Content), &blocks); err == nil {
 				msg.Content = blocks
 			} else {
 				// fallback: plain text stored in legacy format
-				msg.Content = []chat.ContentBlock{{Type: chat.ContentTypeText, Text: row.Content}}
+				msg.Content = chat.Blocks{chat.NewTextBlock(row.Content)}
 			}
 		}
 		messages = append(messages, msg)

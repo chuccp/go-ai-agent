@@ -102,7 +102,7 @@ type sseEvent struct {
 	Type         string             `json:"type"`
 	Index        int                `json:"index"`
 	Delta        *sseDelta          `json:"delta"`
-	ContentBlock *chat.ContentBlock `json:"content_block"`
+	ContentBlock json.RawMessage `json:"content_block"`
 	Message      *sseMessage        `json:"message"`
 	Usage        *chat.Usage        `json:"usage"`
 }
@@ -156,10 +156,13 @@ func (s *serviceImpl) parseSSE(body io.ReadCloser, resp chat.StreamWriter) {
 
 		case "content_block_start":
 			if raw.ContentBlock != nil {
-				resp.Write(&chat.ContentBlockStartEvent{
-					Index:        raw.Index,
-					ContentBlock: *raw.ContentBlock,
-				})
+				block, err := chat.UnmarshalBlock(raw.ContentBlock)
+				if err == nil {
+					resp.Write(&chat.ContentBlockStartEvent{
+						Index:        raw.Index,
+						ContentBlock: block,
+					})
+				}
 			}
 
 		case "content_block_delta":
